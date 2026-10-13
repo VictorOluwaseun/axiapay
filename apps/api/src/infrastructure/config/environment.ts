@@ -1,19 +1,31 @@
 /** Validate process configuration at the application boundary without logging supplied secrets. */
 import { z } from 'zod';
 
-const environmentSchema = z.object({
-  NODE_ENV: z
-    .enum(['development', 'test', 'production'])
-    .default('development'),
-  HOST: z.string().min(1).default('127.0.0.1'),
-  PORT: z.coerce.number().int().min(1).max(65535).default(4000),
-  LOG_LEVEL: z
-    .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
-    .default('info'),
-  DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
-  REDIS_CACHE_URL: z.url({ protocol: /^rediss?$/ }),
-  REDIS_QUEUE_URL: z.url({ protocol: /^rediss?$/ }),
-});
+const environmentSchema = z
+  .object({
+    NODE_ENV: z
+      .enum(['development', 'test', 'production'])
+      .default('development'),
+    HOST: z.string().min(1).default('127.0.0.1'),
+    PORT: z.coerce.number().int().min(1).max(65535).default(4000),
+    LOG_LEVEL: z
+      .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
+      .default('info'),
+    DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
+    REDIS_CACHE_URL: z.url({ protocol: /^rediss?$/ }),
+    REDIS_QUEUE_URL: z.url({ protocol: /^rediss?$/ }),
+    AUTH_CODE_SECRET: z.string().regex(/^[a-fA-F0-9]{64}$/),
+    AUTH_CODE_DELIVERY: z.literal('mailpit').default('mailpit'),
+    AUTH_MAILPIT_URL: z.url().default('http://127.0.0.1:58025'),
+  })
+  .superRefine((settings, context) => {
+    if (settings.NODE_ENV !== 'production') return;
+    context.addIssue({
+      code: 'custom',
+      path: ['AUTH_CODE_DELIVERY'],
+      message: 'Local code delivery is unavailable in production.',
+    });
+  });
 
 /** Validated operational settings; credentials must never enter logs or application contracts. */
 export type ApiEnvironment = z.infer<typeof environmentSchema>;

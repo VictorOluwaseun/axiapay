@@ -1,0 +1,108 @@
+import { Inject, Injectable } from '@nestjs/common';
+import { AUTHENTICATION } from '../authentication.tokens.js';
+import {
+  accountIdentity,
+  type AccountIdentity,
+  type Contact,
+} from '../domain/authentication-models.js';
+import { normalizeContact } from '../domain/authentication-policy.js';
+import { invalidCredentials } from '../domain/authentication-error.js';
+import type {
+  AuthenticationClock,
+  AuthenticationSecrets,
+  PasswordHasher,
+  AuthenticationAttemptLimiter,
+} from '../ports/authentication.ports.js';
+import type { AuthenticationRepository } from '../repositories/contracts/authentication.repository.js';
+import { AuthenticationCodeService } from './authentication-code.service.js';
+import { AuthenticationRateLimiter } from './authentication-rate-limiter.service.js';
+import {
+  issueSession,
+  type AuthenticationResult,
+} from './authentication-session.js';
+
+/** Public code requests omit purpose; each service operation binds it to its intended flow. */
+type CodeRequest = Omit<
+  Parameters<AuthenticationCodeService['request']>[0],
+  'purpose'
+>;
+/** Verification inputs cannot choose a different purpose from the requested service operation. */
+type CodeVerification = Omit<
+  Parameters<AuthenticationCodeService['verify']>[0],
+  'purpose'
+>;
+
+/** Own password login and session access; delegate the cohesive code lifecycle to AuthenticationCodeService. */
+@Injectable()
+export class AuthenticationService {
+  /** Inject repository/capability contracts and focused collaborators; no HTTP, SQL, or cache clients enter this service. */
+  constructor(
+    @Inject(AUTHENTICATION.repository)
+    private readonly repository: AuthenticationRepository,
+    @Inject(AUTHENTICATION.passwords)
+    private readonly passwords: PasswordHasher,
+    @Inject(AUTHENTICATION.secrets)
+    private readonly secrets: AuthenticationSecrets,
+    @Inject(AuthenticationRateLimiter)
+    private readonly limiter: AuthenticationAttemptLimiter,
+    @Inject(AUTHENTICATION.clock) private readonly clock: AuthenticationClock,
+    @Inject(AuthenticationCodeService)
+    private readonly codes: AuthenticationCodeService,
+  ) {}
+  /** Request mandatory contact proof before activation, with an optional password for future login. */
+  signup(input: CodeRequest) {
+    return this.codes.request({ ...input, purpose: 'signup' });
+  }
+  /** Redeem only a signup challenge and activate the account atomically. */
+  verifySignup(input: CodeVerification): Promise<AuthenticationResult> {
+    return this.codes.verify({ ...input, purpose: 'signup' });
+  }
+  /** Request proof for login without exposing whether the contact is registered. */
+  requestLoginCode(input: Omit<CodeRequest, 'password'>) {
+    return this.codes.request({ ...input, purpose: 'login' });
+  }
+  /** Redeem a login challenge without implicitly creating an account. */
+  loginWithCode(input: CodeVerification): Promise<AuthenticationResult> {
+    return this.codes.verify({ ...input, purpose: 'login' });
+  }
+  /** Apply throttling before hashing, then create a fresh session only after successful verification. */
+  async loginWithPassword(input: {
+    contact: Contact;
+    password: string;
+    clientIp: string;
+  }): Promise<AuthenticationResult> {
+    const contact = normalizeContact(input.contact);
+    if (Array.from(input.password).length > 128) throw invalidCredentials();
+    await this.limiter.passwordLogin(contact, input.clientIp);
+    const account = await this.repository.findAccount(contact);
+    const valid = await this.passwords.verify(
+      input.password,
+      account?.passwordHash ?? null,
+    );
+    if (!valid || !account || account.disabledAt !== null)
+      throw invalidCredentials();
+    return issueSession(
+      this.repository,
+      this.secrets,
+      account,
+      this.clock.now(),
+    );
+  }
+  /** Return only the caller's verified identity; expired, disabled, revoked, and unknown sessions share one failure. */
+  async authenticate(token: string): Promise<AccountIdentity> {
+    if (!/^[A-Za-z0-9_-]{43}$/.test(token)) throw invalidCredentials();
+    const account = await this.repository.findSessionIdentity(
+      this.secrets.tokenDigest(token),
+      this.clock.now(),
+    );
+    if (!account) throw invalidCredentials();
+    return accountIdentity(account);
+  }
+  /** End this bearer session immediately; an unknown or previously revoked token is already logged out. */
+  async logout(token: string): Promise<void> {
+    await this.repository.revokeSession(
+      this.secrets.tokenDigest(token),
+      this.clock.now(),
+    );
+  }
+}

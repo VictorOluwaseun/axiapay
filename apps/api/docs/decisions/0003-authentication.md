@@ -1,0 +1,15 @@
+# Authentication for the individual API
+
+Status: Implemented for local development.
+
+Signup verifies ownership of either a phone number or email before creating an active account. A password is optional at signup. Password and one-time-code login are separate routes; existing accounts are never overwritten by repeated signup. The current account model has one canonical verified contact. Adding another contact requires a future verification and linking workflow.
+
+Use service-owned workflows, framework-independent domain policies, repository-owned PostgreSQL access, and provider ports. `PostgresAuthenticationRepository` executes SQL, maps persistence records, and binds callbacks to one transaction connection directly; no separate authentication data source is required. Authentication bypasses cache because revocation, expiry, and rate-limit decisions require authoritative state. The schema precedes the wallet migration, keeping authentication independent of wallet provisioning and payment authorization. Database types come from the complete migration chain; authentication selects only the tables it owns.
+
+Use Argon2id for passwords, keyed challenge digests for short codes, and opaque 256-bit bearer sessions with only token digests stored in PostgreSQL. Stateful sessions provide immediate revocation and account-disable enforcement with one authoritative lookup. The first version uses an absolute 24-hour session lifetime; refresh tokens and biometric/device enrollment are later work. JWT libraries already installed in the workspace are not required for these opaque sessions.
+
+Codes expire after five minutes, permit five guesses, and are protected by contact and IP budgets. Failed attempts must commit, so services return unsuccessful transaction results before throwing public errors. A row lock and one transaction bind successful code consumption, account creation, and session creation. These choices prevent concurrent redemption and duplicate signup without moving workflow decisions into SQL adapters.
+
+The user selected local delivery. Mailpit captures both email and simulated SMS behind a delivery interface. This adapter is restricted to loopback and cannot run in production. It uses bounded synchronous delivery: a crash after sending but before acceptance is recorded requires a new challenge. Real delivery, compromised-password screening, credential recovery, stronger payment authorization, and expired-data cleanup must be completed before a production release.
+
+The password length policy, generic failures, and throttling draw on [OWASP authentication guidance](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html). The Argon2id parameters follow [OWASP password storage guidance](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html). Codes and sessions are application access mechanisms, not a claim of MFA or financial identity verification.

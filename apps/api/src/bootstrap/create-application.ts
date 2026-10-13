@@ -19,6 +19,7 @@ function configureDocumentation(application: NestFastifyApplication): void {
     .setTitle('AxiaPay API')
     .setDescription('Individual payment application API foundation.')
     .setVersion('0.1.0')
+    .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'opaque' })
     .build();
   const document = SwaggerModule.createDocument(application, options);
   SwaggerModule.setup('docs', application, document);

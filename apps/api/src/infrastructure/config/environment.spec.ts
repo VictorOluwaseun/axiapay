@@ -3,11 +3,20 @@ import { describe, expect, it } from 'vitest';
 import { validateEnvironment } from './environment.js';
 
 const settings = {
+  AUTH_CODE_SECRET: '11'.repeat(32),
   DATABASE_URL: 'postgresql://user:secret@localhost/app',
   REDIS_CACHE_URL: 'redis://localhost:56379',
   REDIS_QUEUE_URL: 'redis://localhost:56380',
 };
 describe('API configuration', () => {
+  it('requires a deployment-specific code secret and blocks local delivery in production', () => {
+    expect(() =>
+      validateEnvironment({ ...settings, AUTH_CODE_SECRET: '' }),
+    ).toThrow('AUTH_CODE_SECRET');
+    expect(() =>
+      validateEnvironment({ ...settings, NODE_ENV: 'production' }),
+    ).toThrow('AUTH_CODE_DELIVERY');
+  });
   it('coerces valid ports and supplies local listener defaults', () => {
     expect(validateEnvironment({ ...settings, PORT: '4100' })).toMatchObject({
       PORT: 4100,

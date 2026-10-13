@@ -17,8 +17,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.ts",
+    "auth:setup": "node scripts/configure-local-auth.mjs",
     "db:migrate": "node --env-file=.env dist/infrastructure/database/migrate.js",
-    "db:types": "kysely-codegen --dialect postgres --env-file .env --out-file src/infrastructure/database/database.generated.ts"
+    "db:types": "kysely-codegen --dialect postgres --env-file .env --exclude-pattern \"public.kysely_*\" --type-mapping '{\"xid8\":\"string\"}' --out-file src/infrastructure/database/database.generated.ts"
   },
   "dependencies": {
     "@fastify/static": "10.1.6",
@@ -29,6 +30,8 @@
     "@nestjs/swagger": "12.0.2",
     "argon2": "0.45.1",
     "bullmq": "6.3.13",
+    "class-transformer": "0.5.1",
+    "class-validator": "0.15.1",
     "ioredis": "6.0.0",
     "jose": "6.2.12",
     "kysely": "0.29.6",

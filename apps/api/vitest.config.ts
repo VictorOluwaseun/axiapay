@@ -18,6 +18,7 @@ export default defineConfig({
     include: ['src/**/*.spec.ts', 'tests/e2e/**/*.spec.ts'],
     env: {
       NODE_ENV: 'test',
+      AUTH_CODE_SECRET: '11'.repeat(32),
       LOG_LEVEL: 'silent',
       DATABASE_URL: 'postgresql://test:test@127.0.0.1:55432/test',
       REDIS_CACHE_URL: 'redis://127.0.0.1:56379',

@@ -1,9 +1,10 @@
-/** Construct PostgreSQL access for infrastructure callers; application use cases use repository ports. */
+/** Construct PostgreSQL access for infrastructure callers; feature services use repository ports. */
 import { Kysely, PostgresDialect } from 'kysely';
 import { Pool } from 'pg';
+import type { DB } from './database.generated.js';
 
-/** No application tables exist yet; replace with generated schema types after the first migration. */
-export type DatabaseSchema = Record<never, never>;
+/** Persistence-only types generated from reviewed migrations; never exported through application ports. */
+export type DatabaseSchema = DB;
 
 /** Create a bounded pool. The owner must call destroy; constructing it does not issue a query. */
 export function createDatabase(
