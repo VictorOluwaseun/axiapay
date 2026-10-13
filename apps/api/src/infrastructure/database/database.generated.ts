@@ -5,6 +5,12 @@
 
 import type { ColumnType } from "kysely";
 
+export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
+  ? ColumnType<S, I | undefined, U>
+  : ColumnType<T, T | undefined, T>;
+
+export type Int8 = ColumnType<string, bigint | number | string, bigint | number | string>;
+
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
 export interface AuthAccounts {
@@ -45,9 +51,86 @@ export interface AuthSessions {
   token_digest: string;
 }
 
+export interface LedgerAccounts {
+  account_code: string;
+  account_kind: string;
+  currency: string;
+  id: string;
+  wallet_id: string | null;
+}
+
+export interface LedgerBalances {
+  account_id: string;
+  balance_version: Generated<Int8>;
+  credits_minor_units: Generated<Int8>;
+  debits_minor_units: Generated<Int8>;
+  enforce_nonnegative: boolean;
+}
+
+export interface LedgerEntries {
+  account_id: string;
+  amount_minor_units: Int8;
+  currency: string;
+  entry_side: string;
+  journal_id: string;
+  line_number: number;
+}
+
+export interface LedgerJournals {
+  creation_transaction: Generated<string>;
+  currency: string;
+  evidence_reference: string | null;
+  id: string;
+  journal_kind: string;
+  recorded_at: Generated<Timestamp>;
+  reservation_id: string | null;
+}
+
+export interface WalletOperations {
+  created_at: Generated<Timestamp>;
+  id: string;
+  request_fingerprint: string;
+  request_key: string;
+  request_scope: string;
+}
+
+export interface WalletOutboxEvents {
+  created_at: Generated<Timestamp>;
+  delivered_at: Timestamp | null;
+  delivery_attempts: Generated<number>;
+  event_type: Generated<string>;
+  id: string;
+}
+
+export interface WalletReservations {
+  amount_minor_units: Int8;
+  created_at: Generated<Timestamp>;
+  currency: string;
+  id: string;
+  payment_reference: string;
+  reservation_status: Generated<string>;
+  wallet_id: string;
+}
+
+export interface Wallets {
+  created_at: Generated<Timestamp>;
+  currency: string;
+  id: string;
+  owner_id: string;
+  wallet_status: Generated<string>;
+}
+
 export interface DB {
   auth_accounts: AuthAccounts;
   auth_challenges: AuthChallenges;
   auth_rate_limits: AuthRateLimits;
   auth_sessions: AuthSessions;
+  ledger_accounts: LedgerAccounts;
+  ledger_balances: LedgerBalances;
+  ledger_entries: LedgerEntries;
+  ledger_journals: LedgerJournals;
+  wallet_operations: WalletOperations;
+  wallet_outbox_events: WalletOutboxEvents;
+  wallet_reservations: WalletReservations;
+  wallets: Wallets;
 }
