@@ -234,12 +234,13 @@ describe('API foundation', () => {
       });
     },
   );
-  it('does not expose placeholder financial endpoints', async () => {
+  it('requires a session before accessing the implemented payment endpoint', async () => {
     const response = await application.inject({
       method: 'POST',
       url: '/v1/payments',
       payload: {},
     });
-    expect(response.statusCode).toBe(404);
+    expect(response.statusCode).toBe(401);
+    expect(response.json().code).toBe('INVALID_CREDENTIALS');
   });
 });
