@@ -2,7 +2,7 @@
 
 AxiaPay is being built for wallet-funded airtime, data, and bill payments, with transfers, bulk payments, scheduled transactions, and notifications. The MVP serves individuals; agent and business features are future scope. The first offline payment pilot will cover airtime and data through an SMS gateway.
 
-Development currently focuses on the API foundation. The application starts, validates configuration, exposes a liveness endpoint and development OpenAPI documentation, and includes database migration and testing tools. Authentication, wallet operations, service integrations, and SMS processing still need implementation. Feature folders document their intended responsibilities.
+Development currently focuses on the API. Authentication supports verified phone or email signup, password and one-time-code login, and revocable sessions. Codes are captured locally in Mailpit for development. The application also provides liveness, OpenAPI documentation, migrations, and tests. Public payment routes, service integrations, and real SMS delivery remain to be connected.
 
 ## Project structure
 
@@ -11,11 +11,11 @@ apps/
   api/                     NestJS and Fastify API
     src/
       bootstrap/           Application composition and dependency wiring
-      modules/             Features with domain, application, infrastructure, and delivery layers
+      modules/             Controllers, services, repositories, and domain rules
       infrastructure/      Configuration, database access, and diagnostics
-      shared/              Shared domain values and application contracts
+      shared/              Shared domain values and capability contracts
     migrations/            Reviewed database migrations
-    tests/                 HTTP and data-source integration checks
+    tests/                 HTTP and persistence integration checks
     docs/                  Architecture and implementation decisions
   web/                     Next.js web application scaffold
   docs/                    Next.js documentation application scaffold
@@ -30,16 +30,17 @@ The web and documentation applications still contain starter screens. The API us
 
 ## Technology
 
-| Responsibility                | Tools                                                          |
-| ----------------------------- | -------------------------------------------------------------- |
-| Workspace                     | pnpm and Turborepo                                             |
-| API                           | Node.js 24, TypeScript 6, NestJS, Fastify                      |
-| Database                      | PostgreSQL, Kysely, pg, kysely-codegen                         |
-| Cache and jobs                | ioredis, BullMQ; separate Redis instances for cache and queues |
-| Configuration and diagnostics | Zod, Nest Config, Pino                                         |
-| Authentication libraries      | Argon2 and jose, installed for upcoming authentication work    |
-| Development checks            | ESLint, Prettier, Vitest, SWC, Testcontainers                  |
-| Web scaffolds                 | Next.js, React, TypeScript 7                                   |
+| Responsibility                | Tools                                                                |
+| ----------------------------- | -------------------------------------------------------------------- |
+| Workspace                     | pnpm and Turborepo                                                   |
+| API                           | Node.js 24, TypeScript 6, NestJS, Fastify                            |
+| Database                      | PostgreSQL, Kysely, pg, kysely-codegen                               |
+| Cache and jobs                | ioredis, BullMQ; separate Redis instances for cache and queues       |
+| HTTP validation               | class-validator, class-transformer, Nest ValidationPipe              |
+| Configuration and diagnostics | Zod, Nest Config, Pino                                               |
+| Authentication libraries      | Argon2id and Node.js cryptography for passwords, codes, and sessions |
+| Development checks            | ESLint, Prettier, Vitest, SWC, Testcontainers                        |
+| Web scaffolds                 | Next.js, React, TypeScript 7                                         |
 
 Exact dependency versions are recorded in each application's `package.json` and the workspace lockfile. See the [API foundation decision](apps/api/docs/decisions/0001-api-foundation.md) for compatibility choices.
 
@@ -51,6 +52,9 @@ Install Node.js **24.15 or newer within the 24.x release line**, **pnpm 11.25.0*
 pnpm install --frozen-lockfile
 docker compose -f compose.api.yaml up -d --wait
 cp -n apps/api/.env.example apps/api/.env
+pnpm --filter @axiapay/api auth:setup
+pnpm --filter @axiapay/api build
+pnpm --filter @axiapay/api db:migrate
 pnpm run dev:api
 ```
 
@@ -97,9 +101,11 @@ Run commands from the repository root.
 
 Integration tests use disposable databases rather than the local development database. API startup never runs migrations automatically. See the [API setup guide](apps/api/README.md) and [migration guide](apps/api/migrations/README.md) for more detail.
 
+See the [authentication guide](apps/api/src/modules/authentication/README.md) for request examples, Mailpit code retrieval, expiry, rate limits, and session behaviour.
+
 ## Engineering agreements
 
-Follow [AGENTS.md](AGENTS.md) and the [API architecture guide](apps/api/docs/architecture.md) when contributing. Delivery handlers invoke application use cases; use cases coordinate domain rules and repository contracts. Repository implementations coordinate concrete database and cache data sources. Kysely and ioredis stay in infrastructure.
+Follow [AGENTS.md](AGENTS.md) and the [API architecture guide](apps/api/docs/architecture.md) when contributing. Controllers and job handlers invoke feature services, which coordinate domain rules and repository contracts. Separate use-case classes are optional for complex workflows with a clear independent responsibility. Concrete repositories own storage access directly or coordinate optional data sources when storage complexity or reuse justifies them. Authentication executes SQL in its repository; wallets retain their PostgreSQL data source. Kysely and ioredis stay behind repository contracts, with cache policy and invalidation owned by repositories.
 
 Cache identity must include effective query parameters and authorized account scope. Relevant writes must invalidate affected cached results after commit, with recovery and stale-fill protection defined before caching is implemented. Spending decisions use authoritative database state.
 
