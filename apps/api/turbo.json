@@ -1,0 +1,29 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "outputs": ["dist/**"]
+    },
+    "dev": {
+      "passThroughEnv": [
+        "NODE_ENV",
+        "HOST",
+        "PORT",
+        "LOG_LEVEL",
+        "DATABASE_URL",
+        "REDIS_CACHE_URL",
+        "REDIS_QUEUE_URL"
+      ]
+    },
+    "test": {
+      "outputs": []
+    },
+    "test:integration": {
+      "cache": false,
+      "passThroughEnv": ["DOCKER_HOST", "DOCKER_CONTEXT", "TESTCONTAINERS_*"]
+    },
+    "format:check": {
+      "outputs": []
+    }
+  }
+}
