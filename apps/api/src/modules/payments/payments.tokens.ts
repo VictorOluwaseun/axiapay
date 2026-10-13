@@ -1,0 +1,6 @@
+/** Runtime identities keep persistence and adapter registration private to payment composition. */
+export const PAYMENTS = Object.freeze({
+  repository: Symbol('PaymentRepository'),
+  providers: Symbol('PaymentProviders'),
+  clock: Symbol('PaymentClock'),
+});
