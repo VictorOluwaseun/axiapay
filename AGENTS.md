@@ -45,8 +45,10 @@ These rules govern implementation and changes in this workspace.
 
 - Define repository contracts at the domain or application boundary; implement them in the data or infrastructure layer.
 - Repositories encapsulate relevant data access and source coordination. Keep transport DTOs and persistence models from leaking into domain or presentation contracts.
-- Repository implementations coordinate data sources. PostgreSQL data sources execute Kysely queries, and cache data sources execute ioredis operations. Database and Redis clients stay out of use cases, application services, domain code, and delivery handlers.
-- Application use cases own workflows and coordinate repositories and external service ports. Repository implementations must not become catch-all business services.
+- Feature persistence stays behind repository contracts. Concrete repositories may execute Kysely queries and ioredis operations directly or coordinate optional data sources. Database and Redis clients stay out of repository contracts, use cases, services, domain code, controllers, and job handlers.
+- Extract a data source only for a distinct storage responsibility, substantial storage logic, reuse, or useful separation across multiple stores. Avoid one-to-one forwarding layers with no independent responsibility. Authentication owns SQL directly in its repository; wallets retain their PostgreSQL data source for ledger persistence and transaction coordination.
+- Keep transaction ownership explicit in either layout: all participating operations share the transaction connection and commit or roll back together. Repositories borrow lifecycle-managed clients; they do not create a pool per operation.
+- API and worker services own workflows and coordinate repositories and external service ports; extract use cases only where justified. Repository implementations must not become catch-all business services.
 - Avoid generic repository frameworks or abstraction layers that have no demonstrated need.
 
 ## Caching and invalidation
@@ -57,15 +59,27 @@ These rules govern implementation and changes in this workspace.
 - Define recovery for failed invalidation and protection against concurrent reads repopulating stale results. The linked draft describes proposed durable delivery and versioning mechanisms; choose and verify a concrete protocol during implementation.
 - Keep cache policy and data-source coordination in repository infrastructure. Spending authorization, reservations, and settlement use authoritative database state. Reads requiring immediate consistency must bypass the cache or use a verified consistency protocol.
 
-## Use cases
+## Services and optional use cases
 
-- Use cases are required in Android, API, and worker application layers. Give each use case one clearly named business action or business query with explicit inputs, outputs, and errors.
-- Android ViewModels invoke use cases for business operations rather than accessing repositories or data sources directly. Use-case results feed the existing unidirectional state-update flow.
-- API handlers, scheduled jobs, and event or queue handlers invoke use cases rather than implementing business workflows themselves.
-- Use cases orchestrate domain behaviour, repository contracts, and external service ports through injected dependencies. Keep reusable business invariants in domain models or policies and data access in repository implementations.
-- Android use cases prepare, request, or observe operations; API and worker use cases enforce authoritative permissions, pricing, wallet, and settlement rules. Do not duplicate authoritative financial logic on the client.
-- Keep use cases independent of Views, ViewModels, HTTP request or response types, database models, and concrete provider SDKs. Map those types at the appropriate boundary.
-- Test meaningful use-case behaviour, including success, validation, authorization, and failure or recovery paths where relevant. Purely visual state changes do not require a business use case.
+- API and worker services own business workflows by default. Controllers, scheduled jobs, and event or queue handlers call service operations with explicit inputs, outputs, and errors.
+- A separate use-case class is optional. Extract one when a complex workflow has a clear independent responsibility, such as cross-feature coordination, several business stages, or its own recovery/state rules. Explain the benefit; do not create one class per endpoint or make extraction depend only on line count.
+- Keep services cohesive with small named methods and focused collaborators. Shared domain policies and focused services are valid ways to reduce duplication; do not replace use cases with a collection of renamed one-action service wrappers or one oversized service.
+- Services and any extracted use cases coordinate domain behaviour, repository contracts, and external capability ports. Repositories own persistence directly or coordinate justified data sources. Keep HTTP types, database models, SQL/Redis clients, and concrete provider SDKs out of workflow code.
+- Extracted use cases remain independent of Nest and transport types. Domain models and policies remain framework-independent. API and worker services enforce authoritative permissions, pricing, wallet, and settlement rules.
+- Android keeps its existing MVVM/MVI/UDF agreement: ViewModels invoke application use cases for business operations, and results feed immutable state updates. Client workflows prepare, request, or observe operations without duplicating authoritative financial rules.
+- Test meaningful service and workflow behaviour, including validation, authorization, concurrency, and failure/recovery paths where relevant. Purely visual state changes need no business use case.
+
+## API module layout and stack conventions
+
+- Name API feature folders `controllers`, `services`, and `repositories`; introduce `usecases` only for a justified extracted workflow; add `dtos`, `data-sources`, `domain`, and focused adapter folders as needed. Do not wrap API feature code in `application` or `delivery` directories. Clean Architecture describes dependency rules, not mandatory folder names.
+- Controllers and job adapters call feature services. Services own cohesive workflows through repository and external capability contracts. Services never receive SQL, Redis, or HTTP request/response objects. A separate use-case layer is optional, not a required delegation step.
+- Keep repository contracts framework-independent in `repositories/contracts`. Concrete repositories own storage access directly or coordinate optional data sources. Services and optional use cases depend on contracts, domain rules, and provider ports, never concrete storage implementations. Optional use cases must not depend on Nest-specific services.
+- Use Nest modules, constructor injection, explicit provider tokens, and lifecycle hooks. Export feature services and guards; keep persistence providers private. Do not use combined resource containers or service locators.
+- Validate HTTP requests with class-validator/class-transformer DTOs and a global Nest ValidationPipe. Reject unknown fields and invalid nested objects; disable implicit credential conversion. Preserve password whitespace and code leading zeros. Generate OpenAPI contracts from the DTOs. Keep Zod for environment configuration.
+- Keep Kysely operations in concrete repositories or optional PostgreSQL data sources, with generated schema types, parameterized queries, explicit transactions, and bounded pools. Keep cache-aside and invalidation decisions in repositories; ioredis operations may live there or in optional cache data sources.
+- Use BullMQ for implemented durable background workflows with stable logical IDs, idempotency, bounded retries/backoff, monitored failures, and graceful shutdown. Keep queue Redis persistent and separate from evictable cache Redis. Use an outbox when committed work must be dispatched reliably.
+- Use Next.js App Router and Server Components for appropriate server rendering, with small Client Component boundaries for interaction. Keep secrets server-side and Nest authoritative for financial and authentication workflows. Do not duplicate payment rules or read payment tables directly from web code.
+- Apply each stack capability where the current feature needs it; do not add placeholder workers, cache layers, or business endpoints merely because a library is installed.
 
 ## Control flow
 
@@ -97,7 +111,7 @@ These rules govern implementation and changes in this workspace.
 - Every authored module and named code unit must have concise code documentation describing its responsibility and boundaries. This includes classes, interfaces, functions and methods, use cases, repositories, data sources, controllers, ViewModels, and workers.
 - Keep responsibility documentation beside the declaration using the language's documentation format, such as TSDoc/JSDoc for TypeScript or KDoc for Kotlin. Describe what the unit owns and what it delegates. A declaration comment can also serve as the file overview when it fully describes a single-unit file.
 - Document contract details where applicable: input meaning and units, outputs, preconditions, errors, side effects, authorization expectations, state transitions, and important failure or recovery behaviour. Do not merely repeat parameter types or the declaration name.
-- Repository documentation must describe data-source coordination, cache eligibility, invalidation, and transaction participation where applicable. Data-source documentation must state the storage or external system it accesses. Use-case documentation must describe the business action and its guarantees.
+- Repository documentation must describe direct storage access or data-source coordination, cache eligibility, invalidation, and transaction participation where applicable. Data-source documentation must state the storage or external system it accesses. Service and optional use-case documentation must describe the business action and its guarantees.
 - Keep shared contract documentation at the interface or port. Implementations should reference that contract and document their own responsibilities and relevant differences, avoiding copied descriptions that can drift.
 - Add inline comments where needed to explain non-obvious decisions, domain invariants, concurrency, idempotency, cache races, monetary calculations, provider uncertainty, or other important constraints. Explain why; do not narrate obvious statements or add filler comments.
 - Keep documentation proportionate: a simple function may need only one precise sentence; complex financial or recovery behaviour needs enough detail to review safely. Documentation does not replace clear names, focused code, or meaningful tests.

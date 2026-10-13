@@ -2,7 +2,7 @@
 
 Status: Adopted for the initial setup on 13 October 2026.
 
-Use Node.js 24, NestJS 12 with Fastify, Kysely, PostgreSQL, and ioredis. Keep application use cases framework-independent. The initial application is a cohesive set of feature modules; background workers can later use the same modules without duplicating financial rules.
+Use Node.js 24, NestJS 12 with Fastify, Kysely, PostgreSQL, and ioredis. Keep domain policies and capability contracts framework-independent; services own workflows by default, as recorded in [the current layout decision](0004-feature-module-layout.md). The initial application is a cohesive set of feature modules; background workers can later use the same modules without duplicating financial rules.
 
 Pin API TypeScript to 6.0.3 because the selected Swagger and typescript-eslint releases support TypeScript 6. Existing web packages keep their own TypeScript versions. Pin direct API dependencies and commit the workspace lockfile for reproducible installation.
 

@@ -1,7 +1,10 @@
+import { HealthService } from './services/health.service.js';
 import { Module } from '@nestjs/common';
-import { GetLivenessUseCase } from './application/use-cases/get-liveness.use-case.js';
-import { HealthController } from './delivery/http/health.controller.js';
+import { HealthController } from './controllers/health.controller.js';
 
-/** Bind the operational query to its HTTP adapter without introducing domain dependencies. */
-@Module({ controllers: [HealthController], providers: [GetLivenessUseCase] })
+/** Bind the operational service to its HTTP controller without introducing domain dependencies. */
+@Module({
+  controllers: [HealthController],
+  providers: [HealthService],
+})
 export class HealthModule {}
