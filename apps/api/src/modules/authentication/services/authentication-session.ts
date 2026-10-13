@@ -33,7 +33,9 @@ export async function issueSession(
     expiresAt: new Date(now.getTime() + expiresInSeconds * 1000),
     revokedAt: null,
   });
-  if (!saved) throw invalidCredentials();
+  if (!saved) {
+    throw invalidCredentials();
+  }
   return {
     accessToken,
     tokenType: 'Bearer',

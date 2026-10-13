@@ -35,8 +35,9 @@ async function settlementCredits(
     outcome.principal.amountMinorUnits,
     outcome.principal.currency,
   );
-  if (typeof outcome.feeMinorUnits !== 'bigint' || outcome.feeMinorUnits < 0n)
+  if (typeof outcome.feeMinorUnits !== 'bigint' || outcome.feeMinorUnits < 0n) {
     throw new WalletError('INVALID_AMOUNT');
+  }
   const accountId = await transaction.getSystemAccount(
     outcome.partnerAccountId,
     'partner_funds',
@@ -45,9 +46,13 @@ async function settlementCredits(
   const credits: LedgerEntry[] = [
     { accountId, side: 'credit', amountMinorUnits: principal.amountMinorUnits },
   ];
-  if (outcome.feeMinorUnits === 0n) return credits;
+  if (outcome.feeMinorUnits === 0n) {
+    return credits;
+  }
   money(outcome.feeMinorUnits, principal.currency);
-  if (!outcome.feeAccountId) throw new WalletError('LEDGER_CONFIGURATION');
+  if (!outcome.feeAccountId) {
+    throw new WalletError('LEDGER_CONFIGURATION');
+  }
   const feeAccountId = await transaction.getSystemAccount(
     outcome.feeAccountId,
     'fee_income',
@@ -90,7 +95,9 @@ export class WalletReservationService {
       },
       async (transaction, operationId) => {
         const [wallet] = await transaction.lockWallets([input.walletId]);
-        if (!wallet) throw new WalletError('WALLET_NOT_FOUND');
+        if (!wallet) {
+          throw new WalletError('WALLET_NOT_FOUND');
+        }
         assertWalletOwner(wallet, input.actorId);
         assertCanSpend(wallet, value);
         await transaction.createReservation({
@@ -129,10 +136,12 @@ export class WalletReservationService {
     const outcome = await this.verification.verifyOutcome(
       input.evidenceReference,
     );
-    if (outcome.outcome === 'unknown')
+    if (outcome.outcome === 'unknown') {
       throw new WalletError('OUTCOME_UNCONFIRMED');
-    if (outcome.outcome === 'failed' && !outcome.fundsSafeToRelease)
+    }
+    if (outcome.outcome === 'failed' && !outcome.fundsSafeToRelease) {
       throw new WalletError('OUTCOME_UNCONFIRMED');
+    }
     assertReference(outcome.paymentReference);
     assertReference(outcome.evidenceReference);
     const financialFingerprint =
@@ -160,15 +169,19 @@ export class WalletReservationService {
           input.reservationId,
         );
         assertReservationOpen(reservation);
-        if (reservation.paymentReference !== outcome.paymentReference)
+        if (reservation.paymentReference !== outcome.paymentReference) {
           throw new WalletError('INVALID_EVIDENCE');
+        }
         const [wallet] = await transaction.lockWallets([reservation.walletId]);
-        if (!wallet) throw new WalletError('WALLET_NOT_FOUND');
+        if (!wallet) {
+          throw new WalletError('WALLET_NOT_FOUND');
+        }
         if (
           outcome.outcome === 'succeeded' &&
           outcome.principal.currency !== reservation.currency
-        )
+        ) {
           throw new WalletError('CURRENCY_MISMATCH');
+        }
         // Existing obligations must resolve even if new spending is frozen after reservation.
         const credits: LedgerEntry[] =
           outcome.outcome === 'failed'
@@ -184,8 +197,9 @@ export class WalletReservationService {
           (sum, entry) => sum + entry.amountMinorUnits,
           0n,
         );
-        if (total !== reservation.amountMinorUnits)
+        if (total !== reservation.amountMinorUnits) {
           throw new WalletError('INVALID_EVIDENCE');
+        }
         const isCaptured = outcome.outcome === 'succeeded';
         await transaction.resolveReservation(
           reservation.id,

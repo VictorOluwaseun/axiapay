@@ -40,21 +40,23 @@ export class AuthenticationExceptionFilter implements ExceptionFilter {
       });
       return;
     }
-    if (error.code === 'DELIVERY_UNAVAILABLE')
+    if (error.code === 'DELIVERY_UNAVAILABLE') {
       this.logger.warn({
         event: 'authentication_delivery_failed',
         requestId: request.id,
         causeType:
           error.cause instanceof Error ? error.cause.name : 'UnknownError',
       });
+    }
     const statuses = {
       INVALID_INPUT: 400,
       INVALID_CREDENTIALS: 401,
       RATE_LIMITED: 429,
       DELIVERY_UNAVAILABLE: 503,
     } as const;
-    if (error.retryAfterSeconds)
+    if (error.retryAfterSeconds) {
       response.header('Retry-After', String(error.retryAfterSeconds));
+    }
     response.status(statuses[error.code]).send({
       code: error.code,
       message: error.message,

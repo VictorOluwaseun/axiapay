@@ -17,7 +17,9 @@ import {
 
 /** Convert exact PostgreSQL strings to domain bigints, keeping SQL row names inside infrastructure. */
 function walletFromRecord(record: WalletRecord | undefined): Wallet {
-  if (!record) throw new WalletError('WALLET_NOT_FOUND');
+  if (!record) {
+    throw new WalletError('WALLET_NOT_FOUND');
+  }
   return {
     id: record.id,
     ownerId: record.owner_id,
@@ -49,7 +51,9 @@ class WalletTransactionRepository implements WalletTransaction {
   /** @inheritdoc WalletTransaction.lockReservation */
   async lockReservation(reservationId: string): Promise<WalletReservation> {
     const record = await this.source.lockReservation(reservationId);
-    if (!record) throw new WalletError('RESERVATION_NOT_FOUND');
+    if (!record) {
+      throw new WalletError('RESERVATION_NOT_FOUND');
+    }
     return {
       id: record.id,
       walletId: record.wallet_id,
@@ -72,7 +76,9 @@ class WalletTransactionRepository implements WalletTransaction {
       accountKind,
       currency,
     );
-    if (!account) throw new WalletError('LEDGER_CONFIGURATION');
+    if (!account) {
+      throw new WalletError('LEDGER_CONFIGURATION');
+    }
     return account.id;
   }
 

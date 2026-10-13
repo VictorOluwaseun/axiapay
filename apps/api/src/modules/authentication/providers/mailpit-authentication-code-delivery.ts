@@ -13,8 +13,9 @@ export class MailpitAuthenticationCodeDelivery implements AuthenticationCodeDeli
       url.pathname !== '/' ||
       url.search ||
       url.hash
-    )
+    ) {
       throw new Error('Local code delivery requires a loopback Mailpit URL.');
+    }
   }
   /** Capture the code with a finite timeout; rejection or uncertainty propagates to challenge invalidation. */
   async send(
@@ -40,9 +41,10 @@ export class MailpitAuthenticationCodeDelivery implements AuthenticationCodeDeli
         Tags: ['axiapay-auth', message.contact.kind],
       }),
     });
-    if (!response.ok)
+    if (!response.ok) {
       throw new Error(
         `Local code delivery rejected with HTTP ${response.status}.`,
       );
+    }
   }
 }

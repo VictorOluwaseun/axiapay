@@ -58,11 +58,12 @@ export class AuthenticationRateLimiter implements AuthenticationAttemptLimiter {
       seconds,
       this.clock.now(),
     );
-    if (retryAfterSeconds > 0)
+    if (retryAfterSeconds > 0) {
       throw new AuthenticationError(
         'RATE_LIMITED',
         'Too many attempts. Try again later.',
         retryAfterSeconds,
       );
+    }
   }
 }

@@ -27,7 +27,9 @@ export async function startWalletTestDatabase() {
       }),
     });
     const result = await migrator.migrateToLatest();
-    if (result.error) throw result.error;
+    if (result.error) {
+      throw result.error;
+    }
     await sql`
       create role wallet_runtime login password 'wallet-test-only';
       select grant_wallet_runtime_access('wallet_runtime');

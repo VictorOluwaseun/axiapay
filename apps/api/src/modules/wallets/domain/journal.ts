@@ -20,14 +20,21 @@ export interface JournalPosting {
 
 /** Validate exact arithmetic before sending a posting to the repository. */
 export function assertBalancedJournal(posting: JournalPosting): void {
-  if (posting.entries.length < 2) throw new WalletError('LEDGER_CONFIGURATION');
+  if (posting.entries.length < 2) {
+    throw new WalletError('LEDGER_CONFIGURATION');
+  }
   let debits = 0n;
   let credits = 0n;
   for (const entry of posting.entries) {
     money(entry.amountMinorUnits, posting.currency);
-    if (entry.side === 'debit') debits += entry.amountMinorUnits;
-    if (entry.side === 'credit') credits += entry.amountMinorUnits;
+    if (entry.side === 'debit') {
+      debits += entry.amountMinorUnits;
+    }
+    if (entry.side === 'credit') {
+      credits += entry.amountMinorUnits;
+    }
   }
-  if (debits !== credits || debits === 0n)
+  if (debits !== credits || debits === 0n) {
     throw new WalletError('LEDGER_CONFIGURATION');
+  }
 }

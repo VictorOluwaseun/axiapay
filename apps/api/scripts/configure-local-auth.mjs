@@ -4,11 +4,13 @@ import { chmod, readFile, writeFile } from 'node:fs/promises';
 
 const environmentPath = new URL('../.env', import.meta.url);
 const content = await readFile(environmentPath, 'utf8');
-if (/^NODE_ENV\s*=\s*production\s*$/m.test(content))
+if (/^NODE_ENV\s*=\s*production\s*$/m.test(content)) {
   throw new Error('Local authentication setup cannot configure production.');
+}
 const current = /^AUTH_CODE_SECRET=(.*)$/m.exec(content)?.[1]?.trim();
-if (current && !/^[a-fA-F0-9]{64}$/.test(current))
+if (current && !/^[a-fA-F0-9]{64}$/.test(current)) {
   throw new Error('AUTH_CODE_SECRET already has a value. Review it manually.');
+}
 if (!current) {
   const entry = `AUTH_CODE_SECRET=${randomBytes(32).toString('hex')}`;
   const updated = /^AUTH_CODE_SECRET=.*$/m.test(content)

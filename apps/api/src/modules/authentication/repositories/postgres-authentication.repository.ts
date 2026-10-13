@@ -27,7 +27,9 @@ export class PostgresAuthenticationRepository implements AuthenticationRepositor
   private async withTransaction<T>(
     work: (repository: PostgresAuthenticationRepository) => Promise<T>,
   ): Promise<T> {
-    if (this.database.isTransaction) return work(this);
+    if (this.database.isTransaction) {
+      return work(this);
+    }
     return this.database
       .transaction()
       .execute((transaction) =>
@@ -96,15 +98,18 @@ export class PostgresAuthenticationRepository implements AuthenticationRepositor
   }
   /** Serialize redemption and wrong-guess updates on the same row until the outer transaction commits. */
   async lockChallenge(id: string): Promise<CodeChallenge | null> {
-    if (!this.database.isTransaction)
+    if (!this.database.isTransaction) {
       throw new Error('Challenge locking requires a transaction.');
+    }
     const row = await this.database
       .selectFrom('auth_challenges')
       .selectAll()
       .where('id', '=', id)
       .forUpdate()
       .executeTakeFirst();
-    if (!row) return null;
+    if (!row) {
+      return null;
+    }
     return {
       id: row.id,
       contact: {
@@ -203,7 +208,9 @@ export class PostgresAuthenticationRepository implements AuthenticationRepositor
       )
       .returningAll()
       .executeTakeFirstOrThrow();
-    if (row.attempts <= limit) return 0;
+    if (row.attempts <= limit) {
+      return 0;
+    }
     return Math.max(
       1,
       Math.ceil((row.window_ends_at.getTime() - now.getTime()) / 1000),
@@ -230,12 +237,16 @@ function mapAccount(
 
 /** Check the persisted contact discriminator before exposing a domain value. */
 function readContactKind(value: string): Contact['kind'] {
-  if (value === 'email' || value === 'phone') return value;
+  if (value === 'email' || value === 'phone') {
+    return value;
+  }
   throw new Error('Invalid stored contact kind.');
 }
 /** Check the persisted code purpose independently of HTTP input. */
 function readChallengePurpose(value: string): CodeChallenge['purpose'] {
-  if (value === 'signup' || value === 'login') return value;
+  if (value === 'signup' || value === 'login') {
+    return value;
+  }
   throw new Error('Invalid stored challenge purpose.');
 }
 /** Reject corrupt or unsupported challenge states at the persistence boundary. */
@@ -245,7 +256,8 @@ function readChallengeStatus(value: string): CodeChallenge['status'] {
     value === 'ready' ||
     value === 'consumed' ||
     value === 'invalidated'
-  )
+  ) {
     return value;
+  }
   throw new Error('Invalid stored challenge state.');
 }

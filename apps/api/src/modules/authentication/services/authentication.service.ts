@@ -72,15 +72,18 @@ export class AuthenticationService {
     clientIp: string;
   }): Promise<AuthenticationResult> {
     const contact = normalizeContact(input.contact);
-    if (Array.from(input.password).length > 128) throw invalidCredentials();
+    if (Array.from(input.password).length > 128) {
+      throw invalidCredentials();
+    }
     await this.limiter.passwordLogin(contact, input.clientIp);
     const account = await this.repository.findAccount(contact);
     const valid = await this.passwords.verify(
       input.password,
       account?.passwordHash ?? null,
     );
-    if (!valid || !account || account.disabledAt !== null)
+    if (!valid || !account || account.disabledAt !== null) {
       throw invalidCredentials();
+    }
     return issueSession(
       this.repository,
       this.secrets,
@@ -90,12 +93,16 @@ export class AuthenticationService {
   }
   /** Return only the caller's verified identity; expired, disabled, revoked, and unknown sessions share one failure. */
   async authenticate(token: string): Promise<AccountIdentity> {
-    if (!/^[A-Za-z0-9_-]{43}$/.test(token)) throw invalidCredentials();
+    if (!/^[A-Za-z0-9_-]{43}$/.test(token)) {
+      throw invalidCredentials();
+    }
     const account = await this.repository.findSessionIdentity(
       this.secrets.tokenDigest(token),
       this.clock.now(),
     );
-    if (!account) throw invalidCredentials();
+    if (!account) {
+      throw invalidCredentials();
+    }
     return accountIdentity(account);
   }
   /** End this bearer session immediately; an unknown or previously revoked token is already logged out. */

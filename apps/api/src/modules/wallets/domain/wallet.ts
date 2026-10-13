@@ -25,26 +25,32 @@ export interface WalletReservation {
 
 /** Require ownership inside every customer business operation, including balance reads. */
 export function assertWalletOwner(wallet: Wallet, actorId: string): void {
-  if (wallet.ownerId !== actorId) throw new WalletError('FORBIDDEN');
+  if (wallet.ownerId !== actorId) {
+    throw new WalletError('FORBIDDEN');
+  }
 }
 
 /** Reject restricted wallets for new incoming or outgoing customer instructions. */
 export function assertWalletActive(wallet: Wallet): void {
-  if (wallet.walletStatus !== 'active')
+  if (wallet.walletStatus !== 'active') {
     throw new WalletError('WALLET_RESTRICTED');
+  }
 }
 
 /** Enforce currency and available funds using a transaction-locked snapshot. */
 export function assertCanSpend(wallet: Wallet, value: Money): void {
   assertWalletActive(wallet);
-  if (wallet.currency !== value.currency)
+  if (wallet.currency !== value.currency) {
     throw new WalletError('CURRENCY_MISMATCH');
-  if (wallet.availableMinorUnits < value.amountMinorUnits)
+  }
+  if (wallet.availableMinorUnits < value.amountMinorUnits) {
     throw new WalletError('INSUFFICIENT_FUNDS');
+  }
 }
 
 /** Prevent another resolution of money already captured or released. */
 export function assertReservationOpen(reservation: WalletReservation): void {
-  if (reservation.reservationStatus !== 'reserved')
+  if (reservation.reservationStatus !== 'reserved') {
     throw new WalletError('RESERVATION_RESOLVED');
+  }
 }

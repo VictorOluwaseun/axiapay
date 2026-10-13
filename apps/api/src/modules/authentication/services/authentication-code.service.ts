@@ -54,12 +54,15 @@ export class AuthenticationCodeService {
     clientIp: string;
   }) {
     const contact = normalizeContact(input.contact);
-    if (input.purpose === 'login' && input.password !== undefined)
+    if (input.purpose === 'login' && input.password !== undefined) {
       throw new AuthenticationError(
         'INVALID_INPUT',
         'A code login request does not accept a password.',
       );
-    if (input.password !== undefined) validateNewPassword(input.password);
+    }
+    if (input.password !== undefined) {
+      validateNewPassword(input.password);
+    }
     await this.limiter.codeRequest(contact, input.clientIp);
     const passwordHash =
       input.password === undefined
@@ -121,19 +124,26 @@ export class AuthenticationCodeService {
     const result = await this.repository.transaction(async (repository) => {
       const challenge = await repository.lockChallenge(input.challengeId);
       const now = this.clock.now();
-      if (!challenge || !canRedeemChallenge(challenge, input.purpose, now))
+      if (!challenge || !canRedeemChallenge(challenge, input.purpose, now)) {
         return null;
+      }
       const matches = this.secrets.matches(
         challenge.codeDigest,
         this.secrets.codeDigest(challenge.id, input.code),
       );
-      if (!matches) return this.recordWrongCode(repository, challenge.id);
+      if (!matches) {
+        return this.recordWrongCode(repository, challenge.id);
+      }
       await repository.changeChallengeStatus(challenge.id, 'ready', 'consumed');
       const account = await this.resolveAccount(repository, challenge, now);
-      if (!account || account.disabledAt !== null) return null;
+      if (!account || account.disabledAt !== null) {
+        return null;
+      }
       return issueSession(repository, this.secrets, account, now);
     });
-    if (!result) throw invalidCredentials();
+    if (!result) {
+      throw invalidCredentials();
+    }
     return result;
   }
   /** Keep the failed result explicit so the transaction commits its attempt count. */
@@ -150,8 +160,9 @@ export class AuthenticationCodeService {
     challenge: CodeChallenge,
     now: Date,
   ): Promise<AuthenticationAccount | null> {
-    if (challenge.purpose === 'login')
+    if (challenge.purpose === 'login') {
       return repository.findAccount(challenge.contact);
+    }
     return repository.createAccount({
       id: this.secrets.id(),
       contact: challenge.contact,

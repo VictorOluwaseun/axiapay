@@ -18,6 +18,8 @@ export interface AuthenticationHttpResponse {
 /** Accept exactly one opaque bearer token; cookies and query parameters do not authorize these routes. */
 export function readBearerToken(authorization: string | undefined): string {
   const match = /^Bearer ([A-Za-z0-9_-]{43})$/i.exec(authorization ?? '');
-  if (!match?.[1]) throw invalidCredentials();
+  if (!match?.[1]) {
+    throw invalidCredentials();
+  }
   return match[1];
 }

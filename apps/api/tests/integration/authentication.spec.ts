@@ -40,13 +40,17 @@ class CapturedCodeDelivery implements AuthenticationCodeDelivery {
   async send(
     message: Parameters<AuthenticationCodeDelivery['send']>[0],
   ): Promise<void> {
-    if (this.fail) throw new Error('simulated provider rejection');
+    if (this.fail) {
+      throw new Error('simulated provider rejection');
+    }
     this.messages.push(message);
   }
   /** Retrieve the secret a test recipient would receive; unknown challenge IDs fail the test immediately. */
   codeFor(id: string): string {
     const message = this.messages.find((entry) => entry.challengeId === id);
-    if (!message) throw new Error('No captured code for this challenge.');
+    if (!message) {
+      throw new Error('No captured code for this challenge.');
+    }
     return message.code;
   }
 }
@@ -81,7 +85,9 @@ beforeAll(async () => {
     },
   });
   const { error } = await migrator.migrateToLatest();
-  if (error) throw error;
+  if (error) {
+    throw error;
+  }
   const module = await Test.createTestingModule({
     imports: [RequestValidationModule, AuthenticationModule],
   })
@@ -292,11 +298,12 @@ describe('authentication HTTP and persistence', () => {
     const challengeId = request.json().challengeId as string;
     const correct = delivery.codeFor(challengeId);
     const incorrect = correct === '000000' ? '111111' : '000000';
-    for (let attempt = 0; attempt < 5; attempt += 1)
+    for (let attempt = 0; attempt < 5; attempt += 1) {
       expect(
         (await post('signup/verify', { challengeId, code: incorrect }))
           .statusCode,
       ).toBe(401);
+    }
     expect(
       (await post('signup/verify', { challengeId, code: correct })).statusCode,
     ).toBe(401);
@@ -443,7 +450,9 @@ describe('authentication HTTP and persistence', () => {
       repository.transaction(async (outer) => {
         await outer.transaction(async (nested) => {
           const challenge = await nested.lockChallenge(challengeId);
-          if (!challenge) throw new Error('Expected the existing challenge.');
+          if (!challenge) {
+            throw new Error('Expected the existing challenge.');
+          }
           await nested.storeChallenge({
             ...challenge,
             id: randomUUID(),
@@ -489,7 +498,7 @@ describe('authentication HTTP and persistence', () => {
     expect(delivery.messages).toHaveLength(1);
   });
   it('throttles password guessing identically for registered and unknown contacts', async () => {
-    for (let attempt = 0; attempt < 10; attempt += 1)
+    for (let attempt = 0; attempt < 10; attempt += 1) {
       expect(
         (
           await post('login/password', {
@@ -498,6 +507,7 @@ describe('authentication HTTP and persistence', () => {
           })
         ).statusCode,
       ).toBe(401);
+    }
     const blocked = await post('login/password', {
       contact: email,
       password: 'incorrect',

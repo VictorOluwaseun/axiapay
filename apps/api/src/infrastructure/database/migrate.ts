@@ -8,8 +8,9 @@ import { createDatabase } from './create-database.js';
 /** Run pending migrations and release the pool on success or failure; never undo changes implicitly. */
 async function migrate(): Promise<void> {
   const connectionString = process.env.DATABASE_URL;
-  if (!connectionString)
+  if (!connectionString) {
     throw new Error('DATABASE_URL is required to run migrations.');
+  }
   const database = createDatabase(connectionString);
   const migrationFolder = fileURLToPath(
     new URL('../../../migrations/', import.meta.url),
@@ -20,9 +21,12 @@ async function migrate(): Promise<void> {
   });
   try {
     const { error, results } = await migrator.migrateToLatest();
-    for (const result of results ?? [])
+    for (const result of results ?? []) {
       console.info(`${result.migrationName}: ${result.status}`);
-    if (error) throw error;
+    }
+    if (error) {
+      throw error;
+    }
   } finally {
     await database.destroy();
   }

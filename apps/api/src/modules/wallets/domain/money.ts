@@ -11,7 +11,9 @@ export interface Money {
 
 /** Validate a currency identifier; enabling products/currencies remains an application policy. */
 export function assertCurrency(currency: string): void {
-  if (!/^[A-Z]{3}$/.test(currency)) throw new WalletError('INVALID_CURRENCY');
+  if (!/^[A-Z]{3}$/.test(currency)) {
+    throw new WalletError('INVALID_CURRENCY');
+  }
 }
 
 /** Construct a bounded amount without accepting floating-point input. */
@@ -21,13 +23,15 @@ export function money(amountMinorUnits: bigint, currency: string): Money {
     typeof amountMinorUnits !== 'bigint' ||
     amountMinorUnits <= 0n ||
     amountMinorUnits > maximumMinorUnits
-  )
+  ) {
     throw new WalletError('INVALID_AMOUNT');
+  }
   return Object.freeze({ amountMinorUnits, currency });
 }
 
 /** Reject missing, oversized, or whitespace-padded identities before acquiring database locks. */
 export function assertReference(reference: string): void {
-  if (!reference || reference.length > 200 || reference.trim() !== reference)
+  if (!reference || reference.length > 200 || reference.trim() !== reference) {
     throw new WalletError('INVALID_REFERENCE');
+  }
 }

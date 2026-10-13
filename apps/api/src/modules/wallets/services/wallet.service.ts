@@ -64,8 +64,9 @@ export class WalletService {
     const value = money(input.value.amountMinorUnits, input.value.currency);
     assertReference(input.actorId);
     assertReference(input.requestKey);
-    if (input.sourceWalletId === input.destinationWalletId)
+    if (input.sourceWalletId === input.destinationWalletId) {
       throw new WalletError('INVALID_TRANSFER');
+    }
     return this.wallets.executeOnce(
       {
         requestScope: `customer:${input.actorId}`,
@@ -89,12 +90,15 @@ export class WalletService {
         const destination = snapshots.find(
           (wallet) => wallet.id === input.destinationWalletId,
         );
-        if (!source || !destination) throw new WalletError('WALLET_NOT_FOUND');
+        if (!source || !destination) {
+          throw new WalletError('WALLET_NOT_FOUND');
+        }
         assertWalletOwner(source, input.actorId);
         assertCanSpend(source, value);
         assertWalletActive(destination);
-        if (destination.currency !== value.currency)
+        if (destination.currency !== value.currency) {
           throw new WalletError('CURRENCY_MISMATCH');
+        }
         return transaction.postJournal(operationId, {
           journalKind: 'transfer',
           currency: value.currency,
@@ -137,11 +141,15 @@ export class WalletService {
       },
       async (transaction, operationId) => {
         const [wallet] = await transaction.lockWallets([funding.walletId]);
-        if (!wallet) throw new WalletError('WALLET_NOT_FOUND');
-        if (wallet.walletStatus === 'closed')
+        if (!wallet) {
+          throw new WalletError('WALLET_NOT_FOUND');
+        }
+        if (wallet.walletStatus === 'closed') {
           throw new WalletError('WALLET_RESTRICTED');
-        if (wallet.currency !== value.currency)
+        }
+        if (wallet.currency !== value.currency) {
           throw new WalletError('CURRENCY_MISMATCH');
+        }
         const accountId = await transaction.getSystemAccount(
           funding.partnerAccountId,
           'partner_funds',

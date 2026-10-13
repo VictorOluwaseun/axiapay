@@ -59,7 +59,9 @@ async function fixture() {
           /** Reject evidence the test has not explicitly verified. */
           async verifyFunding(reference) {
             const funding = fundingEvidence.get(reference);
-            if (!funding) throw new Error('unverified funding');
+            if (!funding) {
+              throw new Error('unverified funding');
+            }
             return funding;
           },
         },
@@ -67,7 +69,9 @@ async function fixture() {
           /** Return the controlled provider outcome without converting uncertainty into failure. */
           async verifyOutcome(reference) {
             const outcome = outcomeEvidence.get(reference);
-            if (!outcome) throw new Error('unverified outcome');
+            if (!outcome) {
+              throw new Error('unverified outcome');
+            }
             return outcome;
           },
         },

@@ -12,13 +12,15 @@ export const authenticationPolicy = Object.freeze({
 /** Canonicalize email case and require explicit international phone numbers; never guess a country. */
 export function normalizeContact(contact: Contact): Contact {
   const value = contact.value.trim();
-  if (contact.kind === 'phone' && /^\+[1-9]\d{7,14}$/.test(value))
+  if (contact.kind === 'phone' && /^\+[1-9]\d{7,14}$/.test(value)) {
     return { kind: 'phone', value };
-  if (contact.kind === 'phone')
+  }
+  if (contact.kind === 'phone') {
     throw new AuthenticationError(
       'INVALID_INPUT',
       'Use an international phone number such as +2348012345678.',
     );
+  }
   if (
     contact.kind !== 'email' ||
     value.length > 254 ||
@@ -37,22 +39,24 @@ export function normalizeContact(contact: Contact): Contact {
     localPart.startsWith('.') ||
     localPart.endsWith('.') ||
     localPart.includes('..')
-  )
+  ) {
     throw new AuthenticationError(
       'INVALID_INPUT',
       'Enter a valid email address.',
     );
+  }
   return { kind: 'email', value: value.toLowerCase() };
 }
 
 /** Allow long Unicode passphrases without trimming or composition rules; bound expensive hashing input. */
 export function validateNewPassword(password: string): void {
   const length = Array.from(password).length;
-  if (length < 15 || length > 128)
+  if (length < 15 || length > 128) {
     throw new AuthenticationError(
       'INVALID_INPUT',
       'Use a password between 15 and 128 characters.',
     );
+  }
 }
 
 /** Check immutable challenge policy before comparing its secret or applying any account changes. */

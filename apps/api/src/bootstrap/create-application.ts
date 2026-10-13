@@ -14,7 +14,9 @@ import { ApiModule } from './api.module.js';
 /** Add development API documentation; production exposes no interactive documentation route. */
 function configureDocumentation(application: NestFastifyApplication): void {
   const configuration = application.get(ConfigService);
-  if (configuration.getOrThrow<string>('NODE_ENV') === 'production') return;
+  if (configuration.getOrThrow<string>('NODE_ENV') === 'production') {
+    return;
+  }
   const options = new DocumentBuilder()
     .setTitle('AxiaPay API')
     .setDescription('Individual payment application API foundation.')

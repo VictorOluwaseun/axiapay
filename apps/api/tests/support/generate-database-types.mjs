@@ -26,7 +26,9 @@ try {
     }),
   });
   const result = await migrator.migrateToLatest();
-  if (result.error) throw result.error;
+  if (result.error) {
+    throw result.error;
+  }
   const child = spawnSync(
     'pnpm',
     [
@@ -47,7 +49,9 @@ try {
       cwd: fileURLToPath(new URL('../../', import.meta.url)),
     },
   );
-  if (child.status !== 0) throw new Error('Database type generation failed.');
+  if (child.status !== 0) {
+    throw new Error('Database type generation failed.');
+  }
 } finally {
   await database.destroy();
   await container.stop();

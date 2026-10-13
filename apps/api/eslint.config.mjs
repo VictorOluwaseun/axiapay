@@ -39,6 +39,7 @@ export default tseslint.config(
   {
     languageOptions: { globals: globals.node },
     rules: {
+      curly: ['error', 'all'],
       'no-restricted-syntax': [
         'error',
         {

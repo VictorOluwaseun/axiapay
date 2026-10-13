@@ -15,8 +15,9 @@ import { WalletError } from '../../domain/wallet-error.js';
 
 /** Read a PostgreSQL SQLSTATE without discarding the original diagnostic cause. */
 function sqlState(error: unknown): unknown {
-  if (typeof error !== 'object' || error === null || !('code' in error))
+  if (typeof error !== 'object' || error === null || !('code' in error)) {
     return undefined;
+  }
   return error.code;
 }
 
@@ -76,7 +77,7 @@ export class WalletPostgresDataSource {
         )
         .returning('id')
         .executeTakeFirst();
-      if (inserted)
+      if (inserted) {
         await transaction
           .insertInto('ledger_accounts')
           .values([
@@ -96,6 +97,7 @@ export class WalletPostgresDataSource {
             },
           ])
           .execute();
+      }
       const wallet = await transaction
         .selectFrom('wallets')
         .select('id')
@@ -229,11 +231,15 @@ export class WalletPostgresDataSource {
         return await this.claimAndExecute(identity, action);
       } catch (error) {
         const code = sqlState(error);
-        if (code === '23505')
+        if (code === '23505') {
           throw new WalletError('IDEMPOTENCY_CONFLICT', { cause: error });
-        if (code !== '40001' && code !== '40P01') throw error;
-        if (attempt === 2)
+        }
+        if (code !== '40001' && code !== '40P01') {
+          throw error;
+        }
+        if (attempt === 2) {
           throw new WalletError('CONCURRENT_WRITE', { cause: error });
+        }
         await waitForRetry(5 * (attempt + 1));
       }
     }
@@ -265,19 +271,21 @@ export class WalletPostgresDataSource {
           )
           .returning('id')
           .executeTakeFirst();
-        if (operation)
+        if (operation) {
           return action(
             new WalletPostgresDataSource(transaction),
             operation.id,
           );
+        }
         const existing = await transaction
           .selectFrom('wallet_operations')
           .selectAll()
           .where('request_scope', '=', identity.requestScope)
           .where('request_key', '=', identity.requestKey)
           .executeTakeFirstOrThrow();
-        if (existing.request_fingerprint !== identity.requestFingerprint)
+        if (existing.request_fingerprint !== identity.requestFingerprint) {
           throw new WalletError('IDEMPOTENCY_CONFLICT');
+        }
         const journal = await transaction
           .selectFrom('ledger_journals')
           .select(['id', 'reservation_id'])

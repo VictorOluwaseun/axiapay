@@ -61,9 +61,10 @@ describe('authentication policy', () => {
       canRedeemChallenge({ ...challenge, attempts: 5 }, 'signup', now),
     ).toBe(false);
     expect(canRedeemChallenge(challenge, 'login', now)).toBe(false);
-    for (const status of ['pending', 'consumed', 'invalidated'] as const)
+    for (const status of ['pending', 'consumed', 'invalidated'] as const) {
       expect(canRedeemChallenge({ ...challenge, status }, 'signup', now)).toBe(
         false,
       );
+    }
   });
 });

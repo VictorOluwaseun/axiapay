@@ -40,7 +40,9 @@ export class NodeAuthenticationSecrets implements AuthenticationSecrets {
   matches(left: string, right: string): boolean {
     const expected = Buffer.from(left, 'hex');
     const actual = Buffer.from(right, 'hex');
-    if (expected.length !== actual.length) return false;
+    if (expected.length !== actual.length) {
+      return false;
+    }
     return timingSafeEqual(expected, actual);
   }
   /** Encode the digest context unambiguously before applying the secret key. */

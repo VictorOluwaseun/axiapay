@@ -19,7 +19,9 @@ const environmentSchema = z
     AUTH_MAILPIT_URL: z.url().default('http://127.0.0.1:58025'),
   })
   .superRefine((settings, context) => {
-    if (settings.NODE_ENV !== 'production') return;
+    if (settings.NODE_ENV !== 'production') {
+      return;
+    }
     context.addIssue({
       code: 'custom',
       path: ['AUTH_CODE_DELIVERY'],
@@ -35,7 +37,9 @@ export function validateEnvironment(
   input: Record<string, unknown>,
 ): ApiEnvironment {
   const result = environmentSchema.safeParse(input);
-  if (result.success) return result.data;
+  if (result.success) {
+    return result.data;
+  }
   const fields = [
     ...new Set(result.error.issues.map((issue) => issue.path.join('.'))),
   ];
