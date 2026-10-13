@@ -9,8 +9,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createDatabase } from '../../src/infrastructure/database/create-database.js';
 
-/** Apply the actual migration chain in a disposable container, then use a restricted application role. */
-export async function startWalletTestDatabase() {
+/** Apply the actual migration chain (or a named upgrade baseline) in a disposable container, then use a restricted role. */
+export async function startWalletTestDatabase(migrationTarget?: string) {
   const container: StartedPostgreSqlContainer = await new PostgreSqlContainer(
     'postgres:18-alpine',
   ).start();
@@ -26,7 +26,9 @@ export async function startWalletTestDatabase() {
         ),
       }),
     });
-    const result = await migrator.migrateToLatest();
+    const result = migrationTarget
+      ? await migrator.migrateTo(migrationTarget)
+      : await migrator.migrateToLatest();
     if (result.error) {
       throw result.error;
     }
@@ -39,6 +41,7 @@ export async function startWalletTestDatabase() {
     runtimeUrl.password = 'wallet-test-only';
     const database = createDatabase(runtimeUrl.toString());
     return {
+      migrator,
       administrator,
       database,
       /** Release pools before destroying only this test's disposable container. */

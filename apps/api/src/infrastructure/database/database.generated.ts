@@ -11,6 +11,18 @@ export type Generated<T> = T extends ColumnType<infer S, infer I, infer U>
 
 export type Int8 = ColumnType<string, bigint | number | string, bigint | number | string>;
 
+export type Json = JsonValue;
+
+export type JsonArray = JsonValue[];
+
+export type JsonObject = {
+  [x: string]: JsonValue | undefined;
+};
+
+export type JsonPrimitive = boolean | number | string | null;
+
+export type JsonValue = JsonArray | JsonObject | JsonPrimitive;
+
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
 export interface AuthAccounts {
@@ -36,6 +48,31 @@ export interface AuthChallenges {
   status: string;
 }
 
+export interface AuthDeviceChallenges {
+  account_id: string | null;
+  attempts: Generated<number>;
+  consumed_at: Timestamp | null;
+  credential_id: string;
+  device_name: string | null;
+  enrollment_session_id: string | null;
+  expires_at: Timestamp;
+  id: string;
+  message: string;
+  public_key: string | null;
+  purpose: string;
+}
+
+export interface AuthDeviceCredentials {
+  account_id: string;
+  created_at: Timestamp;
+  device_name: string;
+  id: string;
+  key_fingerprint: string;
+  last_used_at: Timestamp | null;
+  public_key: string;
+  revoked_at: Timestamp | null;
+}
+
 export interface AuthRateLimits {
   attempts: number;
   key: string;
@@ -45,10 +82,36 @@ export interface AuthRateLimits {
 export interface AuthSessions {
   account_id: string;
   created_at: Timestamp;
+  device_credential_id: string | null;
   expires_at: Timestamp;
   id: string;
+  primary_authenticated_at: Timestamp | null;
   revoked_at: Timestamp | null;
   token_digest: string;
+}
+
+export interface BankTransferBanks {
+  bank_code: string;
+  country_code: string;
+  created_at: Generated<Timestamp>;
+  currency: string;
+  display_name: string;
+  id: string;
+  is_enabled: Generated<boolean>;
+  maximum_account_number_length: number;
+  minimum_account_number_length: number;
+}
+
+export interface BankTransferBeneficiaryValidations {
+  account_name: string;
+  account_number: string;
+  bank_id: string;
+  evidence_reference: string;
+  expires_at: Timestamp;
+  id: string;
+  owner_id: string;
+  product_id: string;
+  verified_at: Timestamp;
 }
 
 export interface LedgerAccounts {
@@ -84,6 +147,159 @@ export interface LedgerJournals {
   journal_kind: string;
   recorded_at: Generated<Timestamp>;
   reservation_id: string | null;
+}
+
+export interface ServiceBillAccountValidations {
+  account_number: string;
+  customer_name: string;
+  evidence_reference: string;
+  expires_at: Timestamp;
+  id: string;
+  owner_id: string;
+  product_id: string;
+  service_address: string | null;
+  verified_at: Timestamp;
+}
+
+export interface ServiceCatalogProducts {
+  account_validation_lifetime_seconds: number | null;
+  allowance_label: string | null;
+  amount_step_minor_units: Int8;
+  bank_beneficiary_validation_lifetime_seconds: number | null;
+  bank_id: string | null;
+  biller_code: string | null;
+  created_at: Generated<Timestamp>;
+  currency: string;
+  display_name: string;
+  education_payment_type: string | null;
+  education_purpose: string | null;
+  education_validation_lifetime_seconds: number | null;
+  electricity_meter_type: string | null;
+  fee_minor_units: Int8;
+  fixed_price_minor_units: Int8 | null;
+  id: string;
+  insurance_application_lifetime_seconds: number | null;
+  insurance_terms: Json | null;
+  is_enabled: Generated<boolean>;
+  maximum_amount_minor_units: Int8;
+  minimum_amount_minor_units: Int8;
+  network_code: string | null;
+  provider_key: string;
+  provider_product_code: string;
+  quote_lifetime_seconds: number;
+  service_type: string;
+  validity_seconds: number | null;
+}
+
+export interface ServiceEducationValidations {
+  beneficiary_identifier: string;
+  beneficiary_name: string;
+  evidence_reference: string;
+  expires_at: Timestamp;
+  id: string;
+  owner_id: string;
+  product_id: string;
+  verified_at: Timestamp;
+}
+
+export interface ServiceInsuranceApplications {
+  accepted_terms: boolean;
+  coverage_ends_on: Timestamp;
+  coverage_starts_on: Timestamp;
+  created_at: Timestamp;
+  evidence_reference: string;
+  expires_at: Timestamp;
+  id: string;
+  insured_profile: Json;
+  owner_id: string;
+  product_id: string;
+  terms_version: string;
+}
+
+export interface ServicePaymentDocuments {
+  content_type: string;
+  display_name: string;
+  document_id: string;
+  document_type: string;
+  payment_id: string;
+  provider_document_reference: string;
+  recorded_at: Generated<Timestamp>;
+}
+
+export interface ServicePaymentFulfilments {
+  fulfilment: Json;
+  payment_id: string;
+  recorded_at: Generated<Timestamp>;
+}
+
+export interface ServicePaymentOutcomes {
+  evidence_reference: string;
+  failure_reason: string | null;
+  outcome: string;
+  payment_id: string;
+  provider_key: string;
+  provider_transaction_reference: string;
+  recorded_at: Generated<Timestamp>;
+}
+
+export interface ServicePaymentQuotes {
+  account_validation_id: string | null;
+  bank_beneficiary_validation_id: string | null;
+  created_at: Timestamp;
+  currency: string;
+  education_validation_id: string | null;
+  expires_at: Timestamp;
+  fee_minor_units: Int8;
+  id: string;
+  insurance_application_id: string | null;
+  narration: string | null;
+  owner_id: string;
+  principal_minor_units: Int8;
+  product_id: string;
+  recipient_phone_number: string | null;
+  total_debit_minor_units: Int8;
+  wallet_id: string;
+}
+
+export interface ServicePayments {
+  created_at: Generated<Timestamp>;
+  fee_account_id: string | null;
+  id: string;
+  insurance_application_id: string | null;
+  owner_id: string;
+  partner_account_id: string;
+  quote_id: string;
+  request_key: string;
+  submission_started_at: Timestamp | null;
+}
+
+export interface WalletFundingPayments {
+  environment: string;
+  external_movement_id: string;
+  funding_request_id: string;
+  partner: string;
+  verified_at: Generated<Timestamp>;
+}
+
+export interface WalletFundingRequests {
+  amount_minor_units: Int8;
+  checkout_url: string | null;
+  created_at: Generated<Timestamp>;
+  currency: string;
+  environment: string;
+  funding_option_id: string;
+  id: string;
+  initialization_started_at: Timestamp | null;
+  owner_id: string;
+  /**
+   * Stable adapter binding ID; legacy column name retained for financial history compatibility.
+   */
+  partner: string;
+  partner_account_id: string;
+  payer_email: string;
+  request_fingerprint: string;
+  request_key: string;
+  wallet_id: string;
 }
 
 export interface WalletOperations {
@@ -123,12 +339,27 @@ export interface Wallets {
 export interface DB {
   auth_accounts: AuthAccounts;
   auth_challenges: AuthChallenges;
+  auth_device_challenges: AuthDeviceChallenges;
+  auth_device_credentials: AuthDeviceCredentials;
   auth_rate_limits: AuthRateLimits;
   auth_sessions: AuthSessions;
+  bank_transfer_banks: BankTransferBanks;
+  bank_transfer_beneficiary_validations: BankTransferBeneficiaryValidations;
   ledger_accounts: LedgerAccounts;
   ledger_balances: LedgerBalances;
   ledger_entries: LedgerEntries;
   ledger_journals: LedgerJournals;
+  service_bill_account_validations: ServiceBillAccountValidations;
+  service_catalog_products: ServiceCatalogProducts;
+  service_education_validations: ServiceEducationValidations;
+  service_insurance_applications: ServiceInsuranceApplications;
+  service_payment_documents: ServicePaymentDocuments;
+  service_payment_fulfilments: ServicePaymentFulfilments;
+  service_payment_outcomes: ServicePaymentOutcomes;
+  service_payment_quotes: ServicePaymentQuotes;
+  service_payments: ServicePayments;
+  wallet_funding_payments: WalletFundingPayments;
+  wallet_funding_requests: WalletFundingRequests;
   wallet_operations: WalletOperations;
   wallet_outbox_events: WalletOutboxEvents;
   wallet_reservations: WalletReservations;
