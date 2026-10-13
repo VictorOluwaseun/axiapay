@@ -2,7 +2,7 @@
 
 AxiaPay is being built for wallet-funded airtime, data, and bill payments, with transfers, bulk payments, scheduled transactions, and notifications. The MVP serves individuals; agent and business features are future scope. The first offline payment pilot will cover airtime and data through an SMS gateway.
 
-Development currently focuses on the API. Authentication supports verified phone or email signup, password and one-time-code login, and revocable sessions. Codes are captured locally in Mailpit for development. The application also provides liveness, OpenAPI documentation, migrations, and tests. Public payment routes, service integrations, and real SMS delivery remain to be connected.
+Development currently focuses on the API. Authentication supports verified phone or email signup, password and one-time-code login, and revocable sessions. Codes are captured locally in Mailpit for development. The application also provides wallet operations, first-party airtime/data/TV/electricity/education/insurance/bank-transfer catalogue, recipient verification and quote APIs, duplicate-safe payment submission/recovery, liveness, OpenAPI documentation, migrations, and tests. Service fulfilment adapters and real SMS delivery remain to be connected; absent adapters disable purchases before funds are held. See the [payment contract guide](apps/api/src/modules/payments/README.md).
 
 ## Project structure
 

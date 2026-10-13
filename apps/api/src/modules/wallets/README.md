@@ -1,10 +1,10 @@
 # Wallets
 
-AxiaPay owns the customer subledger. This first increment implements empty-wallet provisioning, owner-authorized balances, settled funding, internal transfers, reservations, and full reservation capture/release. It uses the existing PostgreSQL/Kysely stack and installs no new dependency.
+AxiaPay owns the customer subledger. It implements empty-wallet provisioning, owner-authorized balances, confirmed funding collections, internal transfers, reservations, and full reservation capture/release. It uses the existing PostgreSQL/Kysely stack and installs no new dependency.
 
 ## Calling the module
 
-`WalletModule.register({ funding, paymentOutcome })` registers explicit verifier adapters and exports `WalletService` through Nest dependency injection. The service owns wallet operations through transaction-bound repositories and delegates the held-money lifecycle to `WalletReservationService`. `DatabaseModule` manages the shared pool lifecycle. API and worker callers share these operations.
+`WalletModule` exports `WalletService` through Nest dependency injection for customer operations. `WalletModule.register({ funding, paymentOutcome })` additionally registers trusted verifier adapters for integration callers. Calling funding or settlement without the corresponding verifier fails with `VERIFICATION_UNAVAILABLE` before touching the ledger; there are no permissive defaults. The service owns wallet operations through transaction-bound repositories and delegates the held-money lifecycle to `WalletReservationService`. `DatabaseModule` manages the shared pool lifecycle. API and worker callers share these operations.
 
 | Use case                  | Guarantee                                                                                                                                        |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -15,9 +15,49 @@ AxiaPay owns the customer subledger. This first increment implements empty-walle
 | `ReserveWalletFunds`      | Moves the accepted payment's full debit from available to reserved, linked to a durable payment reference.                                       |
 | `SettleWalletReservation` | Full capture on verified success or full release on verified failure with no outstanding partner debit. Unknown outcomes retain the reservation. |
 
-There are no wallet HTTP routes yet. A controller or worker must obtain `actorId` from a verified session, enforce the payment authorization/quote/limit rules for its business action, and map domain bigints to integer strings in JSON. Never accept an actor identity, settled-funding object, or provider-success flag directly from a customer request. Wallet ownership is checked again inside customer service operations. Funding and settlement are trusted integration operations, not customer mutation endpoints.
+`WalletHttpModule`, imported by `ApiModule`, exposes authenticated wallet creation, balances, and internal transfers. It obtains `actorId` exclusively from the verified session, rejects unknown DTO fields, and maps domain bigints to integer strings in JSON. Never accept an actor identity, settled-funding object, or provider-success flag directly from a customer request. Wallet ownership is checked again inside customer service operations. Funding and settlement are trusted integration operations, not customer mutation endpoints. Reservations remain behind the [accepted-payment workflows](../payments/README.md), which own quote consent, fees, product limits and provider execution. Service-provider adapters remain unconnected by default.
 
-The verifier ports have no default implementation. A real funding adapter must authenticate the source, verify the settled economic movement, bind it to the intended wallet and provisioned partner asset account, and return canonical amounts/currency. The outcome adapter must verify the accepted payment reference, final outcome, actual principal deduction, and authorized fee allocation. Payment instruction/quote records and provider attempts belong to the payments integration; the wallet module does not implement them.
+The base module has no permissive verifier defaults. The [wallet-funding feature](../wallet-funding/README.md) supplies provider-neutral collection verification through `WalletModule.withFundingVerification`. Optional delivery adapters authenticate notifications; the funding core independently verifies payment status and financial terms, binds the payment to an existing funding request, and records a unique economic movement before invoking this ledger. Its partner account is gross collection clearing; bank settlement and fee/reversal accounting are separate. The [payment feature](../payments/README.md) supplies trusted stored-outcome verification through `WalletModule.withPaymentOutcomeVerification`; accepted references, exact principal/fee allocation and safe failure evidence precede capture/release. Bank success additionally requires matching receiving-account credit proof. Payment instruction/quote records and provider attempts belong to the payments feature, whose external execution adapters remain unregistered by default.
+
+## Customer HTTP API
+
+Every route requires `Authorization: Bearer <accessToken>` from successful signup verification or login. The guard checks the current session and account in PostgreSQL on every request; missing, expired, revoked, disabled, and invalid sessions receive 401. The controller never accepts an owner override. UUID case is normalized before service calls and idempotency fingerprints.
+
+| Method | Route                             | Input                                              | Success                                                                   |
+| ------ | --------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------- |
+| POST   | `/v1/wallets`                     | `{ "currency": "NGN" }`                            | 201: empty wallet or existing owner/currency wallet with current balances |
+| GET    | `/v1/wallets/:walletId/balance`   | Wallet UUID in the path                            | 200: owner-only authoritative balance                                     |
+| POST   | `/v1/wallets/:walletId/transfers` | Destination, currency, amount, logical request key | 200: committed operation receipt, including on replay                     |
+
+Wallet creation and balance responses have this shape:
+
+```json
+{
+  "id": "c764f366-e737-4c84-b63b-0df02ad39c76",
+  "currency": "NGN",
+  "walletStatus": "active",
+  "availableMinorUnits": "12500",
+  "reservedMinorUnits": "2500",
+  "totalMinorUnits": "15000"
+}
+```
+
+Internal transfer body:
+
+```json
+{
+  "destinationWalletId": "27e8e98c-caae-40d2-8d45-06c15ef7de66",
+  "currency": "NGN",
+  "amountMinorUnits": "5000",
+  "requestKey": "transfer-0192d5ca-7c24-7f32-9c93-c755ff393782"
+}
+```
+
+The source is the owned wallet in the path. Amounts must be canonical positive integer strings, at most `9223372036854775807`; numbers, decimal fractions, exponents, signs, whitespace, and leading zeros are rejected. Internal transfers currently move exactly this amount with no extra fee. Currency syntax is validated as three uppercase letters; a supported-currency catalogue is not implemented.
+
+The response is `{ "operationId": "<uuid>" }`. Persist the request key before submitting and reuse it with identical terms after a timeout or 503. Changed terms with the same owner-scoped key return 409 `IDEMPOTENCY_CONFLICT`. A committed replay succeeds even if subsequent wallet spending changes the balance. Client requests must never treat a 503 as proof that no transfer happened or automatically retry with a new key.
+
+Validation errors return 400. Wallets that do not exist or are not owned by the caller return the same 404. Insufficient funds, restricted wallets, currency mismatches, and conflicting request keys return 409 with explicit codes. Dependency failures return a redacted 503. Errors have `{ "code": "...", "message": "..." }`. Success and handled failure responses disable caching. Development OpenAPI at `/docs` describes these contracts. DTO validation uses the existing [Nest ValidationPipe](https://docs.nestjs.com/techniques/validation) configuration with implicit conversion disabled and unknown fields rejected.
 
 ## Ledger and reservations
 
@@ -52,6 +92,8 @@ The generated database types reflect migrated PostgreSQL tables. `pg` bigint col
 ## Validation
 
 Unit tests cover exact amounts and journal invariants. Disposable PostgreSQL integration tests exercise service operations through a restricted runtime role: simultaneous creation, duplicate funding and reservations, conflicting request reuse, concurrent spending, ownership, currencies, frozen wallets, verified capture and safe release, uncertain outcomes, rollback, direct SQL violations, immutable history, and projection/reservation reconciliation.
+
+HTTP integration tests exercise the real authentication guard and signup/session lifecycle alongside that restricted ledger role: owner binding, all session rejection states, cross-account access, hostile DTOs, exact large balances, concurrent transfers and replays, currency and wallet restrictions, redacted uncertain outcomes, and safe retries. No guard is mocked and no balance is changed directly by fixtures.
 
 From the workspace root:
 

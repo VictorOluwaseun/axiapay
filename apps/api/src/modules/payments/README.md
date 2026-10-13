@@ -1,5 +1,125 @@
-# payments
+# Service payments
 
-Purchase authorization, provider attempts, reconciliation, settlement, and reversals.
+AxiaPay owns the HTTP contracts for airtime, data, TV subscriptions, prepaid/postpaid electricity, education, individual insurance and bank transfers: catalogue identifiers, recipient validation, quote pricing, wallet authorization, logical identities, payment states and recovery. Fulfilment sits behind `ServicePaymentProvider`; bill-account validation sits behind `BillAccountVerification`. This feature imports no provider SDK or concrete adapter. `PaymentsModule.register()` starts with no adapters and no seeded products. Absent adapters cannot manufacture verified recipients, accept purchases or hold funds.
 
-This module reserves the agreed feature boundary. Business operations and endpoints are not implemented yet. Add only concrete responsibilities as the feature is built; consult [the application layout](../../../docs/architecture.md).
+## Customer contract
+
+All routes require a current bearer session. Responses use `Cache-Control: no-store`; monetary values are decimal integer strings in the product currency's minor units. Unknown fields and implicit primitive conversion are rejected. Caller identity is derived from the session, never a request field.
+
+| Method | Route                                        | Responsibility                                                                                                                                                                                    |
+| ------ | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/v1/service-catalog/products`               | List enabled product revisions; filter by `serviceType` and `networkCode`, with `limit` 1–100 and `afterId` keyset pagination. Bill filters also include `billerCode` and `electricityMeterType`. |
+| GET    | `/v1/service-catalog/products/:productId`    | Read first-party product pricing, allowance, validity and submission availability.                                                                                                                |
+| POST   | `/v1/payments/quotes`                        | Review selected product, recipient and owned wallet without holding money.                                                                                                                        |
+| GET    | `/v1/payments/quotes/:quoteId`               | Retrieve the owner's immutable review terms, including expiry.                                                                                                                                    |
+| POST   | `/v1/payments`                               | Submit explicit consent to `{ quoteId, requestKey }`; resume the same payment on replay.                                                                                                          |
+| GET    | `/v1/payments/by-request-key?requestKey=...` | Recover a lost response using the original owner-scoped logical key, without spending or requiring an adapter.                                                                                    |
+| GET    | `/v1/payments/:paymentId`                    | Read owner-scoped durable progress without financial side effects.                                                                                                                                |
+| POST   | `/v1/payments/:paymentId/reconcile`          | Recover an existing hold, query provider evidence and finish settlement; never create a new hold.                                                                                                 |
+
+An airtime quote request supplies `walletId`, `productId`, an explicit international `recipientPhoneNumber`, and `amountMinorUnits`. The amount must fit the product's denomination range and step. A data quote supplies the same fields **without** `amountMinorUnits`; the selected product defines its price, allowance and validity. Phone prefixes never determine a network because numbers may be ported. Bill quotes use `accountValidationId` instead of a phone recipient. Public contracts expose no upstream product code, adapter key, clearing account, or internal evidence.
+
+Quotes separate `principalMinorUnits`, `feeMinorUnits`, and `totalDebitMinorUnits`. Fees, amount limits, supported currencies and quote lifetimes are administratively selected product terms, not assumed commercial decisions. Every quote is bound to an owner, wallet and immutable product revision. Data/TV package prices cannot be overridden by clients. `isSubmissionAvailable` is false without a registered adapter, and quotes additionally report false after expiry or product withdrawal.
+
+## TV and electricity contracts
+
+Catalogue discovery additionally accepts `billerCode` and `electricityMeterType` filters. Bill products use a first-party `billerCode` and null `networkCode`. Electricity products define their immutable meter mode as `prepaid` or `postpaid`. TV products define a fixed package price and may have a package validity duration; that duration is not a promised renewal date.
+
+| Method | Route                                            | Responsibility                                                                       |
+| ------ | ------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| POST   | `/v1/payments/account-validations`               | Validate a bill recipient without spending or purchasing.                            |
+| GET    | `/v1/payments/account-validations/:validationId` | Retrieve the owning customer's immutable verification snapshot, with visible expiry. |
+
+First verify `{ productId, accountNumber }`. Identifiers are bounded printable strings; leading zeros are preserved. Numeric conversion, padding, control characters and client-supplied customer/verification details are rejected. `BillAccountService` correlates authenticated evidence with the exact product, account, biller and meter mode. Invalid, pending, timed-out and mismatched observations create no verified record. Successful responses contain a validation ID, customer name, any verified service address, verification time and expiry. Historical evidence remains retrievable after expiry without implying freshness.
+
+Then review `{ walletId, productId, accountValidationId }` for TV, or those fields plus `amountMinorUnits` for electricity. A TV package price cannot be overridden. Bill quotes reject phone recipients, direct account-number overrides, another owner's verification or verification for another product/package/meter mode. Quote expiry is the earlier of its configured price lifetime and recipient-validation expiry, checked again under wallet locks before a new hold. Held obligations retain their accepted account and price snapshots for recovery.
+
+Submission uses the existing `{ quoteId, requestKey }` contract. `paymentStatus` still describes financial settlement; `fulfilmentStatus` separately reports `not_applicable` for mobile products, `not_available` before bill success/after safe failure, `pending` for successful bills awaiting a complete receipt, or `available` once matching receipt details are stored. A paid bill awaiting its token remains identifiable and must not trigger another purchase.
+
+`fulfilment` stays null until complete authenticated details are available. First-party variants are:
+
+- `tv_subscription`: activation reference and optional actual renewal instant. Renewal is never estimated from payment timing.
+- `electricity_prepaid`: receipt reference, an ordered list of labelled tokens, and optional exact `unitsKilowattHours` decimal string. Include all required recharge/key-change tokens; no numeric rounding or invented token/unit count.
+- `electricity_postpaid`: receipt reference, with no prepaid tokens.
+
+Read `/v1/payments/:paymentId` or the original request-key lookup to recover stored details. Reconcile the original payment to retrieve delayed details; the adapter performs lookup without another purchase. Receipt outages, missing tokens and pending lookups cannot reverse confirmed financial success. Stored financial evidence is settled before optional receipt lookup, including after ledger outages or adapter removal. Receipts are append-only; conflicting modes/details fail without overwriting the original token or altering the wallet. Public responses contain typed projected fields rather than raw provider bodies.
+
+## Financial progress and recovery
+
+`BillAccountService` owns non-financial recipient verification. `PaymentQuoteService` owns pricing and review. `PaymentExecutionService` owns accepted instructions, the submission claim, final financial evidence and matching receipt persistence. `WalletPaymentService` coordinates these with the existing wallet service; the wallet feature alone posts reserve/capture/release journals. A separate use-case class would duplicate these current cohesive workflows.
+
+| State            | Meaning                                                                                                                                               |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `awaiting_funds` | A durable accepted instruction exists, but no matching hold has committed. Submission may have encountered insufficient funds or a dependency outage. |
+| `reserved`       | The total debit is held; the first external submission has not yet been claimed.                                                                      |
+| `pending`        | Submission was claimed; fulfilment or its wallet settlement remains unresolved.                                                                       |
+| `succeeded`      | Correlated financial success evidence and wallet capture have both committed. Service proof may still be pending.                                     |
+| `failed`         | Independently verified safe failure and wallet release have both committed.                                                                           |
+
+One owner/request key binds to one quote and one payment. One quote authorizes one logical payment; a deliberate second purchase requires a new quote and key. One insurance application additionally binds to at most one accepted payment across different quotes; obtain a new consented eligible application for a deliberate new policy purchase. Reusing a key with another quote returns `PAYMENT_CONFLICT`. An accepted but unreserved instruction must still satisfy quote expiry before obtaining funds; insufficient funds do not preserve old pricing indefinitely. Expiry is rechecked synchronously inside the wallet transaction after wallet locks are acquired, closing the validation-to-reservation race. Existing holds retain their accepted terms for recovery after expiry or wallet freezing.
+
+Acceptance commits before reservation. The hold uses `payment:<paymentId>` as its derived wallet key; retries after a crash recover the same committed reservation. Status joins the actual matching ledger reservation, avoiding a second stale financial state flag. Provider I/O runs outside SQL transactions. A durable compare-and-set claim precedes submission; neither a timeout nor a crash resets that claim. Subsequent submission replays observe the existing pending payment; explicit reconciliation performs lookup, not another purchase.
+
+Final evidence is append-only and correlated to the payment ID and all immutable terms. A provider movement is unique within its adapter routing key. Pending observations, unsafe failures and mismatched evidence preserve held funds. Final success/failure is public only after capture/release commits. If evidence commits before a ledger outage, reconciliation or submission replay finishes the journal without another provider call, even if the adapter has subsequently been removed.
+
+This increment performs foreground submission and explicit reconciliation. It does not start an unattended worker, introduce automatic retries, implement SMS intake, or promise cancellation after submission. Durable background dispatch/reconciliation and operational recovery must be supplied with their actual workflow before live rollout; use the repository's BullMQ/outbox agreements for that work. Provider costs, bank settlement, post-fulfilment refunds and customer transaction limits remain separate policies rather than inferred from these retail clearing postings.
+
+## Adapter composition
+
+The contract is [service-payment-provider.ts](ports/service-payment-provider.ts). Supply registrations with `PaymentsModule.register({ imports, fulfilment: { useFactory, inject } })`, or with `useValue`/`useExisting`. The feature keeps registrations and repositories private. Each routing key identifies a stable provider/environment/credential realm, with provisioned `partnerAccountId` and an optional `feeAccountId`. Both account bindings are persisted with accepted instructions; never reinterpret an existing key with different accounts or credentials.
+
+An adapter implements `submit` and `lookup` using the first-party payment ID as the immutable merchant identity. It maps catalogue routing to its upstream protocol, authenticates upstream evidence, verifies recipient/product/amount correlation, enforces bounded timeouts and keeps credentials/response bodies out of logs. `lookup` must never send a purchase. A `termsFingerprint` is a correlation value, **not** a signature or proof by itself. Only independently final, safe failure evidence can set `fundsSafeToRelease: true`; absence or timeout alone is insufficient. Reconciliation cannot assume upstream idempotency or retry safety that the provider has not documented.
+
+Bill registrations additionally supply `accountVerification.verify`, a non-purchasing authenticated observation correlated to the selected product/account/biller/meter mode. Success results may supply complete `PaymentFulfilment` details; later lookups may return the same financial movement with its now-available receipt. The financial movement reference must remain stable across observations. Omit fulfilment until the complete mode-appropriate receipt is known.
+
+No client-facing endpoint accepts a provider success claim, receipt/token, customer-verification claim, private evidence reference or settlement account. Provider-authenticated webhooks will be adapters into this same evidence workflow when their security contract is defined.
+
+## Persistence and validation
+
+Apply the migration chain through `202610130008-bank-transfers.js` before deploying these queries. It preserves existing mobile history, original mobile/bill adapter fingerprints and wallet balances. Re-run `grant_service_payments_runtime_access('your_runtime_role')` as the migration owner after upgrading, alongside existing wallet/authentication grants, to allow validation/receipt table access. The runtime role cannot publish products or reprice them. Identity-column UPDATE privileges exist solely to permit PostgreSQL row locking; triggers protect financial history, verified recipients and receipts. No migration runs automatically at startup and tests modify only disposable databases.
+
+Catalogue and payment reads deliberately bypass cache because pricing, expiry, eligibility and authorization need authoritative state. Product changes create a new immutable revision and withdraw the old revision; no cached price or collection requires invalidation in this increment.
+
+`tests/integration/service-payments.spec.ts` exercises actual HTTP and restricted PostgreSQL access with test-only adapters, including financial invariants, owner/product validation binding, expiry, bill uncertainty, duplicate submissions, delayed tokens, immutable receipts and outage recovery. `tests/integration/service-payment-migration.spec.ts` verifies a forward upgrade preserves mobile history. `tests/e2e/service-payments-contract.spec.ts` checks the actual bootstrap's OpenAPI projection. No fixture adapter is registered by production composition.
+
+## Education preparation and proof
+
+| Method | Route                                               | Responsibility                                                                      |
+| ------ | --------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| POST   | `/v1/payments/education-validations`                | Verify `{ productId, beneficiaryIdentifier }` for the selected institution/product. |
+| GET    | `/v1/payments/education-validations/:preparationId` | Retrieve the owner's immutable beneficiary/purpose snapshot.                        |
+
+Education revisions specify an institution/biller code, purpose and `educationPaymentType`: `institution_fee` (variable or fixed price) or `voucher` (fixed price). Catalogue publication and fees are operator decisions; this migration inserts no institutions or prices. `EducationRecipientService` requires authenticated, exact beneficiary/product/institution correlation before persisting evidence. Unknown, invalid, mismatched and timed-out evidence never becomes a validated beneficiary. Identifiers preserve leading zeros. Review `{ walletId, productId, educationValidationId }`, adding `amountMinorUnits` only for variable fees. Beneficiary validation is owner/product scoped and bounds the quote expiry; it is rechecked under wallet locks through the bound quote expiry.
+
+Successful fee proof is `education_fee` with `institutionReference`, or a recorded authenticated `education_receipt` PDF. A supported fee PDF can establish available proof without a separate reference. A voucher requires `education_voucher` with exact `voucherCode` and nullable `serialNumber`; a receipt PDF alone cannot substitute for a voucher. Secret voucher details are available only within the authenticated owner's no-store payment resource. Delayed proof is retrieved under the original payment identity; it cannot trigger another purchase or debit.
+
+## Insurance consent, eligibility and issuance
+
+| Method | Route                                                | Responsibility                                                                  |
+| ------ | ---------------------------------------------------- | ------------------------------------------------------------------------------- |
+| POST   | `/v1/payments/insurance-applications`                | Record explicit consent and correlated eligibility without purchasing a policy. |
+| GET    | `/v1/payments/insurance-applications/:preparationId` | Retrieve the owner's immutable application and requested period.                |
+
+This increment supports operator-configured **fixed-premium individual products**. It does not invent product prices, age/underwriting rules, exclusions or refund promises. Product revisions include versioned `insuranceTerms`: coverage summary, exclusions, duration in days, cancellation/refund terms and required/optional insured field lists. `fullName` is mandatory; supported additional fields are `dateOfBirth`, `phoneNumber`, `email`, `address`, `identityNumber` and `assetReference`. Only configured fields are accepted and retained; arbitrary or unrequested personal fields are rejected. Dynamic premium calculation needs its own explicit pricing/underwriting contract before implementation.
+
+Submit `{ productId, insuredProfile, termsVersion, acceptedTerms: true, coverageStartsOn }` after reviewing the displayed product terms. Consent must be literal boolean true for the selected version. Calendar dates are exact `YYYY-MM-DD`; the requested start cannot precede the current UTC date. The server derives the exclusive requested end from the configured duration. The non-purchasing `InsuranceEligibility` port must independently authenticate eligibility for the entire canonical profile, terms version and period. Pending/ineligible/mismatched observations create no approved application. Eligibility is distinct from payment or insurance coverage.
+
+Review `{ walletId, productId, insuranceApplicationId }`; the premium, fees and total debit are server-owned, and client amount overrides are forbidden. The quote includes consented insured details and the reviewable coverage/exclusions/cancellation terms; expiry is bounded by eligibility expiry and enforced before a fresh hold. One application can authorize at most one accepted payment, even with competing quotes. A deliberate later policy purchase needs a new consented eligible application.
+
+`policyIssuanceStatus` is independent of `paymentStatus`: `awaiting_payment`, `awaiting_issuance`, `issued`, or `not_issued` after safe payment failure (`not_applicable` for other services). Confirmed premium payment does not issue a policy. `insurance_policy` fulfilment requires the exact insured name and requested period, plus an authenticated `policyNumber`. `issued` describes recorded issuance evidence; **it makes no assertion of currently active coverage**. Later cancellation/refund execution is not implemented by merely displaying reviewed cancellation/refund terms.
+
+Policy documents can arrive after issuance. `documentStatus` distinguishes `not_available` before premium confirmation/after safe failure, `pending` after confirmed premium until a document is recorded, and `available` once descriptors exist. Education PDFs are optional; without one their document status is `not_applicable`. Document service outages leave recorded policy/payment evidence intact. Reconciliation settles stored financial success before looking for missing issuance/documents, so even unavailable adapters cannot keep a confirmed premium financially unresolved.
+
+## Issued document retrieval and adapter contracts
+
+`GET /v1/payments/:paymentId/documents/:documentId` downloads an owner's recorded document as `application/pdf`, with no caching, `nosniff`, and a deterministic first-party attachment filename. The `documents` list contains first-party IDs, type, display name, media type and authenticated download path. Upstream references, URLs, credentials and owner IDs remain private. Authorization and committed financial success are checked before external retrieval; no client-supplied upstream location or redirect is accepted. Retrieval enforces exact payment/document/reference correlation, PDF media/signature and a ten-MiB byte bound. This is bounded authenticated delivery, not structural validation of every PDF object. Adapters must enforce download limits during fetching as well as bounded timeouts. Descriptor availability is durable evidence, not a guarantee that a dependency is currently reachable.
+
+Education registrations supply `educationVerification.verify` through [education-beneficiary-verification.ts](ports/education-beneficiary-verification.ts). Insurance registrations supply `insuranceEligibility.verify` through [insurance-eligibility.ts](ports/insurance-eligibility.ts) and `documentRetrieval.retrieve` through [payment-document-retrieval.ts](ports/payment-document-retrieval.ts). These ports cannot purchase, silently reprice, or claim active coverage. The shared `ServicePaymentProvider` still submits once and looks up existing instructions only. First-party payment fingerprints bind education beneficiary/purpose or the complete canonical insurance application; original mobile/bill fingerprints are unchanged. PDF retrieval must authenticate upstream evidence and use the stored private descriptor, without a new purchase.
+
+Successful submit/lookup observations may append service proof and up to ten distinct document descriptors. Policy descriptors require stored matching issuance evidence. Education descriptors have type `education_receipt`; insurance descriptors have type `policy` or `certificate`. A descriptor key is immutable within its payment: identical evidence replays, conflicting references/metadata fail, and document errors cannot erase confirmed financial evidence or repeat spending. Missing proof/documents extend lookup of the original instruction; completed evidence avoids unnecessary provider calls.
+
+Migration `202610130007-education-insurance.js` adds catalogue contracts, owner/product-scoped immutable preparation rows, quote bindings, one-payment insurance application protection and append-only private document descriptors. Existing mobile and TV/electricity history, fingerprints and balances are preserved. Re-run the restricted runtime grant function after upgrade. Integration tests cover consent, minimization, expiry under wallet locks, duplicate payments across quotes, delayed proof/policies/documents, unauthorized PDF retrieval, immutable evidence and ledger-outage recovery. Production composition still registers **no provider adapters**.
+
+## Bank transfers
+
+[Bank transfer API contracts and setup](bank-transfers.md) describe the first-party bank directory, owner-scoped name enquiry, exact recipient/debit review, bank transfer endpoints and shared wallet execution/recovery. Bank success requires mandatory matching recipient-credit proof stored atomically with financial evidence. Bank outcome, wallet funds and safe failure reason are separately observable. Provider adapters remain unregistered by default.
