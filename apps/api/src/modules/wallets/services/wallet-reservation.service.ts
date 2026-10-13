@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { WALLET } from '../wallet.tokens.js';
 import { assertReference, money, type Money } from '../domain/money.js';
 import type { LedgerEntry } from '../domain/journal.js';
@@ -24,6 +24,10 @@ export interface ReserveWalletFundsInput {
   readonly requestKey: string;
   readonly paymentReference: string;
   readonly value: Money;
+  /** Recheck optional application authorization while wallet locks are held; must be synchronous with no I/O or external side effects.
+   * Runs only for a new hold. Committed idempotent replays retain the originally accepted authorization.
+   */
+  readonly validateAuthorization?: () => void;
 }
 
 /** Build the verified success credits; zero fees do not create zero-value ledger lines. */
@@ -69,11 +73,12 @@ async function settlementCredits(
 /** Own held-money transitions from reservation through verified capture or safe release; uncertain outcomes preserve the hold. */
 @Injectable()
 export class WalletReservationService {
-  /** Inject authoritative persistence and a trusted outcome verifier; external provider calls precede transactions. */
+  /** Inject persistence and optional outcome verification; absent verification disables settlement and preserves holds. */
   constructor(
     @Inject(WALLET.repository) private readonly wallets: WalletRepository,
+    @Optional()
     @Inject(WALLET.paymentOutcome)
-    private readonly verification: PaymentOutcomeVerification,
+    private readonly verification: PaymentOutcomeVerification | undefined,
   ) {}
   /** Authorize the owner and atomically journal available-to-reserved movement with its allocation. */
   reserve(input: ReserveWalletFundsInput): Promise<WalletReceipt> {
@@ -99,6 +104,7 @@ export class WalletReservationService {
           throw new WalletError('WALLET_NOT_FOUND');
         }
         assertWalletOwner(wallet, input.actorId);
+        input.validateAuthorization?.();
         assertCanSpend(wallet, value);
         await transaction.createReservation({
           id: operationId,
@@ -133,6 +139,9 @@ export class WalletReservationService {
     readonly evidenceReference: string;
   }): Promise<WalletReceipt> {
     assertReference(input.evidenceReference);
+    if (!this.verification) {
+      throw new WalletError('VERIFICATION_UNAVAILABLE');
+    }
     const outcome = await this.verification.verifyOutcome(
       input.evidenceReference,
     );

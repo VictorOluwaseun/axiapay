@@ -1,6 +1,6 @@
 import type { Money } from '../domain/money.js';
 
-/** Provider evidence already verified by a trusted integration; never construct this from customer input. */
+/** Completed collection verified by a trusted integration; never construct from customer input or imply bank payout settlement. */
 export interface ConfirmedFunding {
   readonly walletId: string;
   readonly partnerAccountId: string;
@@ -9,7 +9,7 @@ export interface ConfirmedFunding {
   readonly value: Money;
 }
 
-/** Verify actual settled funding and its intended wallet; pending or untrusted evidence must throw. */
+/** Verify successful funding collection and its intended wallet; pending or untrusted evidence must throw. Partner fee/settlement accounting is separate. */
 export interface FundingVerification {
   /** Resolve and authenticate evidence outside the wallet database transaction. */
   verifyFunding(evidenceReference: string): Promise<ConfirmedFunding>;

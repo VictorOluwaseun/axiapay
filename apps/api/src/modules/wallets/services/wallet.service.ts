@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import { WALLET } from '../wallet.tokens.js';
 import {
   assertCurrency,
@@ -18,6 +18,7 @@ import type {
   WalletReceipt,
 } from '../repositories/contracts/wallet.repository.js';
 import type { FundingVerification } from '../ports/wallet-verification.js';
+import { fundingFingerprint } from '../domain/funding-identity.js';
 import {
   WalletReservationService,
   type ReserveWalletFundsInput,
@@ -34,10 +35,12 @@ export interface WalletTransferInput {
 /** Own wallet provisioning, balance access, transfers, and verified funding; delegate held-money transitions to the reservation service. */
 @Injectable()
 export class WalletService {
-  /** Keep workflows behind repository and verification contracts; storage clients never enter this service. */
+  /** Keep workflows behind repository contracts; absent funding verification disables funding, never bypasses it. */
   constructor(
     @Inject(WALLET.repository) private readonly wallets: WalletRepository,
-    @Inject(WALLET.funding) private readonly funding: FundingVerification,
+    @Optional()
+    @Inject(WALLET.funding)
+    private readonly funding: FundingVerification | undefined,
     @Inject(WalletReservationService)
     private readonly reservations: WalletReservationService,
   ) {}
@@ -123,6 +126,9 @@ export class WalletService {
     evidenceReference: string,
   ): Promise<WalletReceipt> {
     assertReference(evidenceReference);
+    if (!this.funding) {
+      throw new WalletError('VERIFICATION_UNAVAILABLE');
+    }
     const funding = await this.funding.verifyFunding(evidenceReference);
     const value = money(funding.value.amountMinorUnits, funding.value.currency);
     assertReference(funding.externalMovementId);
@@ -132,12 +138,7 @@ export class WalletService {
         requestScope: `funding:${funding.partnerAccountId}`,
         requestKey: funding.externalMovementId,
         // Different notifications can describe the same movement; transport evidence is not identity.
-        requestFingerprint: JSON.stringify([
-          'funding',
-          funding.walletId,
-          value.currency,
-          value.amountMinorUnits.toString(),
-        ]),
+        requestFingerprint: fundingFingerprint(funding.walletId, value),
       },
       async (transaction, operationId) => {
         const [wallet] = await transaction.lockWallets([funding.walletId]);

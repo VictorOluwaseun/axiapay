@@ -2,6 +2,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { createApplication } from '../../src/bootstrap/create-application.js';
+import { WalletService } from '../../src/modules/wallets/services/wallet.service.js';
+import { WalletModule } from '../../src/modules/wallets/wallet.module.js';
 
 let application: NestFastifyApplication;
 beforeAll(async () => {
@@ -48,6 +50,60 @@ describe('API foundation', () => {
       response.json().components.schemas.PasswordLoginDto.required,
     ).toContain('password');
     expect(response.json().components.securitySchemes.bearer.type).toBe('http');
+  });
+  it('documents all wallet routes with bearer authentication and exact monetary strings', async () => {
+    const response = await application.inject({
+      method: 'GET',
+      url: '/docs-json',
+    });
+    const document = response.json();
+    for (const [route, method] of [
+      ['/v1/wallets', 'post'],
+      ['/v1/wallets/{walletId}/balance', 'get'],
+      ['/v1/wallets/{walletId}/transfers', 'post'],
+    ]) {
+      expect(document.paths[route!][method!].security).toEqual([
+        { bearer: [] },
+      ]);
+      expect(document.paths[route!][method!].responses).toHaveProperty('401');
+    }
+    const transfer = document.components.schemas.TransferWalletFundsDto;
+    expect(transfer.properties.amountMinorUnits.type).toBe('string');
+    expect(transfer.required).toContain('requestKey');
+    expect(transfer.required).toContain('currency');
+    expect(transfer.properties).not.toHaveProperty('actorId');
+    expect(
+      document.components.schemas.WalletBalanceResponseDto.properties
+        .availableMinorUnits.type,
+    ).toBe('string');
+  });
+  it.each([
+    ['POST', '/v1/wallets'],
+    ['GET', '/v1/wallets/c764f366-e737-4c84-b63b-0df02ad39c76/balance'],
+    ['POST', '/v1/wallets/c764f366-e737-4c84-b63b-0df02ad39c76/transfers'],
+  ] as const)(
+    'requires a session for %s %s before accessing wallet storage',
+    async (method, url) => {
+      const response = await application.inject({ method, url });
+      expect(response.statusCode).toBe(401);
+      expect(response.json().code).toBe('INVALID_CREDENTIALS');
+      expect(response.headers['cache-control']).toBe('no-store');
+      expect(response.headers['www-authenticate']).toBe('Bearer');
+    },
+  );
+  it('disables trusted integration operations when no verifiers are configured', async () => {
+    const wallets = application
+      .select(WalletModule)
+      .get(WalletService, { strict: true });
+    await expect(
+      wallets.confirmWalletFunding('untrusted-reference'),
+    ).rejects.toMatchObject({ code: 'VERIFICATION_UNAVAILABLE' });
+    await expect(
+      wallets.settleWalletReservation({
+        reservationId: 'untrusted-reservation',
+        evidenceReference: 'untrusted-reference',
+      }),
+    ).rejects.toMatchObject({ code: 'VERIFICATION_UNAVAILABLE' });
   });
   it.each([
     ['signup', {}],

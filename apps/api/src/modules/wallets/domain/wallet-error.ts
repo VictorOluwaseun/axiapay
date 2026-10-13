@@ -17,6 +17,7 @@ export class WalletError extends Error {
       | 'RESERVATION_RESOLVED'
       | 'OUTCOME_UNCONFIRMED'
       | 'INVALID_EVIDENCE'
+      | 'VERIFICATION_UNAVAILABLE'
       | 'LEDGER_CONFIGURATION'
       | 'CONCURRENT_WRITE',
     options?: ErrorOptions,
