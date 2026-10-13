@@ -2,7 +2,7 @@
 
 The API supports signup and login with one phone number or email address per account. Signup always verifies contact ownership using a one-time code. Supply a password during signup to enable password login, or omit it for code-only access. Accounts with a password can also log in with a code.
 
-Email identities are trimmed and lowercased without removing dots or plus aliases. Phone numbers require international format, for example `+2348012345678`. Linking another contact, changing a password, account recovery, biometric/device enrollment, and payment authorization are separate future workflows.
+Email identities are trimmed and lowercased without removing dots or plus aliases. Phone numbers require international format, for example `+2348012345678`. Linking another contact, changing a password, account recovery, and payment authorization are separate future workflows. The [device login API](device-login.md) now supports enrollment and signed-challenge login for Android fingerprint integration; Android biometric enforcement and hardware attestation remain separate work.
 
 ## Local setup
 
@@ -37,7 +37,7 @@ A contact has the form `{ "kind": "email", "value": "alice@example.com" }` or `{
 
 A challenge response contains `challengeId`, `expiresAt`, `expiresInSeconds`, and `resendAfterSeconds`. Read the code from Mailpit and submit it with the matching challenge ID. The signup and login verification endpoints are purpose-specific; a code cannot cross between them.
 
-A successful authentication response contains `accessToken`, `tokenType: "Bearer"`, `expiresInSeconds`, and `account: { id, contact, verifiedAt }`. The token is opaque, not a JWT. Each login creates a new session with an absolute 24-hour expiry. Store it in protected client storage and use TLS outside local development. Logout revokes the presented session immediately; other device sessions continue until revoked or expired. There is no refresh-token endpoint in this implementation.
+A successful authentication response contains `accessToken`, `tokenType: "Bearer"`, `expiresInSeconds`, and `account: { id, contact, verifiedAt }`. The token is opaque, not a JWT. Each login creates a new session with an absolute 24-hour expiry. Store it in protected client storage and use TLS outside local development. Logout revokes the presented session immediately; other device sessions continue until revoked or expired. There is no refresh-token endpoint in this implementation. Device login issues the same session format; logout retains its registration, while removing a device revokes sessions issued through that key. See [device session and recovery rules](device-login.md#session-and-recovery-behavior).
 
 Example signup:
 

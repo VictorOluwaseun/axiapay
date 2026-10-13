@@ -1,0 +1,15 @@
+# Device keys for fingerprint login
+
+Status: API implemented; Android integration and hardware attestation remain separate work.
+
+Add device-key authentication to existing verified phone/email accounts, including passwordless accounts. A password or one-time-code session less than five minutes old authorizes opt-in enrollment. Enrollment binds the proposed key to that exact session and requires proof of possession. Up to five active keys are allowed per account. Legacy and device-issued sessions cannot authorize new enrollment without primary sign-in.
+
+Use P-256 public keys in base64url SPKI DER and SHA256withECDSA signatures in base64url ASN.1 DER. Pin the algorithm and encoding instead of accepting caller-selected algorithms. Server-generated, versioned messages bind purpose, challenge identity, credential identity, random nonce, and expiry; persisted ownership and enrollment-session bindings complete authorization. Android signs the exact decoded bytes with a biometric-gated Keystore key. The API verifies key possession and does not claim biometric or hardware attestation.
+
+Two-minute challenges allow five failed signatures and one successful redemption. Shared PostgreSQL counters bound challenge creation and verification. Device/session changes and challenge consumption commit together. Failed signatures return a result inside the transaction so attempt counters survive the public error. Credential locks serialize login with revocation; enrollment locks the primary session and account to protect freshness and account-wide capacity.
+
+Reuse existing opaque 24-hour sessions and guards. New columns record device provenance and primary-authentication time. Logout retains the registered key; removing a key invalidates its outstanding challenges and sessions. Password/code sessions remain independent because their physical device is not recorded. Retain revoked key fingerprints to prohibit reactivation with old key material. Full session recovery and device-wide account logout remain future work.
+
+Keep the workflow in a focused service, data access in concrete repositories, and Node crypto behind a capability port. No cache, Redis workflow, background job, separate use-case class, or data-source wrapper is required. No new dependency is installed. Follow the [API/Android wire contract and rollout guide](../../src/modules/authentication/device-login.md).
+
+Validation uses real HTTP and PostgreSQL for replay, expiry, wrong signatures, ownership, enrollment freshness, concurrent enrollment, revocation races, and transaction recovery. Standard signing keys simulate the Android signature format; sensor behavior and Keystore authorization still require Android tests. The API is not a payment authorization or SMS offline protocol.

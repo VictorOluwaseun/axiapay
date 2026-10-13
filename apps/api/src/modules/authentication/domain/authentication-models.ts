@@ -26,6 +26,8 @@ export interface CodeChallenge {
 }
 /** Persist only a digest of the opaque bearer token; revocation and expiry are authoritative. */
 export interface AuthenticationSession {
+  readonly deviceCredentialId: string | null;
+  readonly primaryAuthenticatedAt: Date | null;
   readonly id: string;
   readonly accountId: string;
   readonly tokenDigest: string;

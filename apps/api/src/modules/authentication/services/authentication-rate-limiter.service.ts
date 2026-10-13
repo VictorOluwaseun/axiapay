@@ -45,6 +45,25 @@ export class AuthenticationRateLimiter implements AuthenticationAttemptLimiter {
   async codeVerification(clientIp: string): Promise<void> {
     await this.take('verify-ip', clientIp, 100, 900);
   }
+  /** Bound device-registration churn even when a caller obtains several fresh primary sessions. */
+  async deviceEnrollment(accountId: string, clientIp: string): Promise<void> {
+    await this.take('device-enroll-ip', clientIp, 20, 600);
+    await this.take('device-enroll-account', accountId, 10, 600);
+  }
+  /** Unknown IDs receive the same budgets as valid credentials to avoid registration disclosure. */
+  async deviceChallenge(credentialId: string, clientIp: string): Promise<void> {
+    await this.take('device-challenge-ip', clientIp, 60, 600);
+    await this.take(
+      'device-challenge-key',
+      credentialId.toLowerCase(),
+      30,
+      600,
+    );
+  }
+  /** Bound cryptographic verification work across all challenge purposes. */
+  async deviceVerification(clientIp: string): Promise<void> {
+    await this.take('device-verify-ip', clientIp, 100, 900);
+  }
   /** Fail closed when a budget is exhausted or its authoritative store cannot be reached. */
   private async take(
     scope: string,

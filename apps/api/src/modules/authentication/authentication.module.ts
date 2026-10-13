@@ -1,3 +1,7 @@
+import { DeviceAuthenticationController } from './controllers/device-authentication.controller.js';
+import { DeviceAuthenticationService } from './services/device-authentication.service.js';
+import { NodeDeviceSignatures } from './security/node-device-signatures.js';
+import { PostgresDeviceAuthenticationRepository } from './repositories/postgres-device-authentication.repository.js';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import {
@@ -23,8 +27,19 @@ import { AuthenticationRateLimiter } from './services/authentication-rate-limite
 /** Compose explicit Nest providers; export feature operations and guards, keeping persistence private. */
 @Module({
   imports: [ConfigModule, DatabaseModule],
-  controllers: [AuthenticationController],
+  controllers: [AuthenticationController, DeviceAuthenticationController],
   providers: [
+    {
+      provide: AUTHENTICATION.devices,
+      inject: [DatabaseConnection],
+      useFactory: (connection: DatabaseConnection) =>
+        new PostgresDeviceAuthenticationRepository(connection.database),
+    },
+    {
+      provide: AUTHENTICATION.deviceSignatures,
+      useClass: NodeDeviceSignatures,
+    },
+    DeviceAuthenticationService,
     {
       provide: AUTHENTICATION.repository,
       inject: [DatabaseConnection],
@@ -72,6 +87,10 @@ import { AuthenticationRateLimiter } from './services/authentication-rate-limite
     AuthenticationService,
     AuthenticationGuard,
   ],
-  exports: [AuthenticationService, AuthenticationGuard],
+  exports: [
+    AuthenticationService,
+    AuthenticationGuard,
+    DeviceAuthenticationService,
+  ],
 })
 export class AuthenticationModule {}

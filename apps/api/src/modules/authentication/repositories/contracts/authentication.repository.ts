@@ -1,3 +1,4 @@
+import type { EnrollmentSession } from '../../domain/device-authentication.js';
 import type {
   AuthenticationAccount,
   AuthenticationSession,
@@ -7,6 +8,13 @@ import type {
 
 /** Own authoritative authentication data access. Reads bypass cache; transaction callbacks share one connection. */
 export interface AuthenticationRepository {
+  /** Resolve device ownership to the current account; disabled state remains authoritative in the service and session insert. */
+  findAccountById(id: string): Promise<AuthenticationAccount | null>;
+  /** Lock the active session and account for enrollment, serializing logout and concurrent device-count decisions. */
+  lockEnrollmentSession(
+    tokenDigest: string,
+    now: Date,
+  ): Promise<EnrollmentSession | null>;
   /** Commit all callback writes together; callback results allow failed attempts to commit before an error is returned. */
   transaction<T>(
     work: (repository: AuthenticationRepository) => Promise<T>,

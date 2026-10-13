@@ -50,6 +50,9 @@ export class AuthenticationExceptionFilter implements ExceptionFilter {
     }
     const statuses = {
       INVALID_INPUT: 400,
+      RECENT_AUTHENTICATION_REQUIRED: 403,
+      DEVICE_LIMIT_REACHED: 409,
+      DEVICE_ALREADY_REGISTERED: 409,
       INVALID_CREDENTIALS: 401,
       RATE_LIMITED: 429,
       DELIVERY_UNAVAILABLE: 503,

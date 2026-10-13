@@ -56,3 +56,7 @@ Eligible reads use repository-owned cache-aside with normalized query parameters
 A financial transaction binds participating repositories to the same Kysely transaction. Journal and outbox writes commit with the business change. Provider calls run outside long-lived database transactions, with durable progress and reconciliation. API, SMS, bulk, and schedule paths must share logical payment identities. BullMQ execution is introduced with its actual workflow; it does not replace the database ledger or authorization.
 
 ESLint allows storage imports in concrete repositories and data sources while prohibiting them in contracts, services, domain code, and HTTP adapters. It also prohibits nested `if` statements. Every named code unit documents its responsibility and important guarantees. See [stack practices](stack-practices.md), [the layout decision](decisions/0004-feature-module-layout.md), and the root `AGENTS.md`.
+
+## Device authentication
+
+`DeviceAuthenticationService` adds device-key enrollment and login to the authentication feature. `PostgresDeviceAuthenticationRepository` owns device records and signing challenges; its transaction callback binds the existing authentication repository to the same connection for session issuance. Both own SQL directly. Enrollment requires a recent primary session; device sessions cannot enroll more keys. See the [device authentication decision](decisions/0005-device-authentication.md) and [wire contract](../src/modules/authentication/device-login.md).

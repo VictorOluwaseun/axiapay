@@ -1,3 +1,4 @@
+import type { EnrollmentSession } from '../domain/device-authentication.js';
 import { sql, type Kysely, type Selectable } from 'kysely';
 import type {
   AuthenticationAccount,
@@ -45,6 +46,51 @@ export class PostgresAuthenticationRepository implements AuthenticationRepositor
       .where('contact_value', '=', contact.value)
       .executeTakeFirst();
     return row ? mapAccount(row) : null;
+  }
+  /** Resolve an account through a registered device's persisted owner rather than caller-supplied identity. */
+  async findAccountById(id: string): Promise<AuthenticationAccount | null> {
+    const row = await this.database
+      .selectFrom('auth_accounts')
+      .selectAll()
+      .where('id', '=', id)
+      .executeTakeFirst();
+    return row ? mapAccount(row) : null;
+  }
+  /** Lock the session and account in one transaction; session revocation cannot race enrollment completion. */
+  async lockEnrollmentSession(
+    tokenDigest: string,
+    now: Date,
+  ): Promise<EnrollmentSession | null> {
+    if (!this.database.isTransaction) {
+      throw new Error('Enrollment authorization requires a transaction.');
+    }
+    const row = await this.database
+      .selectFrom('auth_sessions')
+      .innerJoin(
+        'auth_accounts',
+        'auth_accounts.id',
+        'auth_sessions.account_id',
+      )
+      .selectAll('auth_accounts')
+      .select([
+        'auth_sessions.id as session_id',
+        'auth_sessions.primary_authenticated_at',
+        'auth_sessions.expires_at as session_expires_at',
+      ])
+      .where('token_digest', '=', tokenDigest)
+      .where('expires_at', '>', now)
+      .where('auth_sessions.revoked_at', 'is', null)
+      .where('disabled_at', 'is', null)
+      .forUpdate(['auth_accounts', 'auth_sessions'])
+      .executeTakeFirst();
+    return row
+      ? {
+          id: row.session_id,
+          account: mapAccount(row),
+          primaryAuthenticatedAt: row.primary_authenticated_at,
+          expiresAt: row.session_expires_at,
+        }
+      : null;
   }
   /** Rely on the unique contact constraint to settle concurrent signup safely. */
   async createAccount(
@@ -153,8 +199,8 @@ export class PostgresAuthenticationRepository implements AuthenticationRepositor
   /** Insert from the active account row so a disabled identity cannot acquire a usable new session. */
   async createSession(session: AuthenticationSession): Promise<boolean> {
     const result =
-      await sql`insert into auth_sessions (id, account_id, token_digest, created_at, expires_at, revoked_at)
-      select ${session.id}::uuid, id, ${session.tokenDigest}, ${session.createdAt}, ${session.expiresAt}, null
+      await sql`insert into auth_sessions (id, account_id, token_digest, created_at, expires_at, revoked_at, device_credential_id, primary_authenticated_at)
+      select ${session.id}::uuid, id, ${session.tokenDigest}, ${session.createdAt}, ${session.expiresAt}, null, ${session.deviceCredentialId}::uuid, ${session.primaryAuthenticatedAt}
       from auth_accounts where id = ${session.accountId}::uuid and disabled_at is null returning id`.execute(
         this.database,
       );

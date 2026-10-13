@@ -81,7 +81,15 @@ beforeAll(async () => {
     db: database,
     provider: {
       /** Load only this feature's migration so unrelated work is not required. */ getMigrations:
-        async () => ({ authentication: await import(migrationPath) }),
+        async () => ({
+          authentication: await import(migrationPath),
+          deviceAuthentication: await import(
+            new URL(
+              '../../migrations/202610130003-device-authentication.js',
+              import.meta.url,
+            ).href
+          ),
+        }),
     },
   });
   const { error } = await migrator.migrateToLatest();

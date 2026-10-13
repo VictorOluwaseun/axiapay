@@ -16,16 +16,19 @@ export interface AuthenticationResult {
   readonly account: AccountIdentity;
 }
 
-/** Create a fresh revocable session using the caller's transaction; persist only its token digest. */
+/** Create a revocable session in the caller's transaction; device login never grants fresh primary-authentication authority. */
 export async function issueSession(
   repository: AuthenticationRepository,
   secrets: AuthenticationSecrets,
   account: AuthenticationAccount,
   now: Date,
+  deviceCredentialId: string | null = null,
 ): Promise<AuthenticationResult> {
   const accessToken = secrets.sessionToken();
   const expiresInSeconds = authenticationPolicy.sessionLifetimeSeconds;
   const saved = await repository.createSession({
+    deviceCredentialId,
+    primaryAuthenticatedAt: deviceCredentialId === null ? now : null,
     id: secrets.id(),
     accountId: account.id,
     tokenDigest: secrets.tokenDigest(accessToken),

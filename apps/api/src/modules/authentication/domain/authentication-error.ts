@@ -5,6 +5,9 @@ export class AuthenticationError extends Error {
     readonly code:
       | 'INVALID_INPUT'
       | 'INVALID_CREDENTIALS'
+      | 'RECENT_AUTHENTICATION_REQUIRED'
+      | 'DEVICE_LIMIT_REACHED'
+      | 'DEVICE_ALREADY_REGISTERED'
       | 'RATE_LIMITED'
       | 'DELIVERY_UNAVAILABLE',
     message: string,
