@@ -1,159 +1,114 @@
-# Turborepo starter
+# AxiaPay
 
-This Turborepo starter is maintained by the Turborepo core team.
+AxiaPay is being built for wallet-funded airtime, data, and bill payments, with transfers, bulk payments, scheduled transactions, and notifications. The MVP serves individuals; agent and business features are future scope. The first offline payment pilot will cover airtime and data through an SMS gateway.
 
-## Using this example
+Development currently focuses on the API foundation. The application starts, validates configuration, exposes a liveness endpoint and development OpenAPI documentation, and includes database migration and testing tools. Authentication, wallet operations, service integrations, and SMS processing still need implementation. Feature folders document their intended responsibilities.
 
-Run the following command:
+## Project structure
 
-```sh
-npx create-turbo@latest
+```text
+apps/
+  api/                     NestJS and Fastify API
+    src/
+      bootstrap/           Application composition and dependency wiring
+      modules/             Features with domain, application, infrastructure, and delivery layers
+      infrastructure/      Configuration, database access, and diagnostics
+      shared/              Shared domain values and application contracts
+    migrations/            Reviewed database migrations
+    tests/                 HTTP and data-source integration checks
+    docs/                  Architecture and implementation decisions
+  web/                     Next.js web application scaffold
+  docs/                    Next.js documentation application scaffold
+packages/
+  ui/                      Shared React components
+  eslint-config/           Shared web lint configuration
+  typescript-config/       Shared TypeScript configuration
+compose.api.yaml           Local PostgreSQL, Redis, and Mailpit services
 ```
 
-## What's inside?
+The web and documentation applications still contain starter screens. The API uses its own lint configuration to enforce its layer boundaries and control-flow rules.
 
-This Turborepo includes the following packages/apps:
+## Technology
 
-### Apps and Packages
+| Responsibility                | Tools                                                          |
+| ----------------------------- | -------------------------------------------------------------- |
+| Workspace                     | pnpm and Turborepo                                             |
+| API                           | Node.js 24, TypeScript 6, NestJS, Fastify                      |
+| Database                      | PostgreSQL, Kysely, pg, kysely-codegen                         |
+| Cache and jobs                | ioredis, BullMQ; separate Redis instances for cache and queues |
+| Configuration and diagnostics | Zod, Nest Config, Pino                                         |
+| Authentication libraries      | Argon2 and jose, installed for upcoming authentication work    |
+| Development checks            | ESLint, Prettier, Vitest, SWC, Testcontainers                  |
+| Web scaffolds                 | Next.js, React, TypeScript 7                                   |
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `@next/eslint-plugin-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
+Exact dependency versions are recorded in each application's `package.json` and the workspace lockfile. See the [API foundation decision](apps/api/docs/decisions/0001-api-foundation.md) for compatibility choices.
 
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+## Run the API locally
 
-### Utilities
-
-This Turborepo has some additional tools already setup for you:
-
-- [TypeScript](https://www.typescriptlang.org/) for static type checking
-- [ESLint](https://eslint.org/) for code linting
-- [Prettier](https://prettier.io) for code formatting
-
-### Build
-
-To build all apps and packages, run the following command:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
+Install Node.js **24.15 or newer within the 24.x release line**, **pnpm 11.25.0**, and Docker with Docker Compose. Start Docker before bringing up the local services. Run these commands from the repository root:
 
 ```sh
-cd my-turborepo
-turbo build
+pnpm install --frozen-lockfile
+docker compose -f compose.api.yaml up -d --wait
+cp -n apps/api/.env.example apps/api/.env
+pnpm run dev:api
 ```
 
-Without global `turbo`, use your package manager:
+The environment copy preserves an existing `.env` file. The example contains local development credentials; deployment environments require their own configuration.
+
+`npm run dev:api` also starts the API in watch mode by delegating to pnpm. Use pnpm for dependency installation to keep the workspace lockfile consistent.
+
+| Resource                      | Local address                       |
+| ----------------------------- | ----------------------------------- |
+| Process liveness              | <http://127.0.0.1:4000/health/live> |
+| Interactive API documentation | <http://127.0.0.1:4000/docs>        |
+| OpenAPI JSON                  | <http://127.0.0.1:4000/docs-json>   |
+| PostgreSQL                    | `127.0.0.1:55432`                   |
+| Redis cache                   | `127.0.0.1:56379`                   |
+| Redis jobs                    | `127.0.0.1:56380`                   |
+| Mailpit inbox                 | <http://127.0.0.1:58025>            |
+| Mailpit SMTP                  | `127.0.0.1:51025`                   |
+
+The liveness endpoint reports that the API process is responding; it does not check the database, queues, or payment providers. Interactive documentation is disabled in production.
+
+Stop the API with `Ctrl+C`. Stop the local services while preserving their data with:
 
 ```sh
-cd my-turborepo
-npx turbo build
-pnpm exec turbo build
-pnpm exec turbo build
+docker compose -f compose.api.yaml stop
 ```
 
-You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
+## Development commands
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
+Run commands from the repository root.
 
-```sh
-turbo build --filter=docs
-```
+| Command                                       | Purpose                                                       |
+| --------------------------------------------- | ------------------------------------------------------------- |
+| `pnpm run dev:api`                            | Start the API with automatic reload                           |
+| `pnpm run dev`                                | Start all application development tasks                       |
+| `pnpm run build`                              | Build the workspace applications                              |
+| `pnpm run lint`                               | Run workspace lint checks                                     |
+| `pnpm run check-types`                        | Run workspace TypeScript checks                               |
+| `pnpm --filter @axiapay/api format:check`     | Check API formatting                                          |
+| `pnpm --filter @axiapay/api test`             | Run configuration and HTTP tests                              |
+| `pnpm --filter @axiapay/api test:integration` | Check PostgreSQL and Redis using disposable Docker containers |
+| `pnpm --filter @axiapay/api build`            | Compile the API to `apps/api/dist`                            |
+| `pnpm --filter @axiapay/api start`            | Run the compiled API                                          |
+| `pnpm --filter @axiapay/api db:migrate`       | Apply migrations after building the API                       |
 
-Without global `turbo`:
+Integration tests use disposable databases rather than the local development database. API startup never runs migrations automatically. See the [API setup guide](apps/api/README.md) and [migration guide](apps/api/migrations/README.md) for more detail.
 
-```sh
-npx turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-pnpm exec turbo build --filter=docs
-```
+## Engineering agreements
 
-### Develop
+Follow [AGENTS.md](AGENTS.md) and the [API architecture guide](apps/api/docs/architecture.md) when contributing. Delivery handlers invoke application use cases; use cases coordinate domain rules and repository contracts. Repository implementations coordinate concrete database and cache data sources. Kysely and ioredis stay in infrastructure.
 
-To develop all apps and packages, run the following command:
+Cache identity must include effective query parameters and authorized account scope. Relevant writes must invalidate affected cached results after commit, with recovery and stale-fill protection defined before caching is implemented. Spending decisions use authoritative database state.
 
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
+Use clear business names, focused responsibilities, guard clauses instead of nested `if` statements, and concise responsibility documentation. Payment work must preserve exact monetary values, atomic movements, idempotency, and explicit recovery states.
 
-```sh
-cd my-turborepo
-turbo dev
-```
+## Product references
 
-Without global `turbo`, use your package manager:
+- [Individual MVP specification](https://chatgpt.com/space/page_9d42d84b06448191a7129d5deeecb916)
+- [Individual MVP user stories](https://chatgpt.com/space/page_f37cd1daa0448191bd9b28617060f66e)
+- [Technology stack and application structure](https://chatgpt.com/space/page_d527055d03a88191b1383b8d08883119)
 
-```sh
-cd my-turborepo
-npx turbo dev
-pnpm exec turbo dev
-pnpm exec turbo dev
-```
-
-You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo dev --filter=web
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-pnpm exec turbo dev --filter=web
-```
-
-### Remote Caching
-
-> [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
-
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
-
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended):
-
-```sh
-cd my-turborepo
-turbo login
-```
-
-Without global `turbo`, use your package manager:
-
-```sh
-cd my-turborepo
-npx turbo login
-pnpm exec turbo login
-pnpm exec turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
-
-With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed:
-
-```sh
-turbo link
-```
-
-Without global `turbo`:
-
-```sh
-npx turbo link
-pnpm exec turbo link
-pnpm exec turbo link
-```
-
-## Useful Links
-
-Learn more about the power of Turborepo:
-
-- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+These drafts distinguish confirmed decisions, proposed defaults, and open release questions. A planned feature or acceptance criterion does not imply that it has been implemented.
