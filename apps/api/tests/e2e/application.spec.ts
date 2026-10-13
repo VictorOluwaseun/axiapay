@@ -77,6 +77,57 @@ describe('API foundation', () => {
         .availableMinorUnits.type,
     ).toBe('string');
   });
+  it('documents session-protected funding routes separately from partner-authenticated webhooks', async () => {
+    const response = await application.inject({
+      method: 'GET',
+      url: '/docs-json',
+    });
+    const document = response.json();
+    expect(
+      document.paths['/v1/wallets/{walletId}/funding-requests'].post.security,
+    ).toEqual([{ bearer: [] }]);
+    expect(
+      document.paths['/v1/wallets/{walletId}/funding-options'].get.security,
+    ).toEqual([{ bearer: [] }]);
+    const fundingContract = document.components.schemas.CreateFundingRequestDto;
+    expect(fundingContract.required).toContain('fundingOptionId');
+    expect(fundingContract.properties.fundingOptionId).not.toHaveProperty(
+      'enum',
+    );
+    expect(fundingContract.properties).not.toHaveProperty('partner');
+    expect(
+      document.components.schemas.FundingResponseDto.properties,
+    ).not.toHaveProperty('adapterId');
+    expect(
+      document.components.schemas.FundingOptionResponseDto.properties
+        .maximumAmountMinorUnits.type,
+    ).toBe('string');
+    expect(
+      document.paths['/v1/wallet-funding/{fundingId}'].get.security,
+    ).toEqual([{ bearer: [] }]);
+    expect(
+      document.paths['/v1/wallet-funding/{fundingId}/reconcile'].post.security,
+    ).toEqual([{ bearer: [] }]);
+    expect(
+      document.paths['/v1/webhooks/wallet-funding/paystack'].post.security,
+    ).toBeUndefined();
+    expect(
+      document.paths['/v1/webhooks/wallet-funding/opay'].post.security,
+    ).toBeUndefined();
+    expect(
+      document.components.schemas.CreateFundingRequestDto.properties
+        .amountMinorUnits.type,
+    ).toBe('string');
+  });
+  it('fails closed on unsigned webhooks through the actual raw-body bootstrap', async () => {
+    const response = await application.inject({
+      method: 'POST',
+      url: '/v1/webhooks/wallet-funding/paystack',
+      payload: { event: 'charge.success' },
+    });
+    expect(response.statusCode).toBe(401);
+    expect(response.json().code).toBe('INVALID_WEBHOOK');
+  });
   it.each([
     ['POST', '/v1/wallets'],
     ['GET', '/v1/wallets/c764f366-e737-4c84-b63b-0df02ad39c76/balance'],

@@ -32,7 +32,7 @@ export async function createApplication(): Promise<NestFastifyApplication> {
   const application = await NestFactory.create<NestFastifyApplication>(
     ApiModule,
     new FastifyAdapter(),
-    { bufferLogs: true, abortOnError: false },
+    { bufferLogs: true, abortOnError: false, rawBody: true },
   );
   application.useLogger(application.get(Logger));
   application.setGlobalPrefix('v1', {

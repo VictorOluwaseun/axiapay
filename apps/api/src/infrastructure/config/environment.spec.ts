@@ -9,6 +9,33 @@ const settings = {
   REDIS_QUEUE_URL: 'redis://localhost:56380',
 };
 describe('API configuration', () => {
+  it('requires complete partner configuration and separates test/live and partner ledger identities', () => {
+    const paystack = {
+      ...settings,
+      PAYSTACK_SECRET_KEY: 'sk_test_example',
+      PAYSTACK_LEDGER_ACCOUNT_ID: '8f819840-74b1-4822-a55b-f4fbaf1f2c90',
+      FUNDING_RETURN_URL: 'https://axiapay.example/return',
+    };
+    expect(validateEnvironment(paystack).FUNDING_ENVIRONMENT).toBe('test');
+    expect(() =>
+      validateEnvironment({
+        ...settings,
+        PAYSTACK_SECRET_KEY: 'sk_test_example',
+      }),
+    ).toThrow('PAYSTACK_LEDGER_ACCOUNT_ID');
+    expect(() =>
+      validateEnvironment({ ...paystack, FUNDING_ENVIRONMENT: 'live' }),
+    ).toThrow('PAYSTACK_SECRET_KEY');
+    expect(() =>
+      validateEnvironment({ ...settings, OPAY_MERCHANT_ID: '123456' }),
+    ).toThrow('OPAY_SECRET_KEY');
+    expect(() =>
+      validateEnvironment({
+        ...paystack,
+        OPAY_LEDGER_ACCOUNT_ID: paystack.PAYSTACK_LEDGER_ACCOUNT_ID,
+      }),
+    ).toThrow('OPAY_LEDGER_ACCOUNT_ID');
+  });
   it('requires a deployment-specific code secret and blocks local delivery in production', () => {
     expect(() =>
       validateEnvironment({ ...settings, AUTH_CODE_SECRET: '' }),
