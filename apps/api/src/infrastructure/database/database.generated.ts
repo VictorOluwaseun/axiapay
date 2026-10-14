@@ -25,6 +25,71 @@ export type JsonValue = JsonArray | JsonObject | JsonPrimitive;
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
+export interface AirtimeConversionInstructions {
+  conversion_id: string;
+  description: string;
+  instruction_reference: string;
+  instructions_fingerprint: string;
+  issued_at: Timestamp;
+  receiving_phone_number: string;
+}
+
+export interface AirtimeConversionOutcomes {
+  conversion_id: string;
+  evidence_reference: string;
+  exception_code: string | null;
+  external_movement_id: string | null;
+  observed_airtime_minor_units: Int8 | null;
+  observed_currency: string | null;
+  outcome: string;
+  partner_account_id: string;
+  receipt: Json | null;
+  receipt_fingerprint: string;
+  received_at: Timestamp | null;
+}
+
+export interface AirtimeConversionQuotes {
+  airtime_minor_units: Int8;
+  airtime_step_minor_units: Int8;
+  currency: string;
+  display_name: string;
+  eligibility_reference: string;
+  expires_at: Timestamp;
+  fee_basis_points: number;
+  fee_minor_units: Int8;
+  fixed_fee_minor_units: Int8;
+  gross_credit_minor_units: Int8;
+  id: string;
+  maximum_airtime_minor_units: Int8;
+  minimum_airtime_minor_units: Int8;
+  net_credit_minor_units: Int8;
+  network_code: string;
+  offer_id: string;
+  owner_id: string;
+  partner_account_id: string;
+  provider_id: string;
+  provider_product_code: string;
+  quote_validity_seconds: number;
+  quoted_at: Timestamp;
+  rate_denominator: Int8;
+  rate_numerator: Int8;
+  source_phone_number: string;
+  terms_version: string;
+  transfer_window_seconds: number;
+  wallet_id: string;
+}
+
+export interface AirtimeConversions {
+  accepted_at: Timestamp;
+  id: string;
+  initialization_started_at: Timestamp | null;
+  owner_id: string;
+  quote_id: string;
+  receive_by: Timestamp;
+  request_fingerprint: string;
+  request_key: string;
+}
+
 export interface AuthAccounts {
   contact_kind: string;
   contact_value: string;
@@ -337,6 +402,10 @@ export interface Wallets {
 }
 
 export interface DB {
+  airtime_conversion_instructions: AirtimeConversionInstructions;
+  airtime_conversion_outcomes: AirtimeConversionOutcomes;
+  airtime_conversion_quotes: AirtimeConversionQuotes;
+  airtime_conversions: AirtimeConversions;
   auth_accounts: AuthAccounts;
   auth_challenges: AuthChallenges;
   auth_device_challenges: AuthDeviceChallenges;
