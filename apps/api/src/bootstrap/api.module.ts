@@ -6,6 +6,7 @@ import { AuthenticationModule } from '../modules/authentication/authentication.m
 import { WalletHttpModule } from '../modules/wallets/wallet-http.module.js';
 import { FundingIntegrationModule } from './funding-integration.module.js';
 import { PaymentsModule } from '../modules/payments/payments.module.js';
+import { AirtimeConversionModule } from '../modules/airtime-conversion/airtime-conversion.module.js';
 import { HealthModule } from '../modules/health/health.module.js';
 import { validateEnvironment } from '../infrastructure/config/environment.js';
 import { createLoggerOptions } from '../infrastructure/observability/logger-options.js';
@@ -25,6 +26,7 @@ import { createLoggerOptions } from '../infrastructure/observability/logger-opti
     WalletHttpModule,
     FundingIntegrationModule,
     PaymentsModule.register(),
+    AirtimeConversionModule.register(),
   ],
 })
 export class ApiModule {}
