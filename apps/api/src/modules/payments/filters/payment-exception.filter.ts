@@ -1,15 +1,7 @@
-import {
-  BadRequestException,
-  Catch,
-  Logger,
-  type ArgumentsHost,
-  type ExceptionFilter,
-} from '@nestjs/common';
+import { Catch } from '@nestjs/common';
+import { HttpExceptionFilter } from '../../../shared/http/http-exception.filter.js';
+import type { HttpFailure } from '../../../shared/http/http-failure.js';
 import { AuthenticationError } from '../../authentication/domain/authentication-error.js';
-import type {
-  AuthenticationHttpRequest,
-  AuthenticationHttpResponse,
-} from '../../authentication/types/authentication-http.js';
 import { WalletError } from '../../wallets/domain/wallet-error.js';
 import { PaymentError } from '../domain/payment.js';
 
@@ -153,54 +145,29 @@ function walletFailure(
   return null;
 }
 
-/** Redact all financial route failures and prevent browser/proxy caching of recipient and payment information. */
+/** Supply payment-specific safe projections while the shared HTTP boundary owns response delivery and logging. */
 @Catch()
-export class PaymentExceptionFilter implements ExceptionFilter {
-  private readonly logger = new Logger(PaymentExceptionFilter.name);
-
-  /** Preserve actionable safe codes, returning retryable uncertainty for every unclassified dependency failure. */
-  catch(error: unknown, host: ArgumentsHost): void {
-    const response = host
-      .switchToHttp()
-      .getResponse<AuthenticationHttpResponse>();
-    response.header('Cache-Control', 'no-store').header('Pragma', 'no-cache');
+export class PaymentExceptionFilter extends HttpExceptionFilter {
+  /** Keep payment identity privacy and request-key recovery guidance for every unclassified dependency outcome. */
+  protected override mapFailure(error: unknown): HttpFailure {
     if (
       error instanceof AuthenticationError &&
       error.code === 'INVALID_CREDENTIALS'
     ) {
-      response
-        .header('WWW-Authenticate', 'Bearer')
-        .status(401)
-        .send({ code: error.code, message: error.message });
-      return;
-    }
-    if (error instanceof BadRequestException) {
-      response
-        .status(400)
-        .send({ code: 'INVALID_INPUT', message: 'Invalid request.' });
-      return;
+      return {
+        status: 401,
+        code: error.code,
+        message: error.message,
+        authenticationScheme: 'Bearer',
+      };
     }
     const financialFailure =
       error instanceof WalletError ? walletFailure(error) : null;
     if (financialFailure) {
-      response.status(financialFailure.status).send({
-        code: financialFailure.code,
-        message: financialFailure.message,
-      });
-      return;
+      return financialFailure;
     }
     const code =
       error instanceof PaymentError ? error.code : 'PAYMENT_UNAVAILABLE';
-    const failure = paymentFailures[code];
-    if (failure.status === 503) {
-      this.logger.warn({
-        event: 'service_payment_unavailable',
-        requestId: host.switchToHttp().getRequest<AuthenticationHttpRequest>()
-          .id,
-        code,
-        errorType: error instanceof Error ? error.name : 'UnknownError',
-      });
-    }
-    response.status(failure.status).send({ code, message: failure.message });
+    return { ...paymentFailures[code], code };
   }
 }

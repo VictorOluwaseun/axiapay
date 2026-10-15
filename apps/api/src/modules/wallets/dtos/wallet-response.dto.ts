@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { HttpErrorResponseDto } from '../../../shared/http/http-error-response.dto.js';
 import type { Wallet } from '../domain/wallet.js';
 
 /** Public wallet snapshot excludes ledger account IDs and serializes every monetary value exactly. */
@@ -43,10 +44,4 @@ export class WalletTransferResponseDto {
 }
 
 /** Stable public failure contract, without raw validation inputs or dependency details. */
-export class WalletErrorResponseDto {
-  @ApiProperty({ example: 'INSUFFICIENT_FUNDS' })
-  readonly code!: string;
-
-  @ApiProperty({ example: 'Insufficient available funds.' })
-  readonly message!: string;
-}
+export class WalletErrorResponseDto extends HttpErrorResponseDto {}

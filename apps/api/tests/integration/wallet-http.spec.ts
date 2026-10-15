@@ -260,7 +260,11 @@ describe('authenticated wallet HTTP', () => {
     const inaccessible = await balance(stranger, owner.wallet.id);
     const absent = await balance(stranger, randomUUID());
     expect(inaccessible.statusCode).toBe(404);
-    expect(inaccessible.json()).toEqual(absent.json());
+    // Per-request diagnostic references differ; inaccessible and absent wallets expose identical business information.
+    expect(inaccessible.json()).toEqual({
+      ...absent.json(),
+      requestId: inaccessible.headers['x-request-id'],
+    });
     const denied = await transfer(stranger, stranger, {}, owner.wallet.id);
     expect(denied.statusCode).toBe(404);
     expect(denied.json().code).toBe('WALLET_NOT_FOUND');
@@ -524,6 +528,8 @@ describe('authenticated wallet HTTP', () => {
     expect(uncertain.statusCode).toBe(503);
     expect(uncertain.headers['cache-control']).toBe('no-store');
     expect(uncertain.json()).toEqual({
+      statusCode: 503,
+      requestId: uncertain.headers['x-request-id'],
       code: 'WALLET_UNAVAILABLE',
       message:
         'Wallet operation unavailable. Retry transfers with the same request key and terms.',

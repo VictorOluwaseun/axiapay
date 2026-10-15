@@ -1,4 +1,5 @@
 import { ApiProperty, ApiExtraModels, getSchemaPath } from '@nestjs/swagger';
+import { HttpErrorResponseDto } from '../../../shared/http/http-error-response.dto.js';
 import {
   BankBeneficiaryValidationResponseDto,
   BankTransferConfirmationResponseDto,
@@ -349,10 +350,7 @@ function paymentFulfilmentStatus(
 }
 
 /** Actionable, redacted error contract shared by catalogue, quote and submission routes. */
-export class PaymentErrorResponseDto {
-  @ApiProperty() readonly code!: string;
-  @ApiProperty() readonly message!: string;
-}
+export class PaymentErrorResponseDto extends HttpErrorResponseDto {}
 
 /** Derive issuance solely from an authenticated stored policy, independent of the ledger's financial state. */
 function policyIssuanceStatus(

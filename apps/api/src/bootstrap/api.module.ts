@@ -1,4 +1,5 @@
 import { RequestValidationModule } from './request-validation.module.js';
+import { HttpErrorHandlingModule } from './http-error-handling.module.js';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { LoggerModule } from 'nestjs-pino';
@@ -21,6 +22,7 @@ import { createLoggerOptions } from '../infrastructure/observability/logger-opti
       useFactory: createLoggerOptions,
     }),
     RequestValidationModule,
+    HttpErrorHandlingModule,
     HealthModule,
     AuthenticationModule,
     WalletHttpModule,

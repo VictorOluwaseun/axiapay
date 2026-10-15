@@ -1,15 +1,7 @@
-import {
-  BadRequestException,
-  Catch,
-  Logger,
-  type ArgumentsHost,
-  type ExceptionFilter,
-} from '@nestjs/common';
+import { Catch } from '@nestjs/common';
+import { HttpExceptionFilter } from '../../../shared/http/http-exception.filter.js';
+import type { HttpFailure } from '../../../shared/http/http-failure.js';
 import { AuthenticationError } from '../../authentication/domain/authentication-error.js';
-import type {
-  AuthenticationHttpRequest,
-  AuthenticationHttpResponse,
-} from '../../authentication/types/authentication-http.js';
 import { WalletError } from '../domain/wallet-error.js';
 
 /** Public failures are deliberately narrower than internal ledger and integration failures. */
@@ -69,52 +61,32 @@ const walletFailures: Partial<
   },
 };
 
-/** Translate wallet and session failures while keeping sensitive financial responses out of caches and logs. */
+/** Project wallet and session failures; shared handling owns headers, error envelopes, and diagnostics. */
 @Catch()
-export class WalletExceptionFilter implements ExceptionFilter {
-  private readonly logger = new Logger(WalletExceptionFilter.name);
-
-  /** Guard failures are handled here too; uncertain dependency outcomes never become confirmed transfer failures. */
-  catch(error: unknown, host: ArgumentsHost): void {
-    const request = host.switchToHttp().getRequest<AuthenticationHttpRequest>();
-    const response = host
-      .switchToHttp()
-      .getResponse<AuthenticationHttpResponse>();
-    response.header('Cache-Control', 'no-store').header('Pragma', 'no-cache');
+export class WalletExceptionFilter extends HttpExceptionFilter {
+  /** Preserve wallet privacy and uncertain transfer guidance rather than reporting a confirmed financial failure. */
+  protected override mapFailure(error: unknown): HttpFailure {
     if (
       error instanceof AuthenticationError &&
       error.code === 'INVALID_CREDENTIALS'
     ) {
-      response.header('WWW-Authenticate', 'Bearer').status(401).send({
+      return {
+        status: 401,
         code: error.code,
         message: error.message,
-      });
-      return;
-    }
-    if (error instanceof BadRequestException) {
-      response
-        .status(400)
-        .send({ code: 'INVALID_INPUT', message: 'Invalid request.' });
-      return;
+        authenticationScheme: 'Bearer',
+      };
     }
     const failure =
       error instanceof WalletError ? walletFailures[error.code] : undefined;
     if (failure) {
-      response
-        .status(failure.status)
-        .send({ code: failure.code, message: failure.message });
-      return;
+      return failure;
     }
-    this.logger.error({
-      event: 'wallet_request_unavailable',
-      requestId: request.id,
-      errorType: error instanceof Error ? error.name : 'UnknownError',
-      walletErrorCode: error instanceof WalletError ? error.code : undefined,
-    });
-    response.status(503).send({
+    return {
+      status: 503,
       code: 'WALLET_UNAVAILABLE',
       message:
         'Wallet operation unavailable. Retry transfers with the same request key and terms.',
-    });
+    };
   }
 }

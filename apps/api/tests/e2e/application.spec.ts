@@ -229,8 +229,10 @@ describe('API foundation', () => {
       expect(response.statusCode).toBe(400);
       expect(response.headers['cache-control']).toBe('no-store');
       expect(response.json()).toEqual({
+        statusCode: 400,
         code: 'INVALID_INPUT',
-        message: 'Invalid request body.',
+        message: 'Invalid request.',
+        requestId: response.headers['x-request-id'],
       });
     },
   );

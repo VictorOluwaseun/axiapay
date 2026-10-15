@@ -1,15 +1,7 @@
-import {
-  BadRequestException,
-  Catch,
-  Logger,
-  type ArgumentsHost,
-  type ExceptionFilter,
-} from '@nestjs/common';
+import { Catch } from '@nestjs/common';
+import { HttpExceptionFilter } from '../../../shared/http/http-exception.filter.js';
+import type { HttpFailure } from '../../../shared/http/http-failure.js';
 import { AuthenticationError } from '../../authentication/domain/authentication-error.js';
-import type {
-  AuthenticationHttpRequest,
-  AuthenticationHttpResponse,
-} from '../../authentication/types/authentication-http.js';
 import { WalletError } from '../../wallets/domain/wallet-error.js';
 import { ConversionError } from '../domain/conversion.js';
 
@@ -47,42 +39,31 @@ const failures = {
   },
 } as const;
 
-/** Map DTO, authorization, monetary and dependency failures without leaking external payloads. */
+/** Supply conversion-specific safe projections; shared handling owns response delivery, headers, and diagnostics. */
 @Catch()
-export class ConversionExceptionFilter implements ExceptionFilter {
-  private readonly logger = new Logger(ConversionExceptionFilter.name);
-
-  /** Return bounded diagnostics and no-store responses; retryable failure never discards an accepted request or verified receipt. */
-  catch(error: unknown, host: ArgumentsHost): void {
-    const response = host
-      .switchToHttp()
-      .getResponse<AuthenticationHttpResponse>();
-    response.header('Cache-Control', 'no-store');
+export class ConversionExceptionFilter extends HttpExceptionFilter {
+  /** Preserve accepted conversion identities and receipts when dependencies fail or credit needs recovery. */
+  protected override mapFailure(error: unknown): HttpFailure {
     if (
       error instanceof AuthenticationError &&
       error.code === 'INVALID_CREDENTIALS'
     ) {
-      response
-        .header('WWW-Authenticate', 'Bearer')
-        .status(401)
-        .send({ code: error.code, message: 'Authentication required.' });
-      return;
-    }
-    if (error instanceof BadRequestException) {
-      response.status(400).send({
-        code: 'INVALID_INPUT',
-        message: 'Invalid conversion request.',
-      });
-      return;
+      return {
+        status: 401,
+        code: error.code,
+        message: 'Authentication required.',
+        authenticationScheme: 'Bearer',
+      };
     }
     if (
       error instanceof WalletError &&
       ['FORBIDDEN', 'WALLET_NOT_FOUND'].includes(error.code)
     ) {
-      response
-        .status(404)
-        .send({ code: 'WALLET_NOT_FOUND', message: 'Wallet not found.' });
-      return;
+      return {
+        status: 404,
+        code: 'WALLET_NOT_FOUND',
+        message: 'Wallet not found.',
+      };
     }
     if (
       error instanceof WalletError &&
@@ -90,10 +71,11 @@ export class ConversionExceptionFilter implements ExceptionFilter {
         error.code,
       )
     ) {
-      response
-        .status(400)
-        .send({ code: error.code, message: 'Invalid conversion terms.' });
-      return;
+      return {
+        status: 400,
+        code: error.code,
+        message: 'Invalid conversion terms.',
+      };
     }
     if (
       error instanceof WalletError &&
@@ -103,22 +85,15 @@ export class ConversionExceptionFilter implements ExceptionFilter {
         'IDEMPOTENCY_CONFLICT',
       ].includes(error.code)
     ) {
-      response.status(409).send({
+      return {
+        status: 409,
         code: error.code,
         message:
           'Credit cannot be applied. Keep the original conversion and contact support.',
-      });
-      return;
+      };
     }
     const code =
       error instanceof ConversionError ? error.code : 'CONVERSION_UNAVAILABLE';
-    const failure = failures[code];
-    this.logger.warn({
-      event: 'airtime_conversion_request_failed',
-      requestId: host.switchToHttp().getRequest<AuthenticationHttpRequest>().id,
-      code,
-      errorType: error instanceof Error ? error.name : 'UnknownError',
-    });
-    response.status(failure.status).send({ code, message: failure.message });
+    return { ...failures[code], code };
   }
 }

@@ -1,15 +1,7 @@
-import {
-  BadRequestException,
-  Catch,
-  Logger,
-  type ArgumentsHost,
-  type ExceptionFilter,
-} from '@nestjs/common';
+import { Catch } from '@nestjs/common';
+import { HttpExceptionFilter } from '../../../shared/http/http-exception.filter.js';
+import type { HttpFailure } from '../../../shared/http/http-failure.js';
 import { AuthenticationError } from '../../authentication/domain/authentication-error.js';
-import type {
-  AuthenticationHttpRequest,
-  AuthenticationHttpResponse,
-} from '../../authentication/types/authentication-http.js';
 import { WalletError } from '../../wallets/domain/wallet-error.js';
 import { FundingError } from '../domain/funding.js';
 
@@ -37,50 +29,41 @@ const fundingFailures = {
   },
 } as const;
 
-/** Cover authentication, DTO, monetary and dependency failures for customer and webhook delivery boundaries. */
+/** Project customer and partner funding errors; shared handling owns response envelopes, headers, and diagnostics. */
 @Catch()
-export class FundingExceptionFilter implements ExceptionFilter {
-  private readonly logger = new Logger(FundingExceptionFilter.name);
-
-  /** Return retryable failures until financial commit; HTTP success must never acknowledge an unposted valid payment. */
-  catch(error: unknown, host: ArgumentsHost): void {
-    const response = host
-      .switchToHttp()
-      .getResponse<AuthenticationHttpResponse>();
-    response.header('Cache-Control', 'no-store');
+export class FundingExceptionFilter extends HttpExceptionFilter {
+  /** Preserve partner authentication and uncertain funding semantics without acknowledging an unposted payment. */
+  protected override mapFailure(error: unknown): HttpFailure {
     if (
       error instanceof AuthenticationError &&
       error.code === 'INVALID_CREDENTIALS'
     ) {
-      response
-        .header('WWW-Authenticate', 'Bearer')
-        .status(401)
-        .send({ code: error.code, message: error.message });
-      return;
-    }
-    if (error instanceof BadRequestException) {
-      response
-        .status(400)
-        .send({ code: 'INVALID_INPUT', message: 'Invalid funding request.' });
-      return;
+      return {
+        status: 401,
+        code: error.code,
+        message: error.message,
+        authenticationScheme: 'Bearer',
+      };
     }
     if (
       error instanceof AuthenticationError &&
       error.code === 'INVALID_INPUT'
     ) {
-      response
-        .status(400)
-        .send({ code: 'INVALID_INPUT', message: 'Invalid funding contact.' });
-      return;
+      return {
+        status: 400,
+        code: 'INVALID_INPUT',
+        message: 'Invalid funding contact.',
+      };
     }
     if (
       error instanceof WalletError &&
       ['FORBIDDEN', 'WALLET_NOT_FOUND'].includes(error.code)
     ) {
-      response
-        .status(404)
-        .send({ code: 'WALLET_NOT_FOUND', message: 'Wallet not found.' });
-      return;
+      return {
+        status: 404,
+        code: 'WALLET_NOT_FOUND',
+        message: 'Wallet not found.',
+      };
     }
     if (
       error instanceof WalletError &&
@@ -88,10 +71,11 @@ export class FundingExceptionFilter implements ExceptionFilter {
         error.code,
       )
     ) {
-      response
-        .status(400)
-        .send({ code: error.code, message: 'Invalid funding terms.' });
-      return;
+      return {
+        status: 400,
+        code: error.code,
+        message: 'Invalid funding terms.',
+      };
     }
     if (
       error instanceof WalletError &&
@@ -101,24 +85,14 @@ export class FundingExceptionFilter implements ExceptionFilter {
         'IDEMPOTENCY_CONFLICT',
       ].includes(error.code)
     ) {
-      response.status(409).send({
+      return {
+        status: 409,
         code: error.code,
         message: 'Funding cannot be applied to this wallet.',
-      });
-      return;
+      };
     }
     const code =
       error instanceof FundingError ? error.code : 'FUNDING_UNAVAILABLE';
-    const failure = fundingFailures[code];
-    if (failure.status !== 401) {
-      this.logger.warn({
-        event: 'funding_request_failed',
-        requestId: host.switchToHttp().getRequest<AuthenticationHttpRequest>()
-          .id,
-        code,
-        errorType: error instanceof Error ? error.name : 'UnknownError',
-      });
-    }
-    response.status(failure.status).send({ code, message: failure.message });
+    return { ...fundingFailures[code], code };
   }
 }
