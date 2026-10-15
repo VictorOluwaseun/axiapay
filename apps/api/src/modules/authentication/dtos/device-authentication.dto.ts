@@ -1,7 +1,12 @@
+import {
+  IsUnpaddedText,
+  IsReadableText,
+} from '../../../shared/validation/input-constraints.js';
 import { ApiProperty } from '@nestjs/swagger';
 import {
   IsString,
   IsUUID,
+  Length,
   Matches,
   MaxLength,
   MinLength,
@@ -13,6 +18,8 @@ export class EnrollDeviceDto {
   @IsString()
   @MinLength(1)
   @MaxLength(80)
+  @IsUnpaddedText()
+  @IsReadableText()
   readonly deviceName!: string;
 
   @ApiProperty({
@@ -22,7 +29,7 @@ export class EnrollDeviceDto {
   })
   @IsString()
   @MaxLength(256)
-  @Matches(/^[A-Za-z0-9_-]+$/)
+  @Matches(/^[A-Za-z0-9_-]+(?![\s\S])/)
   readonly publicKey!: string;
 }
 
@@ -30,6 +37,7 @@ export class EnrollDeviceDto {
 export class DeviceIdentifierDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
+  @Length(36, 36)
   readonly credentialId!: string;
 }
 
@@ -37,6 +45,7 @@ export class DeviceIdentifierDto {
 export class DeviceProofDto extends DeviceIdentifierDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
+  @Length(36, 36)
   readonly challengeId!: string;
 
   @ApiProperty({
@@ -46,7 +55,7 @@ export class DeviceProofDto extends DeviceIdentifierDto {
   })
   @IsString()
   @MaxLength(128)
-  @Matches(/^[A-Za-z0-9_-]+$/)
+  @Matches(/^[A-Za-z0-9_-]+(?![\s\S])/)
   readonly signature!: string;
 }
 

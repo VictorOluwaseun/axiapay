@@ -1,11 +1,18 @@
+import {
+  ContactValueConstraint,
+  canonicalContactValue,
+} from '../validation/contact-input.js';
+import { IsCodePointLength } from '../../../shared/validation/input-constraints.js';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsDefined,
   IsIn,
   IsObject,
   IsString,
   IsUUID,
+  Validate,
+  Length,
   Matches,
   MaxLength,
   MinLength,
@@ -14,13 +21,19 @@ import {
 } from 'class-validator';
 import type { Contact } from '../domain/authentication-models.js';
 
-/** Describe contact input; canonicalization and channel-specific identity rules remain in the domain. */
+/** Validate and canonicalize contact input at the pipe boundary; services receive a consistent identity. */
 export class ContactDto implements Contact {
   @ApiProperty({ enum: ['email', 'phone'], example: 'email' })
   @IsIn(['email', 'phone'])
   readonly kind!: Contact['kind'];
 
   @ApiProperty({ minLength: 1, maxLength: 254, example: 'alice@example.com' })
+  @Transform(
+    ({ value, obj }: { value: unknown; obj: { kind?: unknown } }) =>
+      canonicalContactValue(value, obj.kind),
+    { toClassOnly: true },
+  )
+  @Validate(ContactValueConstraint)
   @IsString()
   @MinLength(1)
   @MaxLength(254)
@@ -47,16 +60,15 @@ export class SignupDto extends RequestLoginCodeDto {
   })
   @ValidateIf((_object: unknown, value: unknown) => value !== undefined)
   @IsString()
-  @MaxLength(256)
+  @IsCodePointLength(15, 128)
   readonly password?: string;
 }
 
 /** Bound password-login input without trimming, case folding, or implicit conversion. */
 export class PasswordLoginDto extends RequestLoginCodeDto {
-  @ApiProperty({ minLength: 1, maxLength: 256 })
+  @ApiProperty({ minLength: 1, maxLength: 128 })
   @IsString()
-  @MinLength(1)
-  @MaxLength(256)
+  @IsCodePointLength(1, 128)
   readonly password!: string;
 }
 
@@ -64,10 +76,19 @@ export class PasswordLoginDto extends RequestLoginCodeDto {
 export class VerifyCodeDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
+  @Length(36, 36)
   readonly challengeId!: string;
 
   @ApiProperty({ pattern: '^\\d{6}$', example: '012345' })
   @IsString()
-  @Matches(/^\d{6}$/)
+  @Matches(/^\d{6}(?![\s\S])/)
   readonly code!: string;
+}
+
+/** Validate an opaque credential for a non-HTTP authentication adapter; HTTP uses the existing bearer-header reader. */
+export class SessionTokenInputDto {
+  @ApiProperty({ pattern: '^[A-Za-z0-9_-]{43}$' })
+  @IsString()
+  @Matches(/^[A-Za-z0-9_-]{43}(?![\s\S])/)
+  readonly token!: string;
 }

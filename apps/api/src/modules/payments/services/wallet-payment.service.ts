@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { WalletService } from '../../wallets/services/wallet.service.js';
 import type { PaymentQuote, ServicePayment } from '../domain/payment.js';
-import { assertUuidReference, paymentStatus } from '../domain/payment.js';
+import { paymentStatus } from '../domain/payment.js';
 import { PaymentExecutionService } from './payment-execution.service.js';
 import { PaymentQuoteService } from './payment-quote.service.js';
 import { needsPaymentFulfilment } from '../domain/payment-fulfilment.js';
@@ -30,7 +30,6 @@ export class WalletPaymentService {
     readonly insuranceApplicationId?: string;
     readonly amountMinorUnits?: bigint;
   }): Promise<PaymentQuote> {
-    assertUuidReference(input.walletId);
     const wallet = await this.wallets.getWalletBalance({
       actorId: input.actorId,
       walletId: input.walletId,

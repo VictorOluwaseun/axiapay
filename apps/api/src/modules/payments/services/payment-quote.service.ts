@@ -8,9 +8,7 @@ import {
 } from '../../wallets/domain/wallet.js';
 import { WalletError } from '../../wallets/domain/wallet-error.js';
 import {
-  assertUuidReference,
   assertQuoteCurrent,
-  assertRecipientPhoneNumber,
   PaymentError,
   quotePrincipal,
   type PaymentQuote,
@@ -25,7 +23,6 @@ import { hasProductSubmissionCapabilities } from './payment-provider-capabilitie
 import { BankBeneficiaryService } from './bank-beneficiary.service.js';
 import {
   assertBankBeneficiaryCurrent,
-  assertTransferNarration,
   type BankBeneficiaryValidation,
 } from '../domain/bank-beneficiary.js';
 import { BillAccountService } from './bill-account.service.js';
@@ -112,7 +109,7 @@ export class PaymentQuoteService {
     ) {
       throw new PaymentError('INVALID_PAYMENT');
     }
-    assertTransferNarration(input.narration);
+
     const principal = quotePrincipal(product, input.amountMinorUnits);
     const createdAt = this.clock.now();
     if (recipient.bankBeneficiaryValidation) {
@@ -171,7 +168,6 @@ export class PaymentQuoteService {
 
   /** Return only the owner's quote; expiry remains visible for review and does not silently generate fresh prices. */
   async get(actorId: string, quoteId: string): Promise<PaymentQuote> {
-    assertUuidReference(quoteId);
     const quote = await this.payments.getQuote(actorId, quoteId);
     if (!quote) {
       throw new PaymentError('QUOTE_NOT_FOUND');
@@ -230,16 +226,6 @@ export class PaymentQuoteService {
     product: ServiceProduct,
     input: QuoteRecipientInput,
   ): Promise<QuoteRecipient> {
-    const selected = [
-      input.recipientPhoneNumber,
-      input.accountValidationId,
-      input.bankBeneficiaryValidationId,
-      input.educationValidationId,
-      input.insuranceApplicationId,
-    ].filter((value) => value !== undefined);
-    if (selected.length !== 1) {
-      throw new PaymentError('INVALID_PAYMENT');
-    }
     const empty: QuoteRecipient = {
       accountValidation: null,
       bankBeneficiaryValidation: null,
@@ -304,7 +290,7 @@ export class PaymentQuoteService {
     ) {
       throw new PaymentError('INVALID_PAYMENT');
     }
-    assertRecipientPhoneNumber(input.recipientPhoneNumber);
+
     return empty;
   }
 }

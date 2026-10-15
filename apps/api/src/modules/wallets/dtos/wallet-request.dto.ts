@@ -55,6 +55,6 @@ export class TransferWalletFundsDto extends CreateWalletDto {
   @MaxLength(200)
   // PostgreSQL text cannot store NUL; reject it as input instead of a dependency failure.
   @NotContains('\u0000')
-  @Matches(/^\S(?:[\s\S]*\S)?$/)
+  @Matches(/^\S(?:[\s\S]*\S)?(?![\s\S])/)
   readonly requestKey!: string;
 }

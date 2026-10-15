@@ -22,7 +22,6 @@ import type {
   ConfirmedFunding,
   FundingVerification,
 } from '../../wallets/ports/wallet-verification.js';
-import { normalizeContact } from '../../authentication/domain/authentication-policy.js';
 import { validateFundingRoutes } from './funding-routing.js';
 
 /** AxiaPay funding intent, routing, and independent verification. Provider protocols and HTTP evidence stay outside this service. */
@@ -61,12 +60,8 @@ export class FundingService implements FundingVerification {
     requestKey: string;
   }): Promise<FundingRequest> {
     const value = money(input.value.amountMinorUnits, input.value.currency);
-    assertReference(input.actorId);
-    assertReference(input.requestKey);
-    const payerEmail = normalizeContact({
-      kind: 'email',
-      value: input.payerEmail,
-    }).value;
+
+    const { payerEmail } = input;
     const existing = await this.repository.findByRequestKey(
       input.actorId,
       input.requestKey,

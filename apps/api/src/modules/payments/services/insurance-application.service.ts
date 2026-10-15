@@ -4,14 +4,13 @@ import { ServiceCatalogService } from '../../service-catalog/services/service-ca
 import { assertReference } from '../../wallets/domain/money.js';
 import {
   assertInsuranceApplicationCurrent,
-  calendarDate,
   insuranceApplicationFingerprint,
   requestedCoverageEnd,
   validatedInsuredProfile,
   type InsuranceApplication,
   type InsuredProfile,
 } from '../domain/insurance-application.js';
-import { PaymentError, assertUuidReference } from '../domain/payment.js';
+import { PaymentError } from '../domain/payment.js';
 import type { PaymentRepository } from '../repositories/contracts/payment.repository.js';
 import type {
   PaymentClock,
@@ -51,10 +50,7 @@ export class InsuranceApplicationService {
       throw new PaymentError('INSURANCE_TERMS_CHANGED');
     }
     const now = this.clock.now();
-    if (
-      calendarDate(input.coverageStartsOn).getTime() <
-      calendarDate(now.toISOString().slice(0, 10)).getTime()
-    ) {
+    if (input.coverageStartsOn < now.toISOString().slice(0, 10)) {
       throw new PaymentError('INVALID_PAYMENT');
     }
     const profile = validatedInsuredProfile(
@@ -121,7 +117,6 @@ export class InsuranceApplicationService {
     actorId: string,
     applicationId: string,
   ): Promise<InsuranceApplication> {
-    assertUuidReference(applicationId);
     const application = await this.payments.getInsuranceApplication(
       actorId,
       applicationId,

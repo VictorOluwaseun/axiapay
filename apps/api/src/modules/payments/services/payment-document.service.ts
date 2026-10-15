@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { PaymentError, paymentStatus } from '../domain/payment.js';
-import { assertPaymentDocumentId } from '../domain/payment-document.js';
+
 import type { PaymentProviders } from '../ports/service-payment-provider.js';
 import { PAYMENTS } from '../payments.tokens.js';
 import { PaymentExecutionService } from './payment-execution.service.js';
@@ -21,7 +21,6 @@ export class PaymentDocumentService {
     paymentId: string,
     documentId: string,
   ): Promise<Uint8Array> {
-    assertPaymentDocumentId(documentId);
     const payment = await this.execution.get(actorId, paymentId);
     const document = payment.documents.find(
       (candidate) => candidate.documentId === documentId,

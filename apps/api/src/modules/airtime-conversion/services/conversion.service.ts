@@ -89,9 +89,6 @@ export class ConversionService implements FundingVerification {
     readonly airtimeMinorUnits: bigint;
     readonly currency: string;
   }): Promise<ConversionQuote> {
-    assertConversionId(input.actorId);
-    assertConversionId(input.walletId);
-    assertSourcePhone(input.sourcePhoneNumber);
     const route = this.routes.find(
       (candidate) =>
         candidate.acceptsNewRequests &&
@@ -153,8 +150,6 @@ export class ConversionService implements FundingVerification {
 
   /** Inaccessible and missing quotes have the same error; customer input never selects a different wallet on acceptance. */
   async getQuote(actorId: string, quoteId: string): Promise<ConversionQuote> {
-    assertConversionId(actorId);
-    assertConversionId(quoteId);
     const quote = await this.conversions.getQuote(quoteId);
     if (!quote || quote.ownerId !== actorId) {
       throw new ConversionError('CONVERSION_NOT_FOUND');
@@ -168,9 +163,6 @@ export class ConversionService implements FundingVerification {
     quoteId: string,
     requestKey: string,
   ): Promise<ConversionRequest> {
-    assertConversionId(actorId);
-    assertConversionId(quoteId);
-    assertConversionReference(requestKey);
     const request = await this.conversions.acceptQuote(
       { id: randomUUID(), ownerId: actorId, quoteId, requestKey },
       (quote) => this.authorizeAcceptance(quote),
@@ -215,8 +207,6 @@ export class ConversionService implements FundingVerification {
     actorId: string,
     conversionId: string,
   ): Promise<ConversionRequest> {
-    assertConversionId(actorId);
-    assertConversionId(conversionId);
     const request = await this.require(conversionId);
     if (request.quote.ownerId !== actorId) {
       throw new ConversionError('CONVERSION_NOT_FOUND');
@@ -229,8 +219,6 @@ export class ConversionService implements FundingVerification {
     actorId: string,
     requestKey: string,
   ): Promise<ConversionRequest> {
-    assertConversionId(actorId);
-    assertConversionReference(requestKey);
     const request = await this.conversions.findByRequestKey(
       actorId,
       requestKey,

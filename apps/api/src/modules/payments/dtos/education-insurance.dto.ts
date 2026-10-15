@@ -1,9 +1,11 @@
+import { IsReadableText } from '../../../shared/validation/input-constraints.js';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   Equals,
   IsBoolean,
   IsDefined,
+  IsISO8601,
   IsObject,
   IsString,
   IsUUID,
@@ -128,36 +130,49 @@ export class InsuranceTermsResponseDto implements InsuranceProductTerms {
 
 /** Whitelist typed insured inputs; product policy further rejects any field it does not request. No implicit primitive conversion is permitted. */
 export class InsuredProfileDto {
-  @ApiProperty() @IsString() @Length(1, 200) readonly fullName!: string;
+  @ApiProperty()
+  @IsString()
+  @Length(1, 200)
+  @IsReadableText()
+  readonly fullName!: string;
   @ApiPropertyOptional({ format: 'date' })
   @ValidateIf((_object, value) => value !== undefined)
   @IsString()
   @Matches(/^\d{4}-\d{2}-\d{2}(?![\s\S])/)
+  @IsISO8601({ strict: true })
   readonly dateOfBirth?: string;
   @ApiPropertyOptional()
   @ValidateIf((_object, value) => value !== undefined)
   @IsString()
   @MaxLength(16)
+  @Matches(/^\+[1-9][0-9]{7,14}(?![\s\S])/)
   readonly phoneNumber?: string;
   @ApiPropertyOptional()
   @ValidateIf((_object, value) => value !== undefined)
   @IsString()
   @Length(1, 254)
+  @Matches(/^[^\s@]+@[^\s@]+\.[^\s@]+(?![\s\S])/)
+  @IsReadableText()
   readonly email?: string;
   @ApiPropertyOptional()
   @ValidateIf((_object, value) => value !== undefined)
   @IsString()
   @Length(1, 500)
+  @IsReadableText()
   readonly address?: string;
   @ApiPropertyOptional()
   @ValidateIf((_object, value) => value !== undefined)
   @IsString()
   @Length(1, 100)
+  @Matches(/^[\x20-\x7e]{1,100}(?![\s\S])/)
+  @Matches(/^\S(?:[\s\S]*\S)?(?![\s\S])/)
   readonly identityNumber?: string;
   @ApiPropertyOptional()
   @ValidateIf((_object, value) => value !== undefined)
   @IsString()
   @Length(1, 100)
+  @Matches(/^[\x20-\x7e]{1,100}(?![\s\S])/)
+  @Matches(/^\S(?:[\s\S]*\S)?(?![\s\S])/)
   readonly assetReference?: string;
   /** Whitelist the supported effective fields, excluding undeclared storage/adapter extensions. */
   static fromProfile(profile: InsuredProfile): InsuredProfileDto {
@@ -197,6 +212,7 @@ export class CreateInsuranceApplicationDto {
   @ApiProperty({ format: 'date' })
   @IsString()
   @Matches(/^\d{4}-\d{2}-\d{2}(?![\s\S])/)
+  @IsISO8601({ strict: true })
   readonly coverageStartsOn!: string;
 }
 

@@ -1,3 +1,4 @@
+import { IsReadableText } from '../../../shared/validation/input-constraints.js';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsString, IsUUID, Length, Matches, ValidateIf } from 'class-validator';
 import type { Bank, BankPage } from '../../service-catalog/domain/bank.js';
@@ -112,6 +113,7 @@ export class CreateBankTransferQuoteDto {
   @ValidateIf((_object, value) => value !== undefined)
   @IsString()
   @Length(1, 140)
+  @IsReadableText()
   readonly narration?: string;
 }
 

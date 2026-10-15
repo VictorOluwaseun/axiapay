@@ -8,7 +8,6 @@ import type {
 import { assertReference } from '../../wallets/domain/money.js';
 import {
   assertUuidReference,
-  assertPaymentRequestKey,
   assertQuoteCurrent,
   PaymentError,
   paymentTermsFingerprint,
@@ -49,8 +48,6 @@ export class PaymentExecutionService implements PaymentOutcomeVerification {
     readonly quoteId: string;
     readonly requestKey: string;
   }): Promise<ServicePayment> {
-    assertUuidReference(input.quoteId);
-    assertPaymentRequestKey(input.requestKey);
     return this.payments.acceptQuote(
       {
         id: randomUUID(),
@@ -84,7 +81,6 @@ export class PaymentExecutionService implements PaymentOutcomeVerification {
 
   /** Enforce ownership for every observable or customer-triggered state transition. */
   async get(actorId: string, paymentId: string): Promise<ServicePayment> {
-    assertUuidReference(paymentId);
     const payment = await this.payments.getPayment(paymentId);
     if (!payment || payment.ownerId !== actorId) {
       throw new PaymentError('PAYMENT_NOT_FOUND');
@@ -97,7 +93,6 @@ export class PaymentExecutionService implements PaymentOutcomeVerification {
     actorId: string,
     requestKey: string,
   ): Promise<ServicePayment> {
-    assertPaymentRequestKey(requestKey);
     const payment = await this.payments.findByRequestKey(actorId, requestKey);
     if (!payment) {
       throw new PaymentError('PAYMENT_NOT_FOUND');
@@ -163,7 +158,6 @@ export class PaymentExecutionService implements PaymentOutcomeVerification {
 
   /** Supply only previously authenticated, correlated, immutable evidence to wallet settlement; public clients cannot manufacture outcomes. */
   async verifyOutcome(paymentId: string): Promise<VerifiedPaymentOutcome> {
-    assertUuidReference(paymentId);
     const payment = await this.readRequired(paymentId);
     const outcome = payment.outcome;
     if (!outcome) {

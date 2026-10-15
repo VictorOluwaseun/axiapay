@@ -9,8 +9,6 @@ import {
   deviceAuthenticationPolicy,
   deviceIdentity,
   requireRecentPrimaryAuthentication,
-  validateDeviceIdentifier,
-  validateDeviceName,
   type DeviceChallenge,
   type DeviceCredential,
 } from '../domain/device-authentication.js';
@@ -57,7 +55,6 @@ export class DeviceAuthenticationService {
     token: string,
     input: { publicKey: string; deviceName: string; clientIp: string },
   ) {
-    validateDeviceName(input.deviceName);
     const owner = await this.authentication.authenticate(token);
     await this.limiter.deviceEnrollment(owner.id, input.clientIp);
     const { publicKey } = this.signatures.readPublicKey(input.publicKey);
@@ -78,7 +75,6 @@ export class DeviceAuthenticationService {
 
   /** Recheck primary authority and exact enrollment binding; account locking enforces the device limit under concurrency. */
   async verifyEnrollment(token: string, input: DeviceProof) {
-    this.validateProof(input);
     await this.limiter.deviceVerification(input.clientIp);
     const result = await this.devices.transaction(
       async (devices, authentication) => {
@@ -151,7 +147,6 @@ export class DeviceAuthenticationService {
 
   /** Return the same public challenge shape for active, revoked, and unknown IDs; authority is checked only on redemption. */
   async requestLogin(input: { credentialId: string; clientIp: string }) {
-    validateDeviceIdentifier(input.credentialId);
     await this.limiter.deviceChallenge(input.credentialId, input.clientIp);
     const credential = await this.devices.findCredential(input.credentialId);
     const challenge = this.newChallenge(
@@ -168,7 +163,6 @@ export class DeviceAuthenticationService {
 
   /** Serialize signature redemption with revocation and issue the normal bearer session in the same transaction. */
   async verifyLogin(input: DeviceProof) {
-    this.validateProof(input);
     await this.limiter.deviceVerification(input.clientIp);
     const result = await this.devices.transaction(
       async (devices, authentication) => {
@@ -226,7 +220,6 @@ export class DeviceAuthenticationService {
 
   /** Permanently remove an owned key and its sessions; foreign or unknown IDs disclose no existence information. */
   async revoke(token: string, credentialId: string): Promise<void> {
-    validateDeviceIdentifier(credentialId);
     const digest = this.tokenDigest(token);
     await this.devices.transaction(async (devices, authentication) => {
       const owner = await authentication.findSessionIdentity(
@@ -338,26 +331,8 @@ export class DeviceAuthenticationService {
       ),
     };
   }
-  /** Service validation protects callers that bypass Nest DTO validation. */
-  private validateProof(input: DeviceProof): void {
-    validateDeviceIdentifier(input.challengeId);
-    validateDeviceIdentifier(input.credentialId);
-    if (
-      typeof input.signature !== 'string' ||
-      input.signature.length === 0 ||
-      input.signature.length > 128
-    ) {
-      throw new AuthenticationError(
-        'INVALID_INPUT',
-        'Invalid device signature.',
-      );
-    }
-  }
-  /** Enforce the existing bearer shape before resolving protected device operations. */
+  /** Hash an adapter-validated bearer credential for authoritative session lookup. */
   private tokenDigest(token: string): string {
-    if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(token)) {
-      throw invalidCredentials();
-    }
     return this.secrets.tokenDigest(token);
   }
 }

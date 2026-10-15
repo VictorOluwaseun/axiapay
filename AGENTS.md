@@ -81,6 +81,15 @@ These rules govern implementation and changes in this workspace.
 - Use Next.js App Router and Server Components for appropriate server rendering, with small Client Component boundaries for interaction. Keep secrets server-side and Nest authoritative for financial and authentication workflows. Do not duplicate payment rules or read payment tables directly from web code.
 - Apply each stack capability where the current feature needs it; do not add placeholder workers, cache layers, or business endpoints merely because a library is installed.
 
+## Input validation boundaries
+
+- Validate and normalize untrusted input before invoking workflow logic. HTTP request shape, required fields, types, lengths, enums, UUID/phone/email formats, fixed numeric bounds, pagination, and static cross-field constraints belong in DTOs and Nest pipes. Put explicit permitted transformations, such as contact canonicalization, in class-transformer DTO metadata or boundary mappers.
+- Services consume typed, validated, normalized commands. Do not repeat DTO checks, parse transport input, normalize contacts, or import DTOs, pipes, class-validator, or class-transformer into services or optional use cases. Controllers map validated DTOs to service inputs; they do not implement parallel validation logic.
+- Non-HTTP adapters that receive untrusted job, event, CLI, or integration payloads must validate before calling services. Use the shared `withValidatedInput` wrapper and the appropriate DTO, or an equivalent adapter-specific schema, then map the result into the workflow command. Do not validate already trusted internal calls again merely because they bypass HTTP. A TypeScript type alone does not validate an external payload.
+- Keep authoritative business rules in services/domain policies: credential verification, authorization, account/device state, current product requirements, consent, quote expiry, recipient correlation, funds, pricing, reservations, settlement, concurrency, and recovery. Domain value objects still protect financial invariants. Product-dependent required/allowed fields and rules involving stored state or current time are business decisions, not static DTO validation.
+- Preserve cryptographic parsing and trusted-provider evidence verification at their capability/domain boundaries. A valid request shape never establishes payment success, key possession, provider evidence, or financial authorization. Do not remove those checks while eliminating duplicated request validation.
+- Use one DTO definition and shared pipe configuration for each input contract; document input preconditions on service operations. Reject malformed boundary input before rate-limit consumption, repository/provider calls, hashing, queue publication, or other workflow side effects. Test rejection at the boundary and business behavior at the service/domain boundary.
+
 ## Control flow
 
 - No nested `if` statements.

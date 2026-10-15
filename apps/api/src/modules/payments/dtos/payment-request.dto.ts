@@ -1,3 +1,7 @@
+import {
+  IsReadableText,
+  HasExactlyOneField,
+} from '../../../shared/validation/input-constraints.js';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import type { ServiceType } from '../../service-catalog/domain/service-product.js';
 import {
@@ -21,6 +25,13 @@ export class CreatePaymentQuoteDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
   @Length(36, 36)
+  @HasExactlyOneField([
+    'recipientPhoneNumber',
+    'accountValidationId',
+    'bankBeneficiaryValidationId',
+    'educationValidationId',
+    'insuranceApplicationId',
+  ])
   readonly productId!: string;
 
   @ApiPropertyOptional({
@@ -62,6 +73,7 @@ export class CreatePaymentQuoteDto {
   @ValidateIf((_object, value) => value !== undefined)
   @IsString()
   @Length(1, 140)
+  @IsReadableText()
   readonly narration?: string;
 
   @ApiPropertyOptional({

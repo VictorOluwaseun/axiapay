@@ -1,26 +1,9 @@
-import { BadRequestException, Module, ValidationPipe } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { APP_PIPE } from '@nestjs/core';
+import { createInputValidationPipe } from '../shared/validation/input-validation.js';
 
-/** Validate class DTOs globally, including nested objects, without coercing credentials or disclosing rejected values. */
+/** Apply DTO input validation and explicit transformation before HTTP handlers invoke feature services. */
 @Module({
-  providers: [
-    {
-      provide: APP_PIPE,
-      useFactory: () =>
-        new ValidationPipe({
-          transform: true,
-          transformOptions: { enableImplicitConversion: false },
-          whitelist: true,
-          forbidNonWhitelisted: true,
-          forbidUnknownValues: true,
-          validationError: { target: false, value: false },
-          exceptionFactory: () =>
-            new BadRequestException({
-              code: 'INVALID_INPUT',
-              message: 'Invalid request body.',
-            }),
-        }),
-    },
-  ],
+  providers: [{ provide: APP_PIPE, useFactory: createInputValidationPipe }],
 })
 export class RequestValidationModule {}

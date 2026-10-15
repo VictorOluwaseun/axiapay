@@ -3,10 +3,9 @@ import { Inject, Injectable } from '@nestjs/common';
 import { ServiceCatalogService } from '../../service-catalog/services/service-catalog.service.js';
 import type { ServiceProduct } from '../../service-catalog/domain/service-product.js';
 import { assertReference } from '../../wallets/domain/money.js';
-import { PaymentError, assertUuidReference } from '../domain/payment.js';
+import { PaymentError } from '../domain/payment.js';
 import {
   assertBillAccountCurrent,
-  assertBillAccountNumber,
   assertBillDisplayText,
   type BillAccountValidation,
 } from '../domain/bill-account.js';
@@ -36,7 +35,6 @@ export class BillAccountService {
     readonly productId: string;
     readonly accountNumber: string;
   }): Promise<BillAccountValidation> {
-    assertBillAccountNumber(input.accountNumber);
     const product = await this.catalogue.getProduct(input.productId);
     if (!['tv', 'electricity'].includes(product.serviceType)) {
       throw new PaymentError('INVALID_PAYMENT');
@@ -79,7 +77,6 @@ export class BillAccountService {
     actorId: string,
     validationId: string,
   ): Promise<BillAccountValidation> {
-    assertUuidReference(validationId);
     const validation = await this.payments.getAccountValidation(
       actorId,
       validationId,

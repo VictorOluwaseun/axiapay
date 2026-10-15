@@ -45,9 +45,9 @@ Nest modules assemble the dependency graph through constructor injection, class 
 
 ## Validation and contracts
 
-`RequestValidationModule` registers Nest's global `ValidationPipe`. Requests use `class-validator` DTO decorators and `class-transformer` nested `@Type` metadata. Unknown fields, malformed nested objects, null required values, and non-string credentials are rejected. Transformation creates class instances but implicit primitive conversion is disabled. Password whitespace and leading-zero codes are preserved. Public validation errors omit submitted values.
+`RequestValidationModule` registers the shared `createInputValidationPipe()` as Nest's global `ValidationPipe`. Requests use `class-validator` DTO decorators and `class-transformer` nested `@Type` metadata. Unknown fields, malformed nested objects, null required values, and non-string credentials are rejected. Transformation creates class instances and canonicalizes declared contact/email strings; implicit primitive conversion is disabled. Password whitespace and leading-zero codes are preserved. Public validation errors omit submitted values.
 
-Domain invariants still apply when a worker or internal caller bypasses HTTP. Swagger uses the DTO classes rather than a second set of request schemas. Environment configuration continues using Zod; it is independent of HTTP DTO validation. Responses are explicit safe projections, never serialized database records. Future wallet responses must map bigint minor units to integer strings.
+Untrusted non-HTTP payloads pass through `withValidatedInput` before a job/CLI/event adapter maps them into service inputs. Internal calls using already validated commands do not repeat validation. Services own business rules and assume validated input; they do not repeat required/type/length/format checks or contact normalization. Domain policies still enforce authorization, current product requirements, expiry, consent, financial invariants, and provider-evidence correlation. Swagger uses the DTO classes rather than a second set of request schemas. Environment configuration continues using Zod; it is independent of HTTP DTO validation. Responses are explicit safe projections, never serialized database records. Future wallet responses must map bigint minor units to integer strings.
 
 ## Storage and durable work
 
@@ -60,3 +60,5 @@ ESLint allows storage imports in concrete repositories and data sources while pr
 ## Device authentication
 
 `DeviceAuthenticationService` adds device-key enrollment and login to the authentication feature. `PostgresDeviceAuthenticationRepository` owns device records and signing challenges; its transaction callback binds the existing authentication repository to the same connection for session issuance. Both own SQL directly. Enrollment requires a recent primary session; device sessions cannot enroll more keys. See the [device authentication decision](decisions/0005-device-authentication.md) and [wire contract](../src/modules/authentication/device-login.md).
+
+See [input validation boundaries](input-validation.md) for the audit decisions, non-HTTP wrapper, and test strategy.

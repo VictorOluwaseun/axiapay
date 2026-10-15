@@ -5,7 +5,6 @@ import {
   type AccountIdentity,
   type Contact,
 } from '../domain/authentication-models.js';
-import { normalizeContact } from '../domain/authentication-policy.js';
 import { invalidCredentials } from '../domain/authentication-error.js';
 import type {
   AuthenticationClock,
@@ -71,10 +70,7 @@ export class AuthenticationService {
     password: string;
     clientIp: string;
   }): Promise<AuthenticationResult> {
-    const contact = normalizeContact(input.contact);
-    if (Array.from(input.password).length > 128) {
-      throw invalidCredentials();
-    }
+    const { contact } = input;
     await this.limiter.passwordLogin(contact, input.clientIp);
     const account = await this.repository.findAccount(contact);
     const valid = await this.passwords.verify(
@@ -93,9 +89,6 @@ export class AuthenticationService {
   }
   /** Return only the caller's verified identity; expired, disabled, revoked, and unknown sessions share one failure. */
   async authenticate(token: string): Promise<AccountIdentity> {
-    if (!/^[A-Za-z0-9_-]{43}$/.test(token)) {
-      throw invalidCredentials();
-    }
     const account = await this.repository.findSessionIdentity(
       this.secrets.tokenDigest(token),
       this.clock.now(),

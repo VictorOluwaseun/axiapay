@@ -1,6 +1,11 @@
+import { Transform } from 'class-transformer';
+import {
+  ContactValueConstraint,
+  canonicalContactValue,
+} from '../../authentication/validation/contact-input.js';
 import { ApiProperty } from '@nestjs/swagger';
 import {
-  IsEmail,
+  Validate,
   IsString,
   IsUUID,
   Length,
@@ -40,7 +45,12 @@ export class CreateFundingRequestDto {
     description:
       'Receipt/checkout email; this is never proof of wallet ownership.',
   })
-  @IsEmail()
+  @Transform(
+    ({ value }: { value: unknown }) => canonicalContactValue(value, 'email'),
+    { toClassOnly: true },
+  )
+  @Validate(ContactValueConstraint, ['email'])
+  @IsString()
   @MaxLength(254)
   readonly payerEmail!: string;
 
@@ -53,7 +63,7 @@ export class CreateFundingRequestDto {
   @IsString()
   @MaxLength(200)
   @NotContains('\u0000')
-  @Matches(/^\S(?:[\s\S]*\S)?$/)
+  @Matches(/^\S(?:[\s\S]*\S)?(?![\s\S])/)
   readonly requestKey!: string;
 }
 

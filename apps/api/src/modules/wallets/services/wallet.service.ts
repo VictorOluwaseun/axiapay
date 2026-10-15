@@ -1,11 +1,6 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import { WALLET } from '../wallet.tokens.js';
-import {
-  assertCurrency,
-  assertReference,
-  money,
-  type Money,
-} from '../domain/money.js';
+import { assertReference, money, type Money } from '../domain/money.js';
 import {
   assertCanSpend,
   assertWalletActive,
@@ -49,8 +44,6 @@ export class WalletService {
     readonly actorId: string;
     readonly currency: string;
   }): Promise<Wallet> {
-    assertReference(input.actorId);
-    assertCurrency(input.currency);
     return this.wallets.createWallet(input.actorId, input.currency);
   }
   /** Return a consistent balance snapshot after checking ownership. */
@@ -65,8 +58,7 @@ export class WalletService {
   /** Enforce ownership, currency, funds and idempotency; no external provider is involved. */
   transferBetweenWallets(input: WalletTransferInput): Promise<WalletReceipt> {
     const value = money(input.value.amountMinorUnits, input.value.currency);
-    assertReference(input.actorId);
-    assertReference(input.requestKey);
+
     if (input.sourceWalletId === input.destinationWalletId) {
       throw new WalletError('INVALID_TRANSFER');
     }
@@ -125,7 +117,6 @@ export class WalletService {
   async confirmWalletFunding(
     evidenceReference: string,
   ): Promise<WalletReceipt> {
-    assertReference(evidenceReference);
     if (!this.funding) {
       throw new WalletError('VERIFICATION_UNAVAILABLE');
     }

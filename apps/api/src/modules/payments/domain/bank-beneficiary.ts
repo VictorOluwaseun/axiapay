@@ -43,25 +43,6 @@ export function assertBankBeneficiaryCurrent(
   }
 }
 
-/** Bound and preserve an optional customer narration; only bank transfer quotes may carry it and no control characters are allowed. */
-export function assertTransferNarration(narration: string | undefined): void {
-  if (narration === undefined) {
-    return;
-  }
-  if (
-    typeof narration !== 'string' ||
-    narration.length < 1 ||
-    narration.length > 140 ||
-    !narration.trim() ||
-    Array.from(narration).some(
-      (character) =>
-        character.codePointAt(0)! < 32 || character.codePointAt(0) === 127,
-    )
-  ) {
-    throw new PaymentError('INVALID_PAYMENT');
-  }
-}
-
 /** Safe reason classifications describe independently confirmed failure; provider response bodies and ambiguous transport errors stay private. */
 export type BankTransferFailureReason =
   | 'bank_rejected'

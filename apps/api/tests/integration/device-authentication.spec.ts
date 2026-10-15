@@ -1,3 +1,6 @@
+import { BadRequestException } from '@nestjs/common';
+import { withValidatedInput } from '../../src/shared/validation/input-validation.js';
+import { DeviceIdentifierDto } from '../../src/modules/authentication/dtos/device-authentication.dto.js';
 /** Exercise Android-compatible signatures through the real Nest module, PostgreSQL transactions, and opaque sessions. */
 import { generateKeyPairSync, randomUUID, sign } from 'node:crypto';
 import {
@@ -855,11 +858,16 @@ describe('device authentication', () => {
     );
     const service = application.get(DeviceAuthenticationService);
     await expect(
-      service.requestLogin({
-        credentialId: 'not-a-uuid',
-        clientIp: '127.0.0.1',
-      }),
-    ).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+      withValidatedInput(
+        DeviceIdentifierDto,
+        { credentialId: 'not-a-uuid' },
+        (input) =>
+          service.requestLogin({
+            credentialId: input.credentialId,
+            clientIp: '127.0.0.1',
+          }),
+      ),
+    ).rejects.toBeInstanceOf(BadRequestException);
   });
   it('documents device DTOs and bearer requirements in the real OpenAPI composition', () => {
     const document = SwaggerModule.createDocument(

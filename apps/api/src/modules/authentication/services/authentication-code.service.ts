@@ -7,8 +7,6 @@ import type {
 } from '../domain/authentication-models.js';
 import {
   authenticationPolicy,
-  normalizeContact,
-  validateNewPassword,
   canRedeemChallenge,
 } from '../domain/authentication-policy.js';
 import {
@@ -53,16 +51,7 @@ export class AuthenticationCodeService {
     password?: string;
     clientIp: string;
   }) {
-    const contact = normalizeContact(input.contact);
-    if (input.purpose === 'login' && input.password !== undefined) {
-      throw new AuthenticationError(
-        'INVALID_INPUT',
-        'A code login request does not accept a password.',
-      );
-    }
-    if (input.password !== undefined) {
-      validateNewPassword(input.password);
-    }
+    const { contact } = input;
     await this.limiter.codeRequest(contact, input.clientIp);
     const passwordHash =
       input.password === undefined

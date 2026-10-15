@@ -73,19 +73,6 @@ export function assertUuidReference(id: string): void {
   }
 }
 
-/** Persist one accepted identity across online and future SMS transports; NUL and padded keys are invalid. */
-export function assertPaymentRequestKey(key: string): void {
-  if (
-    typeof key !== 'string' ||
-    key.length < 1 ||
-    key.length > 200 ||
-    key.trim() !== key ||
-    key.includes('\u0000')
-  ) {
-    throw new PaymentError('INVALID_PAYMENT');
-  }
-}
-
 /** Bind quotes to a canonical international recipient, without guessing country or ported network. */
 export function assertRecipientPhoneNumber(phoneNumber: string): void {
   if (

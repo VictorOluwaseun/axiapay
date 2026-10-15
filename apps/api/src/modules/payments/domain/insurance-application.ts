@@ -2,11 +2,7 @@ import type {
   InsuranceProductTerms,
   InsuredField,
 } from '../../service-catalog/domain/insurance-product-terms.js';
-import {
-  assertBillAccountNumber,
-  assertBillDisplayText,
-} from './bill-account.js';
-import { PaymentError, assertRecipientPhoneNumber } from './payment.js';
+import { PaymentError } from './payment.js';
 import { insuredProfileFingerprint } from './insured-profile-fingerprint.js';
 
 /** Typed personal/asset details; optional fields are accepted only when the selected product explicitly requests them. */
@@ -73,15 +69,12 @@ export function requestedCoverageEnd(
   return endDate;
 }
 
-/** Check product-specific required/optional inputs, minimizing sensitive collection instead of forwarding arbitrary provider fields. */
+/** Enforce product-specific required/allowed fields and birth-date eligibility on an adapter-validated profile. */
 export function validatedInsuredProfile(
   profile: InsuredProfile,
   terms: InsuranceProductTerms,
   now: Date,
 ): InsuredProfile {
-  if (!profile || typeof profile !== 'object' || Array.isArray(profile)) {
-    throw new PaymentError('INVALID_PAYMENT');
-  }
   const known: readonly InsuredField[] = [
     'fullName',
     'dateOfBirth',
@@ -113,7 +106,9 @@ export function validatedInsuredProfile(
     throw new PaymentError('INVALID_PAYMENT');
   }
   for (const field of allowed) {
-    validateInsuredField(field, profile[field], now);
+    if (field === 'dateOfBirth' && profile.dateOfBirth !== undefined) {
+      assertBirthDateNotFuture(profile.dateOfBirth, now);
+    }
   }
   return Object.fromEntries(
     known
@@ -122,42 +117,9 @@ export function validatedInsuredProfile(
   ) as unknown as InsuredProfile;
 }
 
-/** Validate one permitted field without accepting numeric identifiers, invalid birth dates or implicit credential/contact conversion. */
-function validateInsuredField(
-  field: InsuredField,
-  value: string | undefined,
-  now: Date,
-): void {
-  if (value === undefined) {
-    return;
-  }
-  if (typeof value !== 'string') {
-    throw new PaymentError('INVALID_PAYMENT');
-  }
-  if (field === 'dateOfBirth') {
-    assertBirthDateNotFuture(value, now);
-    return;
-  }
-  if (field === 'phoneNumber') {
-    assertRecipientPhoneNumber(value);
-    return;
-  }
-  if (field === 'identityNumber' || field === 'assetReference') {
-    assertBillAccountNumber(value);
-    return;
-  }
-  if (
-    field === 'email' &&
-    (value.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+(?![\s\S])/.test(value))
-  ) {
-    throw new PaymentError('INVALID_PAYMENT');
-  }
-  assertBillDisplayText(value, field === 'address' ? 500 : 254);
-}
-
 /** Birth dates cannot be in the future; no age/eligibility rule is invented here. */
 function assertBirthDateNotFuture(value: string, now: Date): void {
-  if (calendarDate(value).getTime() > now.getTime()) {
+  if (new Date(`${value}T00:00:00.000Z`).getTime() > now.getTime()) {
     throw new PaymentError('INVALID_PAYMENT');
   }
 }

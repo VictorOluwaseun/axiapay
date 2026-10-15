@@ -83,9 +83,7 @@ export class WalletReservationService {
   /** Authorize the owner and atomically journal available-to-reserved movement with its allocation. */
   reserve(input: ReserveWalletFundsInput): Promise<WalletReceipt> {
     const value = money(input.value.amountMinorUnits, input.value.currency);
-    assertReference(input.actorId);
-    assertReference(input.requestKey);
-    assertReference(input.paymentReference);
+
     return this.wallets.executeOnce(
       {
         requestScope: `customer:${input.actorId}`,
@@ -138,7 +136,6 @@ export class WalletReservationService {
     readonly reservationId: string;
     readonly evidenceReference: string;
   }): Promise<WalletReceipt> {
-    assertReference(input.evidenceReference);
     if (!this.verification) {
       throw new WalletError('VERIFICATION_UNAVAILABLE');
     }

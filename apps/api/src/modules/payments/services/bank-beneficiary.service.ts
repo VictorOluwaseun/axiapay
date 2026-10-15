@@ -8,7 +8,7 @@ import {
   assertBankBeneficiaryCurrent,
   type BankBeneficiaryValidation,
 } from '../domain/bank-beneficiary.js';
-import { PaymentError, assertUuidReference } from '../domain/payment.js';
+import { PaymentError } from '../domain/payment.js';
 import type { PaymentRepository } from '../repositories/contracts/payment.repository.js';
 import type {
   PaymentClock,
@@ -93,7 +93,6 @@ export class BankBeneficiaryService {
     actorId: string,
     validationId: string,
   ): Promise<BankBeneficiaryValidation> {
-    assertUuidReference(validationId);
     const validation = await this.payments.getBankBeneficiaryValidation(
       actorId,
       validationId,

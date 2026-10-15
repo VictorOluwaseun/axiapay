@@ -6,6 +6,8 @@ import globals from 'globals';
 
 const storageImports = ['kysely', 'kysely/*', 'pg', 'ioredis', 'bullmq'];
 const transportImports = [
+  '**/validation/**',
+  '**/pipes/**',
   '**/controllers/**',
   '**/dtos/**',
   '**/guards/**',
@@ -98,8 +100,29 @@ export default tseslint.config(
       'no-restricted-imports': [
         'error',
         {
+          paths: [
+            {
+              name: '@nestjs/common',
+              importNames: [
+                'ValidationPipe',
+                'ParseUUIDPipe',
+                'ParseIntPipe',
+                'ParseFloatPipe',
+                'ParseBoolPipe',
+                'ParseArrayPipe',
+                'ParseEnumPipe',
+                'ParseDatePipe',
+              ],
+              message:
+                'Validate untrusted input in DTOs/pipes or an entry-point wrapper before calling service logic.',
+            },
+          ],
           patterns: [
             ...storageImports,
+            'class-validator',
+            'class-validator/*',
+            'class-transformer',
+            'class-transformer/*',
             ...transportImports,
             ...concreteImports,
           ],

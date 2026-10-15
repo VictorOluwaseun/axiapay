@@ -2,15 +2,12 @@ import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { ServiceCatalogService } from '../../service-catalog/services/service-catalog.service.js';
 import { assertReference } from '../../wallets/domain/money.js';
-import {
-  assertBillAccountNumber,
-  assertBillDisplayText,
-} from '../domain/bill-account.js';
+import { assertBillDisplayText } from '../domain/bill-account.js';
 import {
   assertEducationRecipientCurrent,
   type EducationRecipientValidation,
 } from '../domain/education-recipient.js';
-import { PaymentError, assertUuidReference } from '../domain/payment.js';
+import { PaymentError } from '../domain/payment.js';
 import type { PaymentRepository } from '../repositories/contracts/payment.repository.js';
 import type {
   PaymentClock,
@@ -36,7 +33,6 @@ export class EducationRecipientService {
     readonly productId: string;
     readonly beneficiaryIdentifier: string;
   }): Promise<EducationRecipientValidation> {
-    assertBillAccountNumber(input.beneficiaryIdentifier);
     const product = await this.catalogue.getProduct(input.productId);
     if (product.serviceType !== 'education') {
       throw new PaymentError('INVALID_PAYMENT');
@@ -90,7 +86,6 @@ export class EducationRecipientService {
     actorId: string,
     validationId: string,
   ): Promise<EducationRecipientValidation> {
-    assertUuidReference(validationId);
     const validation = await this.payments.getEducationValidation(
       actorId,
       validationId,

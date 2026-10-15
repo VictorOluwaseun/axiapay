@@ -57,34 +57,6 @@ export function deviceIdentity(device: DeviceCredential) {
   };
 }
 
-/** Apply validation for non-HTTP callers as well as DTOs; device labels are plain bounded text. */
-export function validateDeviceName(name: string): void {
-  if (
-    typeof name !== 'string' ||
-    name.length < 1 ||
-    name.length > 80 ||
-    name.trim() !== name ||
-    /\p{Cc}/u.test(name)
-  ) {
-    throw new AuthenticationError('INVALID_INPUT', 'Invalid device name.');
-  }
-}
-
-/** Refuse malformed identifiers before they reach PostgreSQL UUID casts, including from non-HTTP callers. */
-export function validateDeviceIdentifier(value: string): void {
-  if (
-    typeof value !== 'string' ||
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-      value,
-    )
-  ) {
-    throw new AuthenticationError(
-      'INVALID_INPUT',
-      'Invalid device authentication identifier.',
-    );
-  }
-}
-
 /** Require fresh primary proof for enrollment; extending device sessions must never renew this authority. */
 export function requireRecentPrimaryAuthentication(
   session: EnrollmentSession,
