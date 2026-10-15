@@ -21,6 +21,7 @@ import {
 } from '../../src/modules/payments/domain/payment.js';
 import { PostgresPaymentRepository } from '../../src/modules/payments/repositories/postgres-payment.repository.js';
 import { PaymentExecutionService } from '../../src/modules/payments/services/payment-execution.service.js';
+import { AirtimeProcessor } from '../../src/modules/payments/processors/airtime.processor.js';
 import type {
   PaymentProviderRegistration,
   ProviderPaymentResult,
@@ -361,7 +362,18 @@ async function fixture(
       bankVerificationFactory(input),
   );
   registrations[providerKey] = {
-    adapter: { submit, lookup },
+    adapter:
+      serviceType === 'airtime'
+        ? new AirtimeProcessor({
+            providerKey,
+            /** Keep integration fixtures on the test protocol while exercising our real submission pipeline. */
+            toRequest: (payment: ServicePayment) => payment,
+            execute: submit,
+            /** Fixture observations are independently controlled by each recovery scenario. */
+            toSubmission: (result: ProviderPaymentResult) => result,
+            lookup,
+          })
+        : { submit, lookup },
     bankBeneficiaryVerification: { verify: verifyBankBeneficiary },
     accountVerification: { verify },
     educationVerification: { verify: verifyEducation },

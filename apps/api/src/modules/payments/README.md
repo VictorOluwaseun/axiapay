@@ -2,6 +2,8 @@
 
 AxiaPay owns the HTTP contracts for airtime, data, TV subscriptions, prepaid/postpaid electricity, education, individual insurance and bank transfers: catalogue identifiers, recipient validation, quote pricing, wallet authorization, logical identities, payment states and recovery. Fulfilment sits behind `ServicePaymentProvider`; bill-account validation sits behind `BillAccountVerification`. This feature imports no provider SDK or concrete adapter. `PaymentsModule.register()` starts with no adapters and no seeded products. Absent adapters cannot manufacture verified recipients, accept purchases or hold funds.
 
+[Airtime processing](processors/README.md) supplies AxiaPay's concrete `AirtimeProcessor`: an injected `AirtimeProcessorAdapter` provides `toRequest`, `execute` and `toSubmission`, plus a purchase-free status enquiry. Compose it through the existing fulfilment factory; wallet rules and durable submission/recovery remain in their existing owners. No provider is enabled implicitly.
+
 ## Customer contract
 
 All routes require a current bearer session. Responses use `Cache-Control: no-store`; monetary values are decimal integer strings in the product currency's minor units. Unknown fields and implicit primitive conversion are rejected. Caller identity is derived from the session, never a request field.

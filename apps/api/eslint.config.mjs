@@ -18,6 +18,7 @@ const transportImports = [
   '**/types/**',
 ];
 const concreteImports = [
+  '**/adapters/**',
   '**/infrastructure/**',
   '**/data-sources/**',
   '**/providers/**',
@@ -57,6 +58,7 @@ export default tseslint.config(
   {
     files: [
       'src/**/usecases/**/*.ts',
+      'src/**/processors/**/*.ts',
       'src/**/ports/**/*.ts',
       'src/**/repositories/contracts/**/*.ts',
       'src/shared/contracts/**/*.ts',

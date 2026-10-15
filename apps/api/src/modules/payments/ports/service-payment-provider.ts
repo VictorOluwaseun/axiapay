@@ -1,6 +1,7 @@
 import type { BankBeneficiaryVerification } from './bank-beneficiary-verification.js';
 import type { BankTransferFailureReason } from '../domain/bank-beneficiary.js';
-import type { ServicePayment } from '../domain/payment.js';
+import type { PaymentQuote, ServicePayment } from '../domain/payment.js';
+import type { ServiceProduct } from '../../service-catalog/domain/service-product.js';
 import type { PaymentFulfilment } from '../domain/payment-fulfilment.js';
 import type { BillAccountVerification } from './bill-account-verification.js';
 import type { EducationBeneficiaryVerification } from './education-beneficiary-verification.js';
@@ -33,8 +34,15 @@ export type ProviderPaymentResult = {
     }
 );
 
+/** Trusted catalogue product or complete review quote. Product validation checks routing/encoding support; quote validation additionally checks recipient representability. */
+export type PaymentTermsInput =
+  | { readonly scope: 'product'; readonly terms: ServiceProduct }
+  | { readonly scope: 'quote'; readonly terms: PaymentQuote };
+
 /** External fulfilment capability; adapters translate instructions without owning payment/wallet rules and enforce bounded network timeouts with redacted diagnostics. */
 export interface ServicePaymentProvider {
+  /** Optional pure protocol validation for a product or quote; throws a PaymentError before any new hold and performs no I/O or financial authorization. */
+  validate?(target: PaymentTermsInput): void;
   /** Submit once using payment.id as the stable merchant identity. Never retry an uncertain upstream submission blindly. */
   submit(payment: ServicePayment): Promise<ProviderPaymentResult>;
   /** Query independently authenticated evidence for that same identity; no new purchase may be sent by this method. */

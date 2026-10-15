@@ -1,3 +1,4 @@
+import { PaymentError } from '../domain/payment.js';
 import type { ServiceType } from '../../service-catalog/domain/service-product.js';
 import type { PaymentProviderRegistration } from '../ports/service-payment-provider.js';
 
@@ -22,4 +23,17 @@ export function hasProductSubmissionCapabilities(
     return registration.accountVerification !== undefined;
   }
   return true;
+}
+
+/** Identify expected unavailable review/protocol states without hiding unexpected adapter failures. */
+export function isSubmissionUnavailable(error: unknown): boolean {
+  return (
+    error instanceof PaymentError &&
+    [
+      'QUOTE_EXPIRED',
+      'PRODUCT_UNAVAILABLE',
+      'INVALID_PAYMENT',
+      'PAYMENT_UNAVAILABLE',
+    ].includes(error.code)
+  );
 }

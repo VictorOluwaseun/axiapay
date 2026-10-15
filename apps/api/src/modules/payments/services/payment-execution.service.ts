@@ -74,6 +74,10 @@ export class PaymentExecutionService implements PaymentOutcomeVerification {
         ) {
           throw new PaymentError('PAYMENT_UNAVAILABLE');
         }
+        registration.adapter.validate?.({
+          scope: 'quote',
+          terms: quote,
+        });
         return registration;
       },
     );
@@ -111,6 +115,10 @@ export class PaymentExecutionService implements PaymentOutcomeVerification {
     if (!hasProductSubmissionCapabilities(product.serviceType, registration)) {
       throw new PaymentError('PAYMENT_UNAVAILABLE');
     }
+    registration.adapter.validate?.({
+      scope: 'quote',
+      terms: payment.quote,
+    });
   }
 
   /** Submit only after a durable hold, claiming once before network I/O. Crashes and transport exceptions never reset or retry this boundary. */

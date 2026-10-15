@@ -19,7 +19,10 @@ import type {
   PaymentProviders,
 } from '../ports/service-payment-provider.js';
 import { PAYMENTS } from '../payments.tokens.js';
-import { hasProductSubmissionCapabilities } from './payment-provider-capabilities.js';
+import {
+  hasProductSubmissionCapabilities,
+  isSubmissionUnavailable,
+} from './payment-provider-capabilities.js';
 import { BankBeneficiaryService } from './bank-beneficiary.service.js';
 import {
   assertBankBeneficiaryCurrent,
@@ -187,14 +190,18 @@ export class PaymentQuoteService {
     }
     try {
       assertQuoteCurrent(quote, this.clock.now());
-      return this.isProductSubmissionAvailable(
-        await this.catalogue.getProduct(quote.productId),
+      const product = await this.catalogue.getProduct(quote.productId);
+      const registration = this.providers[quote.providerKey]!;
+      registration.adapter.validate?.({
+        scope: 'quote',
+        terms: quote,
+      });
+      return hasProductSubmissionCapabilities(
+        product.serviceType,
+        registration,
       );
     } catch (error) {
-      if (
-        error instanceof PaymentError &&
-        ['QUOTE_EXPIRED', 'PRODUCT_UNAVAILABLE'].includes(error.code)
-      ) {
+      if (isSubmissionUnavailable(error)) {
         return false;
       }
       throw error;
@@ -214,10 +221,22 @@ export class PaymentQuoteService {
     if (!this.isProviderRegistered(product.providerKey)) {
       return false;
     }
-    return hasProductSubmissionCapabilities(
-      product.serviceType,
-      this.providers[product.providerKey]!,
-    );
+    const registration = this.providers[product.providerKey]!;
+    try {
+      registration.adapter.validate?.({
+        scope: 'product',
+        terms: product,
+      });
+      return hasProductSubmissionCapabilities(
+        product.serviceType,
+        registration,
+      );
+    } catch (error) {
+      if (isSubmissionUnavailable(error)) {
+        return false;
+      }
+      throw error;
+    }
   }
 
   /** Resolve exactly one service-appropriate preparation, rejecting all cross-service selectors. */
