@@ -56,13 +56,30 @@ export class PostgresAuthenticationRepository implements AuthenticationRepositor
       .executeTakeFirst();
     return row ? mapAccount(row) : null;
   }
-  /** Lock the session and account in one transaction; session revocation cannot race enrollment completion. */
+  /** Recovery and enrollment acquire the account before session/device locks, preserving one lock order. */
+  async lockAccountById(id: string): Promise<AuthenticationAccount | null> {
+    if (!this.database.isTransaction) {
+      throw new Error('Account locking requires a transaction.');
+    }
+    const row = await this.database
+      .selectFrom('auth_accounts')
+      .selectAll()
+      .where('id', '=', id)
+      .forUpdate()
+      .executeTakeFirst();
+    return row ? mapAccount(row) : null;
+  }
+  /** Lock account first, then recheck and lock the live session; revocation cannot race enrollment completion. */
   async lockEnrollmentSession(
     tokenDigest: string,
     now: Date,
   ): Promise<EnrollmentSession | null> {
     if (!this.database.isTransaction) {
       throw new Error('Enrollment authorization requires a transaction.');
+    }
+    const identity = await this.findSessionIdentity(tokenDigest, now);
+    if (!identity || !(await this.lockAccountById(identity.id))) {
+      return null;
     }
     const row = await this.database
       .selectFrom('auth_sessions')
@@ -81,7 +98,7 @@ export class PostgresAuthenticationRepository implements AuthenticationRepositor
       .where('expires_at', '>', now)
       .where('auth_sessions.revoked_at', 'is', null)
       .where('disabled_at', 'is', null)
-      .forUpdate(['auth_accounts', 'auth_sessions'])
+      .forUpdate('auth_sessions')
       .executeTakeFirst();
     return row
       ? {
@@ -103,6 +120,7 @@ export class PostgresAuthenticationRepository implements AuthenticationRepositor
         contact_kind: account.contact.kind,
         contact_value: account.contact.value,
         password_hash: account.passwordHash,
+        credential_version: account.credentialVersion,
         created_at: account.createdAt,
         verified_at: account.verifiedAt,
         disabled_at: account.disabledAt,
@@ -132,6 +150,8 @@ export class PostgresAuthenticationRepository implements AuthenticationRepositor
           contact_kind: challenge.contact.kind,
           contact_value: challenge.contact.value,
           purpose: challenge.purpose,
+          account_id: challenge.accountId,
+          credential_version: challenge.credentialVersion,
           password_hash: challenge.passwordHash,
           code_digest: challenge.codeDigest,
           created_at: challenge.createdAt,
@@ -163,6 +183,8 @@ export class PostgresAuthenticationRepository implements AuthenticationRepositor
         value: row.contact_value,
       },
       purpose: readChallengePurpose(row.purpose),
+      accountId: row.account_id,
+      credentialVersion: row.credential_version,
       passwordHash: row.password_hash,
       codeDigest: row.code_digest,
       createdAt: row.created_at,
@@ -196,12 +218,54 @@ export class PostgresAuthenticationRepository implements AuthenticationRepositor
       .where('status', '=', 'ready')
       .execute();
   }
-  /** Insert from the active account row so a disabled identity cannot acquire a usable new session. */
-  async createSession(session: AuthenticationSession): Promise<boolean> {
+  /** Update the locked account and revoke its existing access in one transaction; no wallet or payment records are touched. */
+  async replacePassword(
+    account: AuthenticationAccount,
+    passwordHash: string,
+    now: Date,
+  ): Promise<boolean> {
+    if (!this.database.isTransaction) {
+      throw new Error('Password recovery requires a transaction.');
+    }
+    const updated = await this.database
+      .updateTable('auth_accounts')
+      .set({
+        password_hash: passwordHash,
+        credential_version: account.credentialVersion + 1,
+      })
+      .where('id', '=', account.id)
+      .where('credential_version', '=', account.credentialVersion)
+      .where('disabled_at', 'is', null)
+      .returning('id')
+      .executeTakeFirst();
+    if (!updated) {
+      return false;
+    }
+    await this.database
+      .updateTable('auth_device_credentials')
+      .set({ revoked_at: now })
+      .where('account_id', '=', account.id)
+      .where('revoked_at', 'is', null)
+      .execute();
+    await this.database
+      .updateTable('auth_sessions')
+      .set({ revoked_at: now })
+      .where('account_id', '=', account.id)
+      .where('revoked_at', 'is', null)
+      .execute();
+    // Older codes fail their version check; pending device proofs lose their session/key authority.
+    // Avoid locking other challenges here: their own redemption locks precede the account lock.
+    return true;
+  }
+  /** The shared account lock makes insertion serialize with recovery's version update and session revocation. */
+  async createSession(
+    session: AuthenticationSession,
+    credentialVersion: number,
+  ): Promise<boolean> {
     const result =
       await sql`insert into auth_sessions (id, account_id, token_digest, created_at, expires_at, revoked_at, device_credential_id, primary_authenticated_at)
       select ${session.id}::uuid, id, ${session.tokenDigest}, ${session.createdAt}, ${session.expiresAt}, null, ${session.deviceCredentialId}::uuid, ${session.primaryAuthenticatedAt}
-      from auth_accounts where id = ${session.accountId}::uuid and disabled_at is null returning id`.execute(
+      from auth_accounts where id = ${session.accountId}::uuid and disabled_at is null and credential_version = ${credentialVersion} for share returning id`.execute(
         this.database,
       );
     return result.rows.length === 1;
@@ -275,6 +339,7 @@ function mapAccount(
       value: row.contact_value,
     },
     passwordHash: row.password_hash,
+    credentialVersion: row.credential_version,
     createdAt: row.created_at,
     verifiedAt: row.verified_at,
     disabledAt: row.disabled_at,
@@ -290,7 +355,7 @@ function readContactKind(value: string): Contact['kind'] {
 }
 /** Check the persisted code purpose independently of HTTP input. */
 function readChallengePurpose(value: string): CodeChallenge['purpose'] {
-  if (value === 'signup' || value === 'login') {
+  if (value === 'signup' || value === 'login' || value === 'password-reset') {
     return value;
   }
   throw new Error('Invalid stored challenge purpose.');

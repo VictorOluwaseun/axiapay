@@ -1,3 +1,4 @@
+import { asyncSignal } from '../support/async-signal.js';
 /** Exercise public authentication flows and concurrency against an isolated PostgreSQL database. */
 import {
   afterAll,
@@ -9,6 +10,7 @@ import {
   vi,
 } from 'vitest';
 import { randomUUID } from 'node:crypto';
+import { ArgonPasswordHasher } from '../../src/modules/authentication/security/argon-password-hasher.js';
 import { Test } from '@nestjs/testing';
 import {
   FastifyAdapter,
@@ -86,6 +88,12 @@ beforeAll(async () => {
           deviceAuthentication: await import(
             new URL(
               '../../migrations/202610130003-device-authentication.js',
+              import.meta.url,
+            ).href
+          ),
+          passwordRecovery: await import(
+            new URL(
+              '../../migrations/202610150010-password-recovery.js',
               import.meta.url,
             ).href
           ),
@@ -552,5 +560,379 @@ describe('authentication HTTP and persistence', () => {
         .statusCode,
     ).toBe(401);
     expect((await me('malformed')).statusCode).toBe(401);
+  });
+});
+
+/** Request a fresh reset after the shared contact cooldown and capture only the recipient's test code. */
+async function requestReset(contact: Contact) {
+  advance(60);
+  const request = await post('password/forgot', { contact });
+  expect(request.statusCode).toBe(202);
+  expect(request.headers['cache-control']).toBe('no-store');
+  expect(request.json()).toEqual({
+    challengeId: expect.any(String),
+    expiresAt: expect.any(String),
+    expiresInSeconds: 300,
+    resendAfterSeconds: 60,
+  });
+  const challengeId = request.json().challengeId as string;
+  return { challengeId, code: delivery.codeFor(challengeId) };
+}
+const newPassword = '  my replacement private passphrase  ';
+
+describe('one-time-code password recovery', () => {
+  it.each([email, phone])(
+    'resets a $kind password and revokes only that account access',
+    async (contact) => {
+      const owner = await signup(contact, password);
+      const otherContact = contact.kind === 'email' ? phone : email;
+      const other = await signup(otherContact, password);
+      const secondSession = await post('login/password', { contact, password });
+      const proof = await requestReset(contact);
+      const reset = await post('password/reset', { ...proof, newPassword });
+      expect(reset.statusCode).toBe(204);
+      expect(reset.body).toBe('');
+      expect(reset.headers['cache-control']).toBe('no-store');
+      expect((await me(owner.accessToken)).statusCode).toBe(401);
+      expect((await me(secondSession.json().accessToken)).statusCode).toBe(401);
+      expect((await me(other.accessToken)).statusCode).toBe(200);
+      expect(
+        (await post('login/password', { contact, password })).statusCode,
+      ).toBe(401);
+      expect(
+        (
+          await post('login/password', {
+            contact,
+            password: newPassword.trim(),
+          })
+        ).statusCode,
+      ).toBe(401);
+      const login = await post('login/password', {
+        contact,
+        password: newPassword,
+      });
+      expect(login.statusCode).toBe(200);
+      expect(login.json().account.id).toBe(owner.account.id);
+      const stored = await database
+        .selectFrom('auth_accounts')
+        .selectAll()
+        .where('id', '=', owner.account.id)
+        .executeTakeFirstOrThrow();
+      expect(stored.password_hash).toMatch(/^\$argon2id\$/);
+      expect(stored.password_hash).not.toContain(newPassword);
+      expect(stored.credential_version).toBe(1);
+      expect(
+        (await post('password/reset', { ...proof, newPassword: password }))
+          .statusCode,
+      ).toBe(401);
+      expect(
+        (await post('login/password', { contact, password: newPassword }))
+          .statusCode,
+      ).toBe(200);
+    },
+  );
+  it('allows a verified code-only account to establish its first password', async () => {
+    const owner = await signup(email);
+    vi.spyOn(NodeAuthenticationSecrets.prototype, 'code').mockReturnValueOnce(
+      '012345',
+    );
+    const proof = await requestReset(email);
+    expect(proof.code).toBe('012345');
+    expect(
+      (await post('password/reset', { ...proof, newPassword })).statusCode,
+    ).toBe(204);
+    const login = await post('login/password', {
+      contact: email,
+      password: newPassword,
+    });
+    expect(login.statusCode).toBe(200);
+    expect(login.json().account.id).toBe(owner.account.id);
+  });
+  it('keeps request contracts identical for known, unknown, and disabled contacts', async () => {
+    const owner = await signup(email, password);
+    const known = await requestReset(email);
+    const unknown = await requestReset(phone);
+    await database
+      .updateTable('auth_accounts')
+      .set({ disabled_at: clock.now() })
+      .where('id', '=', owner.account.id)
+      .execute();
+    const disabled = await requestReset(email);
+    for (const proof of [known, unknown, disabled]) {
+      const response = await post('password/reset', { ...proof, newPassword });
+      expect(response.statusCode).toBe(401);
+      expect(response.json().code).toBe('INVALID_CREDENTIALS');
+    }
+    expect(
+      await database.selectFrom('auth_accounts').selectAll().execute(),
+    ).toHaveLength(1);
+    expect(
+      (
+        await database
+          .selectFrom('auth_accounts')
+          .selectAll()
+          .executeTakeFirstOrThrow()
+      ).credential_version,
+    ).toBe(0);
+  });
+  it('cannot apply a reset issued before the contact was registered', async () => {
+    const proof = await requestReset(email);
+    advance(60);
+    await signup(email, password);
+    expect(
+      (await post('password/reset', { ...proof, newPassword })).statusCode,
+    ).toBe(401);
+    expect(
+      (await post('login/password', { contact: email, password })).statusCode,
+    ).toBe(200);
+  });
+  it('rejects cross-purpose codes without consuming the correctly bound operation', async () => {
+    const signupRequest = await post('signup', { contact: email, password });
+    const signupId = signupRequest.json().challengeId as string;
+    const signupProof = {
+      challengeId: signupId,
+      code: delivery.codeFor(signupId),
+    };
+    expect(
+      (await post('password/reset', { ...signupProof, newPassword }))
+        .statusCode,
+    ).toBe(401);
+    expect((await post('signup/verify', signupProof)).statusCode).toBe(201);
+    advance(60);
+    const loginRequest = await post('login/code', { contact: email });
+    const loginId = loginRequest.json().challengeId as string;
+    const loginProof = {
+      challengeId: loginId,
+      code: delivery.codeFor(loginId),
+    };
+    expect(
+      (await post('password/reset', { ...loginProof, newPassword })).statusCode,
+    ).toBe(401);
+    expect((await post('login/code/verify', loginProof)).statusCode).toBe(200);
+    const resetProof = await requestReset(email);
+    expect((await post('login/code/verify', resetProof)).statusCode).toBe(401);
+    expect((await post('signup/verify', resetProof)).statusCode).toBe(401);
+    expect(
+      (await post('password/reset', { ...resetProof, newPassword })).statusCode,
+    ).toBe(204);
+  });
+  it('expires reset proof at five minutes and never changes the password or sessions', async () => {
+    const owner = await signup(email, password);
+    const proof = await requestReset(email);
+    advance(300);
+    expect(
+      (await post('password/reset', { ...proof, newPassword })).statusCode,
+    ).toBe(401);
+    expect((await me(owner.accessToken)).statusCode).toBe(200);
+    expect(
+      (await post('login/password', { contact: email, password })).statusCode,
+    ).toBe(200);
+  });
+  it('rechecks expiry if password hashing crosses the code deadline', async () => {
+    const owner = await signup(email, password);
+    const proof = await requestReset(email);
+    const original = ArgonPasswordHasher.prototype.hash;
+    vi.spyOn(ArgonPasswordHasher.prototype, 'hash').mockImplementationOnce(
+      async function (this: ArgonPasswordHasher, candidate) {
+        const hashed = await original.call(this, candidate);
+        advance(300);
+        return hashed;
+      },
+    );
+    expect(
+      (await post('password/reset', { ...proof, newPassword })).statusCode,
+    ).toBe(401);
+    expect((await me(owner.accessToken)).statusCode).toBe(200);
+    expect(
+      (await post('login/password', { contact: email, password })).statusCode,
+    ).toBe(200);
+  });
+  it('commits five wrong guesses without hashing a password or revoking access', async () => {
+    const owner = await signup(email, password);
+    const proof = await requestReset(email);
+    const hashing = vi.spyOn(ArgonPasswordHasher.prototype, 'hash');
+    const wrongCode = proof.code === '000000' ? '111111' : '000000';
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      expect(
+        (
+          await post('password/reset', {
+            ...proof,
+            code: wrongCode,
+            newPassword,
+          })
+        ).statusCode,
+      ).toBe(401);
+    }
+    expect(
+      (await post('password/reset', { ...proof, newPassword })).statusCode,
+    ).toBe(401);
+    expect(hashing).not.toHaveBeenCalled();
+    expect(
+      (
+        await database
+          .selectFrom('auth_challenges')
+          .selectAll()
+          .where('id', '=', proof.challengeId)
+          .executeTakeFirstOrThrow()
+      ).attempts,
+    ).toBe(5);
+    expect((await me(owner.accessToken)).statusCode).toBe(200);
+  });
+  it('shares resend budgets across purposes and supersedes only the earlier reset', async () => {
+    await signup(email, password);
+    const first = await requestReset(email);
+    const blocked = await post('password/forgot', {
+      contact: { kind: 'email', value: ' ALICE@EXAMPLE.COM ' },
+    });
+    expect(blocked.statusCode).toBe(429);
+    expect(blocked.headers['retry-after']).toBe('60');
+    const blockedLogin = await post('login/code', { contact: email });
+    expect(blockedLogin.statusCode).toBe(429);
+    const second = await requestReset(email);
+    expect(
+      (await post('password/reset', { ...first, newPassword })).statusCode,
+    ).toBe(401);
+    expect(
+      (await post('password/reset', { ...second, newPassword })).statusCode,
+    ).toBe(204);
+  });
+  it('invalidates failed deliveries without changing credentials or issuing a reset reference', async () => {
+    const owner = await signup(email, password);
+    advance(60);
+    delivery.fail = true;
+    const response = await post('password/forgot', { contact: email });
+    expect(response.statusCode).toBe(503);
+    expect(response.json().code).toBe('DELIVERY_UNAVAILABLE');
+    expect(response.json()).not.toHaveProperty('challengeId');
+    const challenge = await database
+      .selectFrom('auth_challenges')
+      .selectAll()
+      .where('purpose', '=', 'password-reset')
+      .executeTakeFirstOrThrow();
+    expect(challenge.status).toBe('invalidated');
+    expect((await me(owner.accessToken)).statusCode).toBe(200);
+  });
+  it('allows one concurrent redemption and one credential version change', async () => {
+    await signup(email, password);
+    const proof = await requestReset(email);
+    const responses = await Promise.all([
+      post('password/reset', { ...proof, newPassword }),
+      post('password/reset', {
+        ...proof,
+        newPassword: 'another replacement passphrase',
+      }),
+    ]);
+    expect(responses.map((response) => response.statusCode).sort()).toEqual([
+      204, 401,
+    ]);
+    expect(
+      (
+        await database
+          .selectFrom('auth_accounts')
+          .selectAll()
+          .executeTakeFirstOrThrow()
+      ).credential_version,
+    ).toBe(1);
+    expect(
+      await database
+        .selectFrom('auth_sessions')
+        .selectAll()
+        .where('revoked_at', 'is', null)
+        .execute(),
+    ).toHaveLength(0);
+  });
+  it('rolls back password, version, consumption, and session revocation on storage failure', async () => {
+    const owner = await signup(email, password);
+    const proof = await requestReset(email);
+    const original = PostgresAuthenticationRepository.prototype.replacePassword;
+    const failure = vi
+      .spyOn(PostgresAuthenticationRepository.prototype, 'replacePassword')
+      .mockImplementationOnce(async function (
+        this: PostgresAuthenticationRepository,
+        account,
+        hash,
+        now,
+      ) {
+        await original.call(this, account, hash, now);
+        throw new Error('simulated failure after recovery writes');
+      });
+    const failed = await post('password/reset', { ...proof, newPassword });
+    expect(failed.statusCode).toBe(503);
+    expect(failed.body).not.toContain(newPassword);
+    failure.mockRestore();
+    expect(
+      (
+        await database
+          .selectFrom('auth_challenges')
+          .selectAll()
+          .where('id', '=', proof.challengeId)
+          .executeTakeFirstOrThrow()
+      ).status,
+    ).toBe('ready');
+    expect((await me(owner.accessToken)).statusCode).toBe(200);
+    expect(
+      (await post('login/password', { contact: email, password })).statusCode,
+    ).toBe(200);
+    expect(
+      (await post('password/reset', { ...proof, newPassword })).statusCode,
+    ).toBe(204);
+  });
+  it('rejects an earlier login code after recovery but accepts newly requested code login', async () => {
+    await signup(email, password);
+    advance(60);
+    const request = await post('login/code', { contact: email });
+    const challengeId = request.json().challengeId as string;
+    const proof = { challengeId, code: delivery.codeFor(challengeId) };
+    const reset = await requestReset(email);
+    expect(
+      (await post('password/reset', { ...reset, newPassword })).statusCode,
+    ).toBe(204);
+    expect((await post('login/code/verify', proof)).statusCode).toBe(401);
+    advance(60);
+    const fresh = await post('login/code', { contact: email });
+    const freshId = fresh.json().challengeId as string;
+    expect(
+      (
+        await post('login/code/verify', {
+          challengeId: freshId,
+          code: delivery.codeFor(freshId),
+        })
+      ).statusCode,
+    ).toBe(200);
+  });
+  it('rejects a password login whose verification began before recovery committed', async () => {
+    await signup(email, password);
+    const proof = await requestReset(email);
+    const reached = asyncSignal();
+    const release = asyncSignal();
+    const original = ArgonPasswordHasher.prototype.verify;
+    vi.spyOn(ArgonPasswordHasher.prototype, 'verify').mockImplementationOnce(
+      async function (this: ArgonPasswordHasher, candidate, hash) {
+        const valid = await original.call(this, candidate, hash);
+        reached.resolve();
+        await release.promise;
+        return valid;
+      },
+    );
+    const pendingLogin = post('login/password', {
+      contact: email,
+      password,
+    }).then((response) => response);
+    try {
+      await reached.promise;
+      expect(
+        (await post('password/reset', { ...proof, newPassword })).statusCode,
+      ).toBe(204);
+    } finally {
+      release.resolve();
+    }
+    expect((await pendingLogin).statusCode).toBe(401);
+    expect(
+      await database
+        .selectFrom('auth_sessions')
+        .selectAll()
+        .where('revoked_at', 'is', null)
+        .execute(),
+    ).toHaveLength(0);
   });
 });

@@ -30,6 +30,8 @@ import {
   VerifyCodeDto,
   PasswordLoginDto,
   RequestLoginCodeDto,
+  RequestPasswordResetDto,
+  ResetPasswordDto,
 } from '../dtos/authentication-request.dto.js';
 import {
   CodeChallengeResponseDto,
@@ -128,6 +130,39 @@ export class AuthenticationController {
     @Req() request: AuthenticationHttpRequest,
   ) {
     return this.authentication.loginWithCode({ ...body, clientIp: request.ip });
+  }
+
+  /** Request a recovery code with the same response for registered, disabled, and unknown contacts. */
+  @Post('password/forgot')
+  @HttpCode(202)
+  @ApiOperation({ summary: 'Request a password-reset code by phone or email' })
+  @ApiBody({ type: RequestPasswordResetDto })
+  @ApiResponse({ status: 202, type: CodeChallengeResponseDto })
+  requestPasswordReset(
+    @Body() body: RequestPasswordResetDto,
+    @Req() request: AuthenticationHttpRequest,
+  ) {
+    return this.authentication.requestPasswordReset({
+      ...body,
+      clientIp: request.ip,
+    });
+  }
+
+  /** Redeem recovery proof and revoke prior access; the caller must sign in normally afterward. */
+  @Post('password/reset')
+  @HttpCode(204)
+  @ApiOperation({ summary: 'Reset a password with a one-time code' })
+  @ApiBody({ type: ResetPasswordDto })
+  @ApiResponse({
+    status: 204,
+    description:
+      'Password replaced; previous sessions and device keys revoked. Sign in again.',
+  })
+  async resetPassword(
+    @Body() body: ResetPasswordDto,
+    @Req() request: AuthenticationHttpRequest,
+  ): Promise<void> {
+    await this.authentication.resetPassword({ ...body, clientIp: request.ip });
   }
 
   /** Return only the identity established by the authentication guard. */

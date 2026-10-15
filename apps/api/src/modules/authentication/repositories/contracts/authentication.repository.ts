@@ -10,6 +10,8 @@ import type {
 export interface AuthenticationRepository {
   /** Resolve device ownership to the current account; disabled state remains authoritative in the service and session insert. */
   findAccountById(id: string): Promise<AuthenticationAccount | null>;
+  /** Lock current account state before credential/session/device mutations; requires a transaction. */
+  lockAccountById(id: string): Promise<AuthenticationAccount | null>;
   /** Lock the active session and account for enrollment, serializing logout and concurrent device-count decisions. */
   lockEnrollmentSession(
     tokenDigest: string,
@@ -37,8 +39,17 @@ export interface AuthenticationRepository {
   ): Promise<void>;
   /** Persist a wrong guess within the challenge lock's transaction. */
   recordWrongCode(id: string): Promise<void>;
-  /** Save a session for an active account; return false if the account became unavailable. */
-  createSession(session: AuthenticationSession): Promise<boolean>;
+  /** Replace the locked active account's password/version and revoke its sessions/device keys in the caller's transaction. */
+  replacePassword(
+    account: AuthenticationAccount,
+    passwordHash: string,
+    now: Date,
+  ): Promise<boolean>;
+  /** Lock/check the active account version before insertion; stale pre-reset proof cannot create a surviving session. */
+  createSession(
+    session: AuthenticationSession,
+    credentialVersion: number,
+  ): Promise<boolean>;
   /** Resolve a live, unrevoked token only when its account is still active. */
   findSessionIdentity(
     tokenDigest: string,

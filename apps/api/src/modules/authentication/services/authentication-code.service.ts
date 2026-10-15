@@ -8,6 +8,7 @@ import type {
 import {
   authenticationPolicy,
   canRedeemChallenge,
+  matchesChallengeAccount,
 } from '../domain/authentication-policy.js';
 import {
   AuthenticationError,
@@ -27,7 +28,15 @@ import {
   type AuthenticationResult,
 } from './authentication-session.js';
 
-/** Own the code lifecycle: issuance, provider acceptance, guesses, atomic redemption, and account activation. */
+/** Bind validated code proofs to a server-selected purpose; transport shape is checked before service entry. */
+interface CodeVerification {
+  readonly purpose: CodeChallenge['purpose'];
+  readonly challengeId: string;
+  readonly code: string;
+  readonly clientIp: string;
+}
+
+/** Own code issuance, bounded single-use redemption, account activation, and atomic credential recovery. */
 @Injectable()
 export class AuthenticationCodeService {
   /** Inject persistence and capability ports; storage and messaging clients stay behind their implementations. */
@@ -44,7 +53,7 @@ export class AuthenticationCodeService {
     private readonly limiter: AuthenticationAttemptLimiter,
     @Inject(AUTHENTICATION.clock) private readonly clock: AuthenticationClock,
   ) {}
-  /** Persist a pending challenge before delivery; a delivery failure invalidates it and returns no credentials. */
+  /** Persist before delivery; all contacts follow the same path, but unknown/disabled identities gain no login or reset authority. */
   async request(input: {
     purpose: CodeChallenge['purpose'];
     contact: Contact;
@@ -57,6 +66,11 @@ export class AuthenticationCodeService {
       input.password === undefined
         ? null
         : await this.passwords.hash(input.password);
+    const account =
+      input.purpose === 'signup'
+        ? null
+        : await this.repository.findAccount(contact);
+    const binding = account?.disabledAt === null ? account : null;
     const now = this.clock.now();
     const expiresAt = new Date(
       now.getTime() + authenticationPolicy.codeLifetimeSeconds * 1000,
@@ -67,6 +81,8 @@ export class AuthenticationCodeService {
       id,
       contact,
       purpose: input.purpose,
+      accountId: binding?.id ?? null,
+      credentialVersion: binding?.credentialVersion ?? null,
       passwordHash,
       codeDigest: this.secrets.codeDigest(id, code),
       createdAt: now,
@@ -102,60 +118,96 @@ export class AuthenticationCodeService {
       resendAfterSeconds: authenticationPolicy.resendAfterSeconds,
     };
   }
-  /** Commit failed-guess counters before returning a generic error; an exception inside the transaction would undo them. */
-  async verify(input: {
-    purpose: CodeChallenge['purpose'];
-    challengeId: string;
-    code: string;
-    clientIp: string;
-  }): Promise<AuthenticationResult> {
-    await this.limiter.codeVerification(input.clientIp);
-    const result = await this.repository.transaction(async (repository) => {
-      const challenge = await repository.lockChallenge(input.challengeId);
+  /** Redeem signup/login only; reset-purpose codes never create a session through this operation. */
+  verify(
+    input: CodeVerification & { purpose: 'signup' | 'login' },
+  ): Promise<AuthenticationResult> {
+    return this.redeem(input, async (repository, challenge) => {
       const now = this.clock.now();
-      if (!challenge || !canRedeemChallenge(challenge, input.purpose, now)) {
-        return null;
-      }
-      const matches = this.secrets.matches(
-        challenge.codeDigest,
-        this.secrets.codeDigest(challenge.id, input.code),
-      );
-      if (!matches) {
-        return this.recordWrongCode(repository, challenge.id);
-      }
-      await repository.changeChallengeStatus(challenge.id, 'ready', 'consumed');
       const account = await this.resolveAccount(repository, challenge, now);
       if (!account || account.disabledAt !== null) {
         return null;
       }
       return issueSession(repository, this.secrets, account, now);
     });
-    if (!result) {
+  }
+  /** Replace a validated new password only after code ownership proof; consumption, version change and revocation commit together. */
+  async resetPassword(
+    input: Omit<CodeVerification, 'purpose'> & { newPassword: string },
+  ): Promise<void> {
+    await this.redeem(
+      { ...input, purpose: 'password-reset' },
+      async (repository, challenge) => {
+        if (!challenge.accountId) {
+          return null;
+        }
+        const account = await repository.lockAccountById(challenge.accountId);
+        if (!account || !matchesChallengeAccount(challenge, account)) {
+          return null;
+        }
+        // Hash only a proven, current code. Keep the account lock through replacement to serialize concurrent recovery/enrollment.
+        const passwordHash = await this.passwords.hash(input.newPassword);
+        const now = this.clock.now();
+        if (!canRedeemChallenge(challenge, 'password-reset', now)) {
+          return null;
+        }
+        return (await repository.replacePassword(account, passwordHash, now))
+          ? true
+          : null;
+      },
+    );
+  }
+  /** Commit failed-guess counts before returning a generic failure; exceptions roll back consumption and all callback writes. */
+  private async redeem<Result>(
+    input: CodeVerification,
+    operation: (
+      repository: AuthenticationRepository,
+      challenge: CodeChallenge,
+    ) => Promise<Result | null>,
+  ): Promise<Result> {
+    await this.limiter.codeVerification(input.clientIp);
+    const result = await this.repository.transaction(async (repository) => {
+      const challenge = await repository.lockChallenge(input.challengeId);
+      if (
+        !challenge ||
+        !canRedeemChallenge(challenge, input.purpose, this.clock.now())
+      ) {
+        return null;
+      }
+      if (
+        !this.secrets.matches(
+          challenge.codeDigest,
+          this.secrets.codeDigest(challenge.id, input.code),
+        )
+      ) {
+        await repository.recordWrongCode(challenge.id);
+        return null;
+      }
+      await repository.changeChallengeStatus(challenge.id, 'ready', 'consumed');
+      return operation(repository, challenge);
+    });
+    if (result === null) {
       throw invalidCredentials();
     }
     return result;
   }
-  /** Keep the failed result explicit so the transaction commits its attempt count. */
-  private async recordWrongCode(
-    repository: AuthenticationRepository,
-    id: string,
-  ): Promise<null> {
-    await repository.recordWrongCode(id);
-    return null;
-  }
-  /** Signup creates a new verified identity only; existing credentials are never replaced or silently linked. */
+  /** Signup cannot overwrite an identity; login proof is bound to the account/version that existed when the code was sent. */
   private async resolveAccount(
     repository: AuthenticationRepository,
     challenge: CodeChallenge,
     now: Date,
   ): Promise<AuthenticationAccount | null> {
-    if (challenge.purpose === 'login') {
-      return repository.findAccount(challenge.contact);
+    if (challenge.purpose !== 'signup') {
+      const account = await repository.findAccount(challenge.contact);
+      return account && matchesChallengeAccount(challenge, account)
+        ? account
+        : null;
     }
     return repository.createAccount({
       id: this.secrets.id(),
       contact: challenge.contact,
       passwordHash: challenge.passwordHash,
+      credentialVersion: 0,
       createdAt: now,
       verifiedAt: now,
       disabledAt: null,

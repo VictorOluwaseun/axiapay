@@ -32,6 +32,18 @@ describe('API foundation', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json().paths).toHaveProperty('/health/live');
     expect(response.json().paths).toHaveProperty('/v1/auth/signup');
+    const document = response.json();
+    expect(
+      document.paths['/v1/auth/password/forgot'].post.requestBody.content[
+        'application/json'
+      ].schema.$ref,
+    ).toBe('#/components/schemas/RequestPasswordResetDto');
+    expect(
+      document.paths['/v1/auth/password/reset'].post.responses,
+    ).toHaveProperty('204');
+    expect(document.components.schemas.ResetPasswordDto.required).toEqual(
+      expect.arrayContaining(['challengeId', 'code', 'newPassword']),
+    );
     expect(
       response.json().paths['/v1/auth/signup'].post.responses['202'].content[
         'application/json'

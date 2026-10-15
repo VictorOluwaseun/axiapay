@@ -64,6 +64,16 @@ export class AuthenticationService {
   loginWithCode(input: CodeVerification): Promise<AuthenticationResult> {
     return this.codes.verify({ ...input, purpose: 'login' });
   }
+  /** Request purpose-bound recovery without exposing registration status; the canonical contact is already validated. */
+  requestPasswordReset(input: Omit<CodeRequest, 'password'>) {
+    return this.codes.request({ ...input, purpose: 'password-reset' });
+  }
+  /** Complete code-authorized recovery without signing in; all sessions and device registrations must be re-established. */
+  resetPassword(
+    input: CodeVerification & { newPassword: string },
+  ): Promise<void> {
+    return this.codes.resetPassword(input);
+  }
   /** Apply throttling before hashing, then create a fresh session only after successful verification. */
   async loginWithPassword(input: {
     contact: Contact;

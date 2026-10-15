@@ -8,6 +8,8 @@ export interface AuthenticationAccount {
   readonly id: string;
   readonly contact: Contact;
   readonly passwordHash: string | null;
+  /** Recovery increments this version to reject proofs captured before the password change. */
+  readonly credentialVersion: number;
   readonly createdAt: Date;
   readonly verifiedAt: Date;
   readonly disabledAt: Date | null;
@@ -15,7 +17,10 @@ export interface AuthenticationAccount {
 /** A code is bound to one contact and one purpose; terminal challenges cannot be redeemed. */
 export interface CodeChallenge {
   readonly id: string;
-  readonly purpose: 'signup' | 'login';
+  readonly purpose: 'signup' | 'login' | 'password-reset';
+  /** Bind login/recovery to the identity and credential version present at issuance. */
+  readonly accountId: string | null;
+  readonly credentialVersion: number | null;
   readonly contact: Contact;
   readonly passwordHash: string | null;
   readonly codeDigest: string;

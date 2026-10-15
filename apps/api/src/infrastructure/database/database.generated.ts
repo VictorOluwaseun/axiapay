@@ -94,6 +94,7 @@ export interface AuthAccounts {
   contact_kind: string;
   contact_value: string;
   created_at: Timestamp;
+  credential_version: Generated<number>;
   disabled_at: Timestamp | null;
   id: string;
   password_hash: string | null;
@@ -101,11 +102,13 @@ export interface AuthAccounts {
 }
 
 export interface AuthChallenges {
+  account_id: string | null;
   attempts: number;
   code_digest: string;
   contact_kind: string;
   contact_value: string;
   created_at: Timestamp;
+  credential_version: number | null;
   expires_at: Timestamp;
   id: string;
   password_hash: string | null;

@@ -60,13 +60,15 @@ Successful device login returns the existing `{ accessToken, tokenType: "Bearer"
 - **Logout:** revokes the presented session. The registered key stays available for another explicit device login.
 - **Session expiry:** a fresh signed challenge can obtain another 24-hour session while the account and key remain active. No refresh token is introduced.
 - **Remove a device:** permanently revokes that credential, consumes its outstanding challenges, and revokes all sessions created through that key in one transaction. A concurrent login either completes before revocation and is revoked, or sees the revoked key and fails.
-- **Revocation scope:** credentials identify registered keys, not every session on a physical phone. Password/code sessions are not automatically associated with a device key and are not revoked by this endpoint. Full account/session recovery is separate work.
+- **Revocation scope:** credentials identify registered keys, not every session on a physical phone. Password/code sessions are not automatically associated with a device key and are not revoked by this endpoint. Account-wide revocation on password reset is described below.
 - **New phone, reinstall, or invalidated key:** normal phone/email sign-in followed by explicit enrollment with new key material. An existing or revoked public key cannot be registered again, including under another account.
 - **Missing/late response:** enrollment and login proofs are single use. If enrollment may have completed, check the owner's active-device list. If a login response is lost, request and sign a fresh challenge. Do not retry a consumed proof expecting the original raw bearer token to be returned.
 - **Storage failure before commit:** enrollment/session creation and challenge consumption roll back together. The same proof remains retryable until its deadline if the transaction did not commit.
 - **Offline:** these endpoints require network access. Local biometric unlocking and SMS payment authorization remain separate Android/payment workflows. Device login signatures do not authorize payments.
 
 Device metadata contains only `credentialId`, `deviceName`, `createdAt`, and nullable `lastUsedAt`. Revoked registrations are omitted from the list; retained key fingerprints prevent reuse.
+
+A successful [password reset](password-recovery.md) revokes every session and registered device key for that account. Pending login/enrollment proofs also lose authority. Sign in by password or a newly requested login code, generate a new key, and enroll again. Recovery and enrollment/device login use the same account-first lock order.
 
 ## Expiry, limits, and safe failures
 

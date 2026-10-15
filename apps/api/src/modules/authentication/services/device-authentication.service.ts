@@ -166,7 +166,14 @@ export class DeviceAuthenticationService {
     await this.limiter.deviceVerification(input.clientIp);
     const result = await this.devices.transaction(
       async (devices, authentication) => {
-        // Match revocation's lock order: credential first, then challenge, then session changes.
+        const candidate = await devices.findCredential(input.credentialId);
+        if (!candidate) {
+          return null;
+        }
+        // Recovery/enrollment take the account first; a key lock must not wait on that account in reverse order.
+        const account = await authentication.lockAccountById(
+          candidate.accountId,
+        );
         const credential = await devices.lockCredential(input.credentialId);
         const challenge = await devices.lockChallenge(input.challengeId);
         const now = this.clock.now();
@@ -190,9 +197,6 @@ export class DeviceAuthenticationService {
           return this.rejectProof(devices, challenge.id);
         }
         await devices.consumeChallenge(challenge.id, now);
-        const account = await authentication.findAccountById(
-          credential.accountId,
-        );
         if (!account || account.disabledAt !== null) {
           return null;
         }

@@ -26,16 +26,19 @@ export async function issueSession(
 ): Promise<AuthenticationResult> {
   const accessToken = secrets.sessionToken();
   const expiresInSeconds = authenticationPolicy.sessionLifetimeSeconds;
-  const saved = await repository.createSession({
-    deviceCredentialId,
-    primaryAuthenticatedAt: deviceCredentialId === null ? now : null,
-    id: secrets.id(),
-    accountId: account.id,
-    tokenDigest: secrets.tokenDigest(accessToken),
-    createdAt: now,
-    expiresAt: new Date(now.getTime() + expiresInSeconds * 1000),
-    revokedAt: null,
-  });
+  const saved = await repository.createSession(
+    {
+      deviceCredentialId,
+      primaryAuthenticatedAt: deviceCredentialId === null ? now : null,
+      id: secrets.id(),
+      accountId: account.id,
+      tokenDigest: secrets.tokenDigest(accessToken),
+      createdAt: now,
+      expiresAt: new Date(now.getTime() + expiresInSeconds * 1000),
+      revokedAt: null,
+    },
+    account.credentialVersion,
+  );
   if (!saved) {
     throw invalidCredentials();
   }

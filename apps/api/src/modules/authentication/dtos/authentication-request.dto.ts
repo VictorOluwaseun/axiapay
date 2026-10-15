@@ -1,3 +1,4 @@
+import { authenticationPolicy } from '../domain/authentication-policy.js';
 import {
   ContactValueConstraint,
   canonicalContactValue,
@@ -53,22 +54,28 @@ export class RequestLoginCodeDto {
 /** Allow omission of a signup password, but reject null and non-string credentials before hashing. */
 export class SignupDto extends RequestLoginCodeDto {
   @ApiPropertyOptional({
-    minLength: 15,
-    maxLength: 128,
+    minLength: authenticationPolicy.newPasswordMinCodePoints,
+    maxLength: authenticationPolicy.passwordMaxCodePoints,
     description:
       'Optional passphrase; omit for code-only signup. Whitespace is preserved.',
   })
   @ValidateIf((_object: unknown, value: unknown) => value !== undefined)
   @IsString()
-  @IsCodePointLength(15, 128)
+  @IsCodePointLength(
+    authenticationPolicy.newPasswordMinCodePoints,
+    authenticationPolicy.passwordMaxCodePoints,
+  )
   readonly password?: string;
 }
 
 /** Bound password-login input without trimming, case folding, or implicit conversion. */
 export class PasswordLoginDto extends RequestLoginCodeDto {
-  @ApiProperty({ minLength: 1, maxLength: 128 })
+  @ApiProperty({
+    minLength: 1,
+    maxLength: authenticationPolicy.passwordMaxCodePoints,
+  })
   @IsString()
-  @IsCodePointLength(1, 128)
+  @IsCodePointLength(1, authenticationPolicy.passwordMaxCodePoints)
   readonly password!: string;
 }
 
@@ -91,4 +98,22 @@ export class SessionTokenInputDto {
   @IsString()
   @Matches(/^[A-Za-z0-9_-]{43}(?![\s\S])/)
   readonly token!: string;
+}
+
+/** Request recovery for one canonical contact; purpose and account identity remain server-owned. */
+export class RequestPasswordResetDto extends RequestLoginCodeDto {}
+
+/** Submit proof and a new passphrase together; a valid reset never creates a bearer session. */
+export class ResetPasswordDto extends VerifyCodeDto {
+  @ApiProperty({
+    minLength: authenticationPolicy.newPasswordMinCodePoints,
+    maxLength: authenticationPolicy.passwordMaxCodePoints,
+    description: 'New passphrase; whitespace is preserved.',
+  })
+  @IsString()
+  @IsCodePointLength(
+    authenticationPolicy.newPasswordMinCodePoints,
+    authenticationPolicy.passwordMaxCodePoints,
+  )
+  readonly newPassword!: string;
 }

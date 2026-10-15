@@ -44,7 +44,7 @@ Nest modules assemble the dependency graph through constructor injection, class 
 
 `AirtimeProcessor` implements the existing `ServicePaymentProvider` contract through an injected `AirtimeProcessorAdapter`. AxiaPay owns the common `toRequest → execute → toSubmission` sequence; each adapter owns provider wire formats, transport and authenticated evidence. The existing payment-module factory constructs processors from injected adapters. Lookup uses a separate enquiry path and never repeats the purchase pipeline. Durable claiming, authorization and settlement remain in payment/wallet services. See [airtime processing](../src/modules/payments/processors/README.md). Root `PaymentIntegrationModule` optionally composes the [VTpass domestic airtime adapter](../src/modules/payments/adapters/README.md) from validated configuration. A single pure adapter `validate` contract checks catalogue products and complete quotes, keeping unsupported terms out of new wallet holds; provider transport remains outside transaction locks.
 
-`AuthenticationService`, `WalletService`, and `HealthService` are implemented. `AuthenticationModule` exposes the existing signup, login, session, and logout routes. `WalletModule.register({ funding, paymentOutcome })` requires trusted verifier implementations and exports `WalletService`; it registers no public wallet routes. `/health/live` confirms process liveness only.
+`AuthenticationService`, `WalletService`, and `HealthService` are implemented. `AuthenticationModule` exposes the existing signup, login, code-authorized password recovery, session, and logout routes. `WalletModule.register({ funding, paymentOutcome })` requires trusted verifier implementations and exports `WalletService`; it registers no public wallet routes. `/health/live` confirms process liveness only.
 
 ## Outbound HTTP
 
@@ -73,3 +73,5 @@ ESLint allows storage imports in concrete repositories and data sources while pr
 `DeviceAuthenticationService` adds device-key enrollment and login to the authentication feature. `PostgresDeviceAuthenticationRepository` owns device records and signing challenges; its transaction callback binds the existing authentication repository to the same connection for session issuance. Both own SQL directly. Enrollment requires a recent primary session; device sessions cannot enroll more keys. See the [device authentication decision](decisions/0005-device-authentication.md) and [wire contract](../src/modules/authentication/device-login.md).
 
 See [input validation boundaries](input-validation.md) for the audit decisions, non-HTTP wrapper, and test strategy.
+
+Password recovery reuses the code lifecycle and direct SQL repository. Challenge/credential-version checks, password replacement and account-wide session/device revocation commit atomically. Shared account locks prevent pre-reset proofs from issuing surviving sessions. See [password recovery](../src/modules/authentication/password-recovery.md).

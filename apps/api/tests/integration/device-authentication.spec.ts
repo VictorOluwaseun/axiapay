@@ -1,3 +1,4 @@
+import { asyncSignal } from '../support/async-signal.js';
 import { BadRequestException } from '@nestjs/common';
 import { withValidatedInput } from '../../src/shared/validation/input-validation.js';
 import { DeviceIdentifierDto } from '../../src/modules/authentication/dtos/device-authentication.dto.js';
@@ -78,6 +79,12 @@ beforeAll(async () => {
           devices: await import(
             new URL(
               '../../migrations/202610130003-device-authentication.js',
+              import.meta.url,
+            ).href
+          ),
+          passwordRecovery: await import(
+            new URL(
+              '../../migrations/202610150010-password-recovery.js',
               import.meta.url,
             ).href
           ),
@@ -890,5 +897,128 @@ describe('device authentication', () => {
     expect(
       document.paths['/v1/auth/devices/{credentialId}']!.delete!.security,
     ).toEqual([{ bearer: [] }]);
+  });
+});
+
+/** Request reset using the normal cooldown; the recipient gets a code through the same test delivery port. */
+async function passwordResetProof() {
+  currentTime = new Date(currentTime.getTime() + 60_000);
+  const request = await post('password/forgot', { contact: email });
+  expect(request.statusCode).toBe(202);
+  const challengeId = request.json().challengeId as string;
+  return {
+    challengeId,
+    code: codes.get(challengeId),
+    newPassword: 'a replacement private passphrase',
+  };
+}
+
+describe('device access after password recovery', () => {
+  it('revokes active keys, their sessions, and pending enrollment/login proofs after reset', async () => {
+    const owner = await signup(email, true);
+    const device = await enroll(owner.accessToken);
+    const login = await loginChallenge(device.credentialId);
+    const loggedIn = await post(
+      'login/device/verify',
+      proof(login, device.keys),
+    );
+    expect(loggedIn.statusCode).toBe(200);
+    const pendingLogin = await loginChallenge(device.credentialId);
+    const pendingEnrollment = await beginEnrollment(owner.accessToken);
+    const reset = await passwordResetProof();
+    expect((await post('password/reset', reset)).statusCode).toBe(204);
+    expect((await me(owner.accessToken)).statusCode).toBe(401);
+    expect((await me(loggedIn.json().accessToken)).statusCode).toBe(401);
+    expect(
+      (await post('login/device/verify', proof(pendingLogin, device.keys)))
+        .statusCode,
+    ).toBe(401);
+    expect(
+      (
+        await post(
+          'devices/enrollment/verify',
+          proof(pendingEnrollment.challenge, pendingEnrollment.keys),
+          owner.accessToken,
+        )
+      ).statusCode,
+    ).toBe(401);
+    const freshChallenge = await loginChallenge(device.credentialId);
+    expect(
+      (await post('login/device/verify', proof(freshChallenge, device.keys)))
+        .statusCode,
+    ).toBe(401);
+    const freshSession = await post('login/password', {
+      contact: email,
+      password: reset.newPassword,
+    });
+    expect(freshSession.statusCode).toBe(200);
+    const list = await application.inject({
+      method: 'GET',
+      url: '/v1/auth/devices',
+      headers: { authorization: `Bearer ${freshSession.json().accessToken}` },
+    });
+    expect(list.json()).toEqual([]);
+    await enroll(freshSession.json().accessToken);
+  });
+  it('rolls back key revocation when recovery persistence fails', async () => {
+    const owner = await signup(email, true);
+    const device = await enroll(owner.accessToken);
+    const reset = await passwordResetProof();
+    const original = PostgresAuthenticationRepository.prototype.replacePassword;
+    vi.spyOn(
+      PostgresAuthenticationRepository.prototype,
+      'replacePassword',
+    ).mockImplementationOnce(async function (
+      this: PostgresAuthenticationRepository,
+      account,
+      hash,
+      now,
+    ) {
+      await original.call(this, account, hash, now);
+      throw new Error('simulated failure after device revocation');
+    });
+    expect((await post('password/reset', reset)).statusCode).toBe(503);
+    const login = await loginChallenge(device.credentialId);
+    expect(
+      (await post('login/device/verify', proof(login, device.keys))).statusCode,
+    ).toBe(200);
+  });
+  it('serializes recovery with an in-flight device login and revokes any session it issued', async () => {
+    const owner = await signup(email, true);
+    const device = await enroll(owner.accessToken);
+    const challenge = await loginChallenge(device.credentialId);
+    const reset = await passwordResetProof();
+    const reached = asyncSignal();
+    const release = asyncSignal();
+    const original =
+      PostgresDeviceAuthenticationRepository.prototype.lockCredential;
+    vi.spyOn(
+      PostgresDeviceAuthenticationRepository.prototype,
+      'lockCredential',
+    ).mockImplementationOnce(async function (
+      this: PostgresDeviceAuthenticationRepository,
+      id,
+    ) {
+      const credential = await original.call(this, id);
+      reached.resolve();
+      await release.promise;
+      return credential;
+    });
+    const pendingLogin = post(
+      'login/device/verify',
+      proof(challenge, device.keys),
+    ).then((response) => response);
+    await reached.promise;
+    const pendingReset = post('password/reset', reset).then(
+      (response) => response,
+    );
+    release.resolve();
+    const [loginResult, resetResult] = await Promise.all([
+      pendingLogin,
+      pendingReset,
+    ]);
+    expect(loginResult.statusCode).toBe(200);
+    expect(resetResult.statusCode).toBe(204);
+    expect((await me(loginResult.json().accessToken)).statusCode).toBe(401);
   });
 });

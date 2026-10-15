@@ -17,6 +17,7 @@ import {
   PasswordLoginDto,
   VerifyCodeDto,
   SessionTokenInputDto,
+  ResetPasswordDto,
 } from '../../src/modules/authentication/dtos/authentication-request.dto.js';
 import { AuthenticationService } from '../../src/modules/authentication/services/authentication.service.js';
 import {
@@ -393,5 +394,83 @@ describe('non-HTTP validation wrapper', () => {
       ),
     ).rejects.toBeInstanceOf(BadRequestException);
     expect(operation).not.toHaveBeenCalled();
+  });
+});
+
+describe('password recovery input boundary', () => {
+  it.each([
+    { challengeId: id, code: '012345', newPassword: 'short' },
+    { challengeId: id, code: '012345', newPassword: 'a'.repeat(129) },
+    { challengeId: id, code: 12345, newPassword: 'a valid private passphrase' },
+    {
+      challengeId: id,
+      code: '012345\n',
+      newPassword: 'a valid private passphrase',
+    },
+    {
+      challengeId: 'bad-id',
+      code: '012345',
+      newPassword: 'a valid private passphrase',
+    },
+    { challengeId: id, code: '012345', newPassword: null },
+    { challengeId: id, code: '012345' },
+    {
+      challengeId: id,
+      code: '012345',
+      newPassword: 'a valid private passphrase',
+      accountId: id,
+    },
+  ])(
+    'rejects invalid reset input before invoking the service (%j)',
+    async (payload) => {
+      const operation = vi.spyOn(
+        application.get(AuthenticationService),
+        'resetPassword',
+      );
+      const response = await application.inject({
+        method: 'POST',
+        url: '/v1/auth/password/reset',
+        payload,
+      });
+      expect(response.statusCode).toBe(400);
+      expect(operation).not.toHaveBeenCalled();
+    },
+  );
+  it('canonicalizes the recovery contact and rejects nested privilege injection before service entry', async () => {
+    const operation = vi
+      .spyOn(application.get(AuthenticationService), 'requestPasswordReset')
+      .mockResolvedValue({
+        challengeId: id,
+        expiresAt: '2030-01-01T00:05:00Z',
+        expiresInSeconds: 300,
+        resendAfterSeconds: 60,
+      });
+    const response = await application.inject({
+      method: 'POST',
+      url: '/v1/auth/password/forgot',
+      payload: { contact: { kind: 'email', value: ' ALICE@EXAMPLE.COM ' } },
+    });
+    expect(response.statusCode).toBe(202);
+    expect(operation).toHaveBeenCalledWith(
+      expect.objectContaining({ contact }),
+    );
+    operation.mockClear();
+    const invalid = await application.inject({
+      method: 'POST',
+      url: '/v1/auth/password/forgot',
+      payload: { contact: { ...contact, verified: true } },
+    });
+    expect(invalid.statusCode).toBe(400);
+    expect(operation).not.toHaveBeenCalled();
+  });
+  it('preserves a leading-zero code and a Unicode passphrase in the shared non-HTTP wrapper', async () => {
+    const newPassword = '  ' + '🔒'.repeat(15) + '  ';
+    expect(
+      await withValidatedInput(
+        ResetPasswordDto,
+        { challengeId: id, code: '012345', newPassword },
+        (input) => input.newPassword,
+      ),
+    ).toBe(newPassword);
   });
 });

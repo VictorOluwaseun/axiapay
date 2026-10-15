@@ -26,6 +26,7 @@ export function createLoggerOptions(configuration: ConfigService): Params {
           'req.headers.cookie',
           'res.headers["set-cookie"]',
           'password',
+          'newPassword',
           'token',
           'otp',
         ],
