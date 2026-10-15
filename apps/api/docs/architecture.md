@@ -14,6 +14,7 @@ src/modules/<feature>/
   data-sources/             Optional adapters for distinct storage responsibilities
   domain/                   Entities, values, invariants, and business errors
   ports/                    External capability contracts, such as code delivery
+  processors/               Shared provider protocol sequences with injected adapters
   providers/                External capability implementations
   guards/                   Request authentication and route access
   filters/                  Safe transport error mapping
@@ -41,7 +42,7 @@ Wallets retain `WalletPostgresDataSource`: ledger queries, locking, journal writ
 
 Nest modules assemble the dependency graph through constructor injection, class providers, and explicit tokens/factories for interfaces. They export feature services and guards while keeping concrete persistence private. `DatabaseModule` owns the shared Kysely pool and closes it through Nest lifecycle hooks. Tests replace individual ports or pool ownership without bypassing the feature module graph.
 
-`AirtimeProcessor` implements the existing `ServicePaymentProvider` contract through an injected `AirtimeProcessorAdapter`. AxiaPay owns the common `toRequest → execute → toSubmission` sequence; each adapter owns provider wire formats, transport and authenticated evidence. The existing payment-module factory constructs processors from injected adapters. Lookup uses a separate enquiry path and never repeats the purchase pipeline. Durable claiming, authorization and settlement remain in payment/wallet services. See [airtime processing](../src/modules/payments/processors/README.md). A single pure adapter `validate` contract checks catalogue products and complete quotes before new wallet holds; provider transport remains outside transaction locks.
+`AirtimeProcessor` implements the existing `ServicePaymentProvider` contract through an injected `AirtimeProcessorAdapter`. AxiaPay owns the common `toRequest → execute → toSubmission` sequence; each adapter owns provider wire formats, transport and authenticated evidence. The existing payment-module factory constructs processors from injected adapters. Lookup uses a separate enquiry path and never repeats the purchase pipeline. Durable claiming, authorization and settlement remain in payment/wallet services. See [airtime processing](../src/modules/payments/processors/README.md). Root `PaymentIntegrationModule` optionally composes the [VTpass domestic airtime adapter](../src/modules/payments/adapters/README.md) from validated configuration. A single pure adapter `validate` contract checks catalogue products and complete quotes, keeping unsupported terms out of new wallet holds; provider transport remains outside transaction locks.
 
 `AuthenticationService`, `WalletService`, and `HealthService` are implemented. `AuthenticationModule` exposes the existing signup, login, session, and logout routes. `WalletModule.register({ funding, paymentOutcome })` requires trusted verifier implementations and exports `WalletService`; it registers no public wallet routes. `/health/live` confirms process liveness only.
 

@@ -37,6 +37,6 @@ PaymentsModule.register({
 });
 ```
 
-The provider module/token/types and configured account IDs above are illustrative. Multiple injected adapters get separate processors and immutable routing keys; changed account/environment bindings need a new key. Other categories retain their existing registrations. Without provider configuration, default API composition still has no payment adapters or seeded catalogue. There is no simulated production fulfilment.
+The provider module/token/types and configured account IDs above are illustrative. The implemented [VTpass airtime adapter](../adapters/README.md) now follows this pattern with optional validated configuration. Multiple injected adapters get separate processors and immutable routing keys; changed account/environment bindings need a new key. Other categories retain their existing registrations. Without provider configuration, default API composition still has no payment adapters or seeded catalogue. There is no simulated production fulfilment.
 
 Unit checks cover exact mapping, unresolved/final observations, propagation of errors, rejected routing/evidence and overlapping calls. The Nest composition test verifies two independently injected adapters and timeout recovery through the existing execution service. PostgreSQL payment integration fixtures route airtime through the real processor, retaining ledger, duplicate-submission, concurrency and recovery coverage.

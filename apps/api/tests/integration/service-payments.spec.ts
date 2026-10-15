@@ -1,4 +1,6 @@
 /** Verify the first-party airtime/data contract, real PostgreSQL invariants and recovery using test-only fulfilment adapters. */
+import { AxiosError, type AxiosAdapter } from 'axios';
+import { axiosTextResponse } from '../support/axios-response-fixture.js';
 import { randomUUID } from 'node:crypto';
 import { ConfigModule } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
@@ -22,6 +24,8 @@ import {
 import { PostgresPaymentRepository } from '../../src/modules/payments/repositories/postgres-payment.repository.js';
 import { PaymentExecutionService } from '../../src/modules/payments/services/payment-execution.service.js';
 import { AirtimeProcessor } from '../../src/modules/payments/processors/airtime.processor.js';
+import { VtpassAirtimeAdapter } from '../../src/modules/payments/adapters/vtpass-airtime.adapter.js';
+import { parseVtpassJson } from '../../src/modules/payments/adapters/vtpass-airtime.protocol.js';
 import type {
   PaymentProviderRegistration,
   ProviderPaymentResult,
@@ -161,6 +165,11 @@ async function fixture(
   maximumAirtimeAmountMinorUnits = 90_000n,
   electricityMeterType: ElectricityMeterType = 'prepaid',
   educationPaymentType: EducationPaymentType = 'institution_fee',
+  providerProtocol?: {
+    providerKey: string;
+    networkCode: string;
+    productCode: string;
+  },
 ) {
   currentTime = new Date(currentTime.getTime() + 3_600_000);
   const signup = await application.inject({
@@ -215,9 +224,9 @@ async function fixture(
     });
     await trustedWallets.confirmWalletFunding(reference);
   }
-  const providerKey = `test:${randomUUID()}`;
+  const providerKey = providerProtocol?.providerKey ?? `test:${randomUUID()}`;
   const productId = randomUUID();
-  const networkCode = `test-${randomUUID()}`;
+  const networkCode = providerProtocol?.networkCode ?? `test-${randomUUID()}`;
   const isBill = ['tv', 'electricity'].includes(serviceType);
   const hasFixedPrice =
     ['data', 'tv', 'insurance'].includes(serviceType) ||
@@ -288,7 +297,8 @@ async function fixture(
       validity_seconds: serviceType === 'data' ? 86_400 : null,
       quote_lifetime_seconds: 300,
       provider_key: providerKey,
-      provider_product_code: `sku:${productId}`,
+      provider_product_code:
+        providerProtocol?.productCode ?? `sku:${productId}`,
       is_enabled: true,
     })
     .execute();
@@ -3330,4 +3340,162 @@ it('shows confirmed bank failure and reason independently of a wallet-release ou
   } finally {
     settlement.mockRestore();
   }
+});
+
+/** Wire the actual VTpass processor/adapter into real wallet and payment persistence, replacing only external HTTP. */
+async function vtpassPaymentFixture(networkCode = 'mtn') {
+  const providerKey = `vtpass:sandbox:${randomUUID()}`;
+  const context = await fixture(
+    'airtime',
+    100_000n,
+    90_000n,
+    'prepaid',
+    'institution_fee',
+    {
+      providerKey,
+      networkCode,
+      productCode: 'mtn',
+    },
+  );
+  let purchase: Record<string, unknown> | undefined;
+  let outcome: 'delivered' | 'failed' | 'timeout' = 'delivered';
+  const transport = vi.fn<AxiosAdapter>().mockImplementation(async (config) => {
+    const request = parseVtpassJson(config.data as string);
+    const isPurchase = config.url!.endsWith('/api/pay');
+    if (isPurchase) {
+      purchase = request;
+    }
+    if (isPurchase && outcome === 'timeout') {
+      throw new AxiosError('Acknowledgement lost', AxiosError.ETIMEDOUT);
+    }
+    if (!purchase) {
+      throw new Error('No existing provider purchase');
+    }
+    return axiosTextResponse(
+      JSON.stringify({
+        code: outcome === 'failed' ? '016' : '000',
+        requestId: request.request_id,
+        amount: purchase.amount,
+        content: {
+          transactions: {
+            status: outcome === 'failed' ? 'failed' : 'delivered',
+            product_name: 'MTN Airtime VTU',
+            type: 'Airtime Recharge',
+            unique_element: purchase.phone,
+            phone: 'merchant-contact',
+            unit_price: purchase.amount,
+            amount: purchase.amount,
+            quantity: 1,
+            transactionId: '17415980564672211596777904',
+          },
+        },
+      }),
+    );
+  });
+  registrations[providerKey] = {
+    partnerAccountId: context.partnerAccountId,
+    feeAccountId: context.feeAccountId,
+    adapter: new AirtimeProcessor(
+      new VtpassAirtimeAdapter(
+        {
+          providerKey,
+          environment: 'sandbox',
+          apiKey: 'test-api-key',
+          secretKey: 'test-secret-key',
+        },
+        transport,
+      ),
+    ),
+  };
+  return {
+    ...context,
+    transport,
+    /** Change test-authenticated provider state without bypassing its HTTP mapping or wallet settlement. */
+    setOutcome(next: typeof outcome) {
+      outcome = next;
+    },
+  };
+}
+
+describe('VTpass airtime with authoritative wallet settlement', () => {
+  it('captures exactly one reservation from correlated delivered evidence and preserves request replay', async () => {
+    const context = await vtpassPaymentFixture();
+    const quote = (await context.quote()).json<PaymentQuoteResponseDto>();
+    expect(quote.isSubmissionAvailable).toBe(true);
+    const key = randomUUID();
+    const response = await context.pay(quote.id, key);
+    expect(response.statusCode).toBe(200);
+    expect(response.json().paymentStatus).toBe('succeeded');
+    expect((await context.pay(quote.id, key)).json().id).toBe(
+      response.json().id,
+    );
+    expect(context.transport).toHaveBeenCalledTimes(1);
+    expect((await context.balance()).reservedMinorUnits).toBe(0n);
+    expect((await context.balance()).availableMinorUnits).toBe(89_950n);
+  });
+
+  it('keeps a timed-out purchase held and recovers through the same request reference without repurchasing', async () => {
+    const context = await vtpassPaymentFixture();
+    context.setOutcome('timeout');
+    const quote = (await context.quote()).json<PaymentQuoteResponseDto>();
+    const key = randomUUID();
+    expect((await context.pay(quote.id, key)).statusCode).toBe(503);
+    const replay = await context.pay(quote.id, key);
+    expect(replay.json().paymentStatus).toBe('pending');
+    expect((await context.balance()).reservedMinorUnits).toBe(10_050n);
+    const purchase = parseVtpassJson(
+      context.transport.mock.calls[0]![0]!.data as string,
+    );
+    context.setOutcome('delivered');
+    currentTime = new Date(currentTime.getTime() + 23 * 3_600_000);
+    expect(
+      (await context.reconcile(replay.json().id)).json().paymentStatus,
+    ).toBe('succeeded');
+    expect(context.transport).toHaveBeenCalledTimes(2);
+    expect(context.transport.mock.calls[1]![0]!.url).toBe(
+      'https://sandbox.vtpass.com/api/requery',
+    );
+    expect(
+      parseVtpassJson(context.transport.mock.calls[1]![0]!.data as string)
+        .request_id,
+    ).toBe(purchase.request_id);
+    expect((await context.balance()).reservedMinorUnits).toBe(0n);
+    expect((await context.balance()).availableMinorUnits).toBe(89_950n);
+  });
+
+  it('releases a fully correlated outright failure without debiting customer funds', async () => {
+    const context = await vtpassPaymentFixture();
+    context.setOutcome('failed');
+    const quote = (await context.quote()).json<PaymentQuoteResponseDto>();
+    const response = await context.pay(quote.id);
+    expect(response.json().paymentStatus).toBe('failed');
+    expect((await context.balance()).reservedMinorUnits).toBe(0n);
+    expect((await context.balance()).availableMinorUnits).toBe(100_000n);
+    expect(context.transport).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects unsupported recipient encoding before accepting or reserving money', async () => {
+    const context = await vtpassPaymentFixture();
+    const quote = (
+      await context.quote({ recipientPhoneNumber: '+15551234567' })
+    ).json<PaymentQuoteResponseDto>();
+    expect(quote.isSubmissionAvailable).toBe(false);
+    const response = await context.pay(quote.id);
+    expect(response.statusCode).toBe(400);
+    expect(response.json().code).toBe('INVALID_PAYMENT');
+    expect((await context.balance()).availableMinorUnits).toBe(100_000n);
+    expect((await context.balance()).reservedMinorUnits).toBe(0n);
+    expect(context.transport).not.toHaveBeenCalled();
+  });
+
+  it('reports unsupported catalogue mappings unavailable before holding funds', async () => {
+    const context = await vtpassPaymentFixture('glo');
+    const quote = (await context.quote()).json<PaymentQuoteResponseDto>();
+    expect(quote.isSubmissionAvailable).toBe(false);
+    expect((await context.pay(quote.id)).json().code).toBe(
+      'PAYMENT_UNAVAILABLE',
+    );
+    expect((await context.balance()).reservedMinorUnits).toBe(0n);
+    expect(context.transport).not.toHaveBeenCalled();
+  });
 });

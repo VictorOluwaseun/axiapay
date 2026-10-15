@@ -9,6 +9,30 @@ const settings = {
   REDIS_QUEUE_URL: 'redis://localhost:56380',
 };
 describe('API configuration', () => {
+  it('requires complete VTpass credentials, separate fee routing and an explicit live environment in production', () => {
+    const vtpass = {
+      ...settings,
+      VTPASS_API_KEY: 'test-static-key',
+      VTPASS_SECRET_KEY: 'test-secret-key',
+      VTPASS_PARTNER_ACCOUNT_ID: '8f819840-74b1-4822-a55b-f4fbaf1f2c90',
+    };
+    expect(validateEnvironment(vtpass).VTPASS_ENVIRONMENT).toBe('sandbox');
+    expect(() =>
+      validateEnvironment({ ...settings, VTPASS_API_KEY: 'private-value' }),
+    ).toThrow('VTPASS_SECRET_KEY');
+    expect(() =>
+      validateEnvironment({
+        ...vtpass,
+        VTPASS_FEE_ACCOUNT_ID: vtpass.VTPASS_PARTNER_ACCOUNT_ID,
+      }),
+    ).toThrow('VTPASS_FEE_ACCOUNT_ID');
+    expect(() =>
+      validateEnvironment({ ...vtpass, NODE_ENV: 'production' }),
+    ).toThrow('VTPASS_ENVIRONMENT');
+    expect(() =>
+      validateEnvironment({ ...vtpass, VTPASS_SECRET_KEY: 'private-value\n' }),
+    ).toThrow(/^Invalid API configuration fields: VTPASS_SECRET_KEY$/);
+  });
   it('requires complete partner configuration and separates test/live and partner ledger identities', () => {
     const paystack = {
       ...settings,
