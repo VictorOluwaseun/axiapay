@@ -19,9 +19,19 @@ import type { InsuranceApplication } from './insurance-application.js';
 import { insuredProfileFingerprint } from './insured-profile-fingerprint.js';
 import type { PaymentDocument } from './payment-document.js';
 import type { InsuranceProductTerms } from '../../service-catalog/domain/insurance-product-terms.js';
+import {
+  paymentErrorDescription,
+  type PaymentErrorReason,
+} from './payment-error-reasons.js';
+
+/** Preserve safe failure classification and the original cause without accepting arbitrary external messages into the public contract. */
+export interface PaymentErrorOptions extends ErrorOptions {
+  readonly reason?: PaymentErrorReason;
+}
 
 /** Stable first-party failures; provider response bodies and storage details remain internal causes. */
 export class PaymentError extends Error {
+  readonly reason: PaymentErrorReason | undefined;
   /** Preserve actionable codes without accepting external error messages into public responses. */
   constructor(
     readonly code:
@@ -54,9 +64,16 @@ export class PaymentError extends Error {
       | 'BANK_BENEFICIARY_INVALID'
       | 'BANK_BENEFICIARY_UNCONFIRMED'
       | 'BANK_TRANSFER_NOT_FOUND',
-    options?: ErrorOptions,
+    options?: PaymentErrorOptions,
   ) {
-    super(code, options);
+    const reason =
+      options?.reason ??
+      (options?.cause instanceof PaymentError
+        ? options.cause.reason
+        : undefined);
+    const description = paymentErrorDescription(reason);
+    super(description ?? code, options);
+    this.reason = description === undefined ? undefined : reason;
     this.name = 'PaymentError';
   }
 }

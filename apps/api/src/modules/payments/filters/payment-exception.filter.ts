@@ -4,6 +4,7 @@ import type { HttpFailure } from '../../../shared/http/http-failure.js';
 import { AuthenticationError } from '../../authentication/domain/authentication-error.js';
 import { WalletError } from '../../wallets/domain/wallet-error.js';
 import { PaymentError } from '../domain/payment.js';
+import { paymentErrorDescription } from '../domain/payment-error-reasons.js';
 
 /** Public error mapping hides storage/provider diagnostics and inaccessible wallet/quote/payment identities. */
 const paymentFailures: Record<
@@ -168,6 +169,14 @@ export class PaymentExceptionFilter extends HttpExceptionFilter {
     }
     const code =
       error instanceof PaymentError ? error.code : 'PAYMENT_UNAVAILABLE';
-    return { ...paymentFailures[code], code };
+    const description =
+      error instanceof PaymentError
+        ? paymentErrorDescription(error.reason)
+        : undefined;
+    return {
+      ...paymentFailures[code],
+      code,
+      ...(description === undefined ? {} : { message: description }),
+    };
   }
 }
