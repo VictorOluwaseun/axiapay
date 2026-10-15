@@ -43,6 +43,12 @@ Nest modules assemble the dependency graph through constructor injection, class 
 
 `AuthenticationService`, `WalletService`, and `HealthService` are implemented. `AuthenticationModule` exposes the existing signup, login, session, and logout routes. `WalletModule.register({ funding, paymentOutcome })` requires trusted verifier implementations and exports `WalletService`; it registers no public wallet routes. `/health/live` confirms process liveness only.
 
+## Outbound HTTP
+
+Provider adapters and local Mailpit delivery use Axios 1.20.0, pinned in the API manifest and pnpm lockfile. The shared `infrastructure/http/axios-client.ts` factory owns Node HTTP transport defaults: no redirects or environment proxy routing, 256 KiB request/decoded-response limits, finite timeouts, and raw text without implicit JSON transformations. Feature adapters own fixed destinations, credentials, absolute AbortSignal deadlines, exact body serialization, provider parsing and safe error classification. Axios types remain inside infrastructure and concrete adapters, outside services, domain models and capability contracts.
+
+The existing exact-number parsers retain provider identifiers and money before JavaScript numeric rounding. OPay signs the same bytes Axios sends. Provider HTTP failures, response limits and timeouts retain existing payment/funding uncertainty and reconciliation; there are no automatic retries. Raw Axios errors can retain credentials, request bodies and OTPs, so adapters project controlled failures before returning them to workflows or logs. Axios's response-limit classification is covered against its actual Node adapter and must be reverified on upgrades. Node 24.19.0, API types/build, loopback HTTP checks and payment/funding/Mailpit integration tests verify this migration. See the [Axios release](https://github.com/axios/axios/releases/tag/v1.20.0) and [request configuration](https://axios-http.com/docs/req_config).
+
 ## Validation and contracts
 
 `RequestValidationModule` registers the shared `createInputValidationPipe()` as Nest's global `ValidationPipe`. Requests use `class-validator` DTO decorators and `class-transformer` nested `@Type` metadata. Unknown fields, malformed nested objects, null required values, and non-string credentials are rejected. Transformation creates class instances and canonicalizes declared contact/email strings; implicit primitive conversion is disabled. Password whitespace and leading-zero codes are preserved. Public validation errors omit submitted values.

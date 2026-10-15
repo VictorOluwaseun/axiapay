@@ -5,6 +5,8 @@ import prettier from 'eslint-config-prettier';
 import globals from 'globals';
 
 const storageImports = ['kysely', 'kysely/*', 'pg', 'ioredis', 'bullmq'];
+/** Keep concrete HTTP clients inside infrastructure and provider adapters. */
+const httpClientImports = ['axios', 'axios/*'];
 const transportImports = [
   '**/validation/**',
   '**/pipes/**',
@@ -65,6 +67,7 @@ export default tseslint.config(
         {
           patterns: [
             ...storageImports,
+            ...httpClientImports,
             ...frameworkImports,
             ...transportImports,
             ...concreteImports,
@@ -82,6 +85,7 @@ export default tseslint.config(
         {
           patterns: [
             ...storageImports,
+            ...httpClientImports,
             ...frameworkImports,
             ...transportImports,
             ...concreteImports,
@@ -119,6 +123,7 @@ export default tseslint.config(
           ],
           patterns: [
             ...storageImports,
+            ...httpClientImports,
             'class-validator',
             'class-validator/*',
             'class-transformer',
@@ -144,6 +149,7 @@ export default tseslint.config(
         {
           patterns: [
             ...storageImports,
+            ...httpClientImports,
             ...concreteImports,
             '**/repositories/**',
             '**/usecases/**',

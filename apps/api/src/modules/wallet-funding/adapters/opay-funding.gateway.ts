@@ -1,3 +1,5 @@
+import type { AxiosAdapter, AxiosInstance } from 'axios';
+import { createOutboundHttpClient } from '../../../infrastructure/http/axios-client.js';
 import { createHmac } from 'node:crypto';
 import type {
   FundingAdapter,
@@ -18,12 +20,12 @@ import {
   partnerObject,
   partnerString,
   requestPartnerJson,
-  type PartnerFetch,
 } from './partner-http.js';
 import { verifyPartnerSignature } from './partner-signature.js';
 
 /** OPay Nigeria Express Checkout adapter; callback SHA3 signatures intentionally differ from API request SHA512 signatures. */
 export class OpayFundingGateway implements FundingAdapter {
+  private readonly client: AxiosInstance;
   /** Credentials and return/webhook URLs are deployment configuration, never client input. */
   constructor(
     readonly environment: FundingEnvironment,
@@ -33,8 +35,10 @@ export class OpayFundingGateway implements FundingAdapter {
     private readonly secret: string,
     private readonly returnUrl: string,
     private readonly webhookUrl: string,
-    private readonly transport: PartnerFetch = fetch,
-  ) {}
+    httpAdapter?: AxiosAdapter,
+  ) {
+    this.client = createOutboundHttpClient(8000, httpAdapter);
+  }
 
   /** Create hosted checkout for the immutable intent; card and bank credentials stay on OPay's page. */
   async initialize(request: FundingCheckoutRequest): Promise<string> {
@@ -155,11 +159,11 @@ export class OpayFundingGateway implements FundingAdapter {
         ? 'testapi.opaycheckout.com'
         : 'liveapi.opaycheckout.com';
     const result = await requestPartnerJson(
-      this.transport,
+      this.client,
       `https://${host}/api/v1/international/cashier/${action}`,
       {
         method: 'POST',
-        body,
+        data: body,
         headers: {
           Authorization: `Bearer ${authorization}`,
           MerchantId: this.merchantId,

@@ -1,3 +1,5 @@
+import type { AxiosAdapter, AxiosHeaders, AxiosResponse } from 'axios';
+import { axiosTextResponse } from '../support/axios-response-fixture.js';
 /** Exercise real partner adapters, signed HTTP callbacks, session guards, and restricted PostgreSQL posting without live payments. */
 import { createHmac, randomUUID } from 'node:crypto';
 import { Test } from '@nestjs/testing';
@@ -62,11 +64,11 @@ class PartnerTransport {
   rejectVerification = false;
 
   /** Validate adapter credentials and route the fixed provider requests to controlled response fixtures. */
-  send: typeof fetch = async (input, options) => {
-    const url = String(input);
+  send: AxiosAdapter = async (config) => {
+    const url = config.url!;
     const partner = url.includes('paystack.co') ? 'paystack' : 'opay';
-    const headers = new Headers(options?.headers);
-    const body = options?.body ? JSON.parse(String(options.body)) : {};
+    const headers = config.headers;
+    const body = config.data ? JSON.parse(String(config.data)) : {};
     if (url.endsWith('/initialize') || url.endsWith('/create')) {
       return this.initialize(partner, body, headers);
     }
@@ -78,7 +80,7 @@ class PartnerTransport {
       partner === 'paystack'
         ? paystackSecret
         : createHmac('sha512', opaySecret)
-            .update(String(options?.body))
+            .update(String(config.data))
             .digest('hex');
     expect(headers.get('authorization')).toBe(`Bearer ${authorization}`);
     if (partner === 'opay') {
@@ -91,8 +93,8 @@ class PartnerTransport {
   private initialize(
     partner: FundingPartner,
     body: Record<string, unknown>,
-    headers: Headers,
-  ): Response {
+    headers: AxiosHeaders,
+  ): AxiosResponse<string> {
     this.initializationCalls += 1;
     expect(headers.get('authorization')).toBe(
       `Bearer ${partner === 'paystack' ? paystackSecret : 'OPAYPUB-local-fixture'}`,
@@ -133,7 +135,7 @@ class PartnerTransport {
             amount: { total: Number(amount), currency },
             cashierUrl: `https://sandboxcashier.opaycheckout.com/checkout/${reference}`,
           };
-    return new Response(
+    return axiosTextResponse(
       JSON.stringify(
         partner === 'paystack'
           ? { status: true, data }
@@ -143,17 +145,17 @@ class PartnerTransport {
   }
 
   /** Return authoritative partner status separately from notification claims. */
-  private verify(reference: string): Response {
+  private verify(reference: string): AxiosResponse<string> {
     this.verificationCalls += 1;
     if (this.rejectVerification) {
-      return new Response('unavailable', { status: 503 });
+      return axiosTextResponse('unavailable', 503);
     }
     const order = this.orders.get(reference);
     if (!order) {
-      return new Response('missing', { status: 404 });
+      return axiosTextResponse('missing', 404);
     }
     if (order.partner === 'paystack') {
-      return new Response(
+      return axiosTextResponse(
         JSON.stringify({
           status: true,
           data: {
@@ -167,7 +169,7 @@ class PartnerTransport {
         }),
       );
     }
-    return new Response(
+    return axiosTextResponse(
       JSON.stringify({
         code: '00000',
         data: {

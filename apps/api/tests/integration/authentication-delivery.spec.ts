@@ -1,4 +1,5 @@
 /** Verify the local email and simulated SMS adapters against a real disposable Mailpit server. */
+import axios from 'axios';
 import { describe, expect, it } from 'vitest';
 import { GenericContainer } from 'testcontainers';
 import { MailpitAuthenticationCodeDelivery } from '../../src/modules/authentication/providers/mailpit-authentication-code-delivery.js';
@@ -25,22 +26,25 @@ describe('local authentication delivery', () => {
         challengeId: 'sms-test',
         expiresInSeconds: 300,
       });
-      const response = await fetch(`${baseUrl}/api/v1/messages`);
-      const inbox = (await response.json()) as {
+      const client = axios.create({
+        baseURL: baseUrl,
+        timeout: 10_000,
+        maxRedirects: 0,
+        proxy: false,
+      });
+      const { data: inbox } = await client.get<{
         messages: { ID: string; To: { Address: string }[] }[];
-      };
+      }>('/api/v1/messages');
       expect(inbox.messages).toHaveLength(2);
       const addresses = inbox.messages.flatMap((message) =>
         message.To.map((recipient) => recipient.Address),
       );
       expect(addresses).toContain('alice@example.com');
       expect(addresses).toContain('sms+2348012345678@sms.axiapay.test');
-      const details = await fetch(
-        `${baseUrl}/api/v1/message/${inbox.messages[0]?.ID}`,
+      const { data: details } = await client.get<{ Text: string }>(
+        `/api/v1/message/${inbox.messages[0]?.ID}`,
       );
-      expect(((await details.json()) as { Text: string }).Text).toContain(
-        '543210',
-      );
+      expect(details.Text).toContain('543210');
     } finally {
       await container.stop();
     }

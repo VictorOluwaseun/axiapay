@@ -1,4 +1,7 @@
+import { inspect } from 'node:util';
 /** Verify partner protocols against published signing rules and exact-number JSON, independently of ledger fixtures. */
+import { AxiosError, type AxiosAdapter } from 'axios';
+import { axiosTextResponse } from '../../../../tests/support/axios-response-fixture.js';
 import { createHmac } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { OpayFundingGateway } from './opay-funding.gateway.js';
@@ -58,9 +61,9 @@ describe('funding partner authentication', () => {
 
   it('checks Paystack transaction-level success and environment through the verify endpoint', async () => {
     const transport = vi
-      .fn<typeof fetch>()
+      .fn<AxiosAdapter>()
       .mockResolvedValue(
-        new Response(
+        axiosTextResponse(
           `{"status":true,"data":{"reference":"${reference}","id":18446744073709551615,"amount":9007199254740993,"currency":"NGN","domain":"test","status":"pending"}}`,
         ),
       );
@@ -77,15 +80,17 @@ describe('funding partner authentication', () => {
       value: { amountMinorUnits: 9007199254740993n },
     });
     expect(transport).toHaveBeenCalledWith(
-      `https://api.paystack.co/transaction/verify/${reference}`,
       expect.objectContaining({
-        redirect: 'error',
+        url: `https://api.paystack.co/transaction/verify/${reference}`,
+        maxRedirects: 0,
         signal: expect.any(AbortSignal),
         headers: expect.objectContaining({ Authorization: `Bearer ${secret}` }),
       }),
     );
     transport.mockResolvedValueOnce(
-      new Response(JSON.stringify({ status: true, data: { domain: 'live' } })),
+      axiosTextResponse(
+        JSON.stringify({ status: true, data: { domain: 'live' } }),
+      ),
     );
     await expect(gateway.verify(reference)).rejects.toMatchObject({
       code: 'INVALID_FUNDING',
@@ -137,8 +142,8 @@ describe('funding partner authentication', () => {
   });
 
   it('uses OPay Nigeria test/live hosts and an ordered SHA512-signed status query', async () => {
-    const transport = vi.fn<typeof fetch>().mockResolvedValue(
-      new Response(
+    const transport = vi.fn<AxiosAdapter>().mockResolvedValue(
+      axiosTextResponse(
         JSON.stringify({
           code: '00000',
           data: {
@@ -167,9 +172,9 @@ describe('funding partner authentication', () => {
     });
     const body = JSON.stringify({ country: 'NG', reference });
     expect(transport).toHaveBeenCalledWith(
-      'https://testapi.opaycheckout.com/api/v1/international/cashier/status',
       expect.objectContaining({
-        body,
+        url: 'https://testapi.opaycheckout.com/api/v1/international/cashier/status',
+        data: body,
         headers: expect.objectContaining({
           MerchantId: '256612345678901',
           Authorization: `Bearer ${createHmac('sha512', 'example-secret').update(body).digest('hex')}`,
@@ -180,8 +185,14 @@ describe('funding partner authentication', () => {
 
   it('preserves provider outages and malformed responses as unconfirmed outcomes', async () => {
     const transport = vi
-      .fn<typeof fetch>()
-      .mockRejectedValue(new Error('private transport details'));
+      .fn<AxiosAdapter>()
+      .mockImplementation(async (config) => {
+        throw new AxiosError(
+          'private transport details',
+          AxiosError.ERR_NETWORK,
+          config,
+        );
+      });
     const gateway = new PaystackFundingGateway(
       'test',
       accountId,
@@ -192,7 +203,13 @@ describe('funding partner authentication', () => {
     await expect(gateway.verify(reference)).rejects.toMatchObject({
       code: 'FUNDING_UNAVAILABLE',
     });
-    transport.mockResolvedValueOnce(new Response('not-json'));
+    const failure = await gateway
+      .verify(reference)
+      .catch((error: unknown) => error);
+    expect(inspect(failure, { depth: 5 })).not.toMatch(
+      /sk_test_fixturesecret|private transport details/,
+    );
+    transport.mockResolvedValueOnce(axiosTextResponse('not-json'));
     await expect(gateway.verify(reference)).rejects.toMatchObject({
       code: 'INVALID_FUNDING',
     });

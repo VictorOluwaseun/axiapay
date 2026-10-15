@@ -1,3 +1,5 @@
+import type { AxiosAdapter, AxiosInstance, AxiosRequestConfig } from 'axios';
+import { createOutboundHttpClient } from '../../../infrastructure/http/axios-client.js';
 import type {
   FundingAdapter,
   FundingNotification,
@@ -16,26 +18,28 @@ import {
   partnerObject,
   partnerString,
   requestPartnerJson,
-  type PartnerFetch,
 } from './partner-http.js';
 import { verifyPartnerSignature } from './partner-signature.js';
 
 /** Paystack hosted checkout, raw-body HMAC-SHA512 webhooks, and server-authenticated transaction verification. */
 export class PaystackFundingGateway implements FundingAdapter {
+  private readonly client: AxiosInstance;
   /** The secret's test/live scope is validated by composition; ledger account identity is never supplied by customers. */
   constructor(
     readonly environment: FundingEnvironment,
     readonly partnerAccountId: string,
     private readonly secret: string,
     private readonly returnUrl: string,
-    private readonly transport: PartnerFetch = fetch,
-  ) {}
+    httpAdapter?: AxiosAdapter,
+  ) {
+    this.client = createOutboundHttpClient(8000, httpAdapter);
+  }
 
   /** Initialize exactly the persisted reference; the client never calls Paystack with the secret key. */
   async initialize(request: FundingCheckoutRequest): Promise<string> {
     const result = await this.call('/transaction/initialize', {
       method: 'POST',
-      body: JSON.stringify({
+      data: JSON.stringify({
         reference: request.reference,
         email: request.payerEmail,
         amount: request.value.amountMinorUnits.toString(),
@@ -96,10 +100,10 @@ export class PaystackFundingGateway implements FundingAdapter {
   /** Keep credentials on the fixed Paystack origin; transport errors never reveal headers or response bodies. */
   private async call(
     path: string,
-    options: RequestInit,
+    options: Pick<AxiosRequestConfig<string>, 'method' | 'data'>,
   ): Promise<Record<string, unknown>> {
     const result = await requestPartnerJson(
-      this.transport,
+      this.client,
       `https://api.paystack.co${path}`,
       {
         ...options,

@@ -1,7 +1,6 @@
+import type { AxiosInstance, AxiosRequestConfig } from 'axios';
+import { isOutboundResponseTooLarge } from '../../../infrastructure/http/axios-client.js';
 import { FundingError } from '../domain/funding.js';
-
-/** Fetch capability can be replaced by deterministic local transport in adapter tests, without changing production endpoints. */
-export type PartnerFetch = typeof fetch;
 
 /** Parse JSON integer tokens as exact strings, including provider IDs beyond JavaScript's safe-integer range (Node 24). */
 export function parsePartnerJson(text: string): unknown {
@@ -91,28 +90,30 @@ export function partnerCheckoutUrl(
 
 /** Call a fixed partner endpoint once with a bounded deadline, no redirects, and redacted error context. */
 export async function requestPartnerJson(
-  transport: PartnerFetch,
+  client: AxiosInstance,
   url: string,
-  options: RequestInit,
+  options: Pick<AxiosRequestConfig<string>, 'method' | 'data' | 'headers'>,
 ): Promise<Record<string, unknown>> {
   try {
-    const response = await transport(url, {
+    const response = await client.request<string>({
+      url,
       ...options,
       signal: AbortSignal.timeout(8000),
-      redirect: 'error',
     });
-    if (!response.ok) {
+    if (response.status < 200 || response.status >= 300) {
       throw new FundingError('FUNDING_UNAVAILABLE');
     }
-    const text = await response.text();
-    if (text.length > 262144) {
-      throw new FundingError('INVALID_FUNDING');
-    }
-    return partnerObject(parsePartnerJson(text));
+    return partnerObject(parsePartnerJson(response.data));
   } catch (cause) {
     if (cause instanceof FundingError) {
       throw cause;
     }
-    throw new FundingError('FUNDING_UNAVAILABLE', { cause });
+    if (isOutboundResponseTooLarge(cause)) {
+      throw new FundingError('INVALID_FUNDING');
+    }
+    // Axios errors retain signed bodies and credentials in config; never keep them as causes.
+    throw new FundingError('FUNDING_UNAVAILABLE', {
+      cause: new Error('Funding provider HTTP request failed or timed out.'),
+    });
   }
 }
