@@ -14,7 +14,13 @@ import type {
   AuthenticationClock,
   AuthenticationSecrets,
 } from './ports/authentication.ports.js';
-import { PostgresAuthenticationRepository } from './repositories/postgres-authentication.repository.js';
+import { AuthenticationRepositoryImpl } from './repositories/authentication.repository.impl.js';
+import { RedisCacheConnection } from '../../infrastructure/redis/redis-cache-connection.js';
+import { RedisSessionIdentityCache } from './data-sources/redis-session-identity-cache.js';
+import type { SessionIdentityCache } from './repositories/contracts/session-identity-cache.js';
+import { PostgresSessionCacheInvalidationRepository } from './repositories/postgres-session-cache-invalidation.repository.js';
+import type { SessionCacheInvalidationRepository } from './repositories/contracts/session-cache-invalidation.repository.js';
+import { PostgresCodeRedemptionRepository } from './repositories/postgres-code-redemption.repository.js';
 import { NodeAuthenticationSecrets } from './security/node-authentication-secrets.js';
 import { ArgonPasswordHasher } from './security/argon-password-hasher.js';
 import { MailpitAuthenticationCodeDelivery } from './providers/mailpit-authentication-code-delivery.js';
@@ -23,17 +29,65 @@ import { AuthenticationGuard } from './guards/authentication.guard.js';
 import { AuthenticationCodeService } from './services/authentication-code.service.js';
 import { AuthenticationService } from './services/authentication.service.js';
 import { AuthenticationRateLimiter } from './services/authentication-rate-limiter.service.js';
+import { SessionCacheInvalidationConnection } from '../../infrastructure/database/session-cache-invalidation.connection.js';
 
 /** Compose explicit Nest providers; export feature operations and guards, keeping persistence private. */
 @Module({
   imports: [ConfigModule, DatabaseModule],
   controllers: [AuthenticationController, DeviceAuthenticationController],
   providers: [
+    RedisCacheConnection,
+    SessionCacheInvalidationConnection,
+    {
+      provide: AUTHENTICATION.sessionIdentityCache,
+      inject: [RedisCacheConnection, ConfigService],
+      useFactory: (
+        connection: RedisCacheConnection,
+        configuration: ConfigService,
+      ) =>
+        new RedisSessionIdentityCache(
+          connection,
+          configuration.getOrThrow<string>('AUTH_CODE_SECRET'),
+        ),
+    },
+    {
+      provide: AUTHENTICATION.sessionCacheInvalidations,
+      inject: [
+        SessionCacheInvalidationConnection,
+        AUTHENTICATION.sessionIdentityCache,
+      ],
+      useFactory: (
+        connection: SessionCacheInvalidationConnection,
+        cache: SessionIdentityCache,
+      ) =>
+        new PostgresSessionCacheInvalidationRepository(
+          connection.database,
+          cache,
+        ),
+    },
+    {
+      provide: AUTHENTICATION.codeRedemption,
+      inject: [DatabaseConnection, AUTHENTICATION.sessionCacheInvalidations],
+      useFactory: (
+        connection: DatabaseConnection,
+        invalidations: SessionCacheInvalidationRepository,
+      ) =>
+        new PostgresCodeRedemptionRepository(
+          connection.database,
+          invalidations,
+        ),
+    },
     {
       provide: AUTHENTICATION.devices,
-      inject: [DatabaseConnection],
-      useFactory: (connection: DatabaseConnection) =>
-        new PostgresDeviceAuthenticationRepository(connection.database),
+      inject: [DatabaseConnection, AUTHENTICATION.sessionCacheInvalidations],
+      useFactory: (
+        connection: DatabaseConnection,
+        invalidations: SessionCacheInvalidationRepository,
+      ) =>
+        new PostgresDeviceAuthenticationRepository(
+          connection.database,
+          invalidations,
+        ),
     },
     {
       provide: AUTHENTICATION.deviceSignatures,
@@ -42,9 +96,21 @@ import { AuthenticationRateLimiter } from './services/authentication-rate-limite
     DeviceAuthenticationService,
     {
       provide: AUTHENTICATION.repository,
-      inject: [DatabaseConnection],
-      useFactory: (connection: DatabaseConnection) =>
-        new PostgresAuthenticationRepository(connection.database),
+      inject: [
+        DatabaseConnection,
+        AUTHENTICATION.sessionIdentityCache,
+        AUTHENTICATION.sessionCacheInvalidations,
+      ],
+      useFactory: (
+        connection: DatabaseConnection,
+        cache: SessionIdentityCache,
+        invalidations: SessionCacheInvalidationRepository,
+      ) =>
+        new AuthenticationRepositoryImpl(
+          connection.database,
+          cache,
+          invalidations,
+        ),
     },
     { provide: AUTHENTICATION.passwords, useClass: ArgonPasswordHasher },
     {

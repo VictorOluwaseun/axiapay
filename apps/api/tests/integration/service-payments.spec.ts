@@ -1,3 +1,5 @@
+import { WalletSummaryInvalidationConnection } from '../../src/infrastructure/database/wallet-summary-invalidation.connection.js';
+import { SessionCacheInvalidationConnection } from '../../src/infrastructure/database/session-cache-invalidation.connection.js';
 import { VtpassDataAdapter } from '@axiapay/payments-runtime/modules/payments/adapters/vtpass-data.adapter';
 import { VtpassTvSubscriptionAdapter } from '@axiapay/payments-runtime/modules/payments/adapters/vtpass-tv-subscription.adapter';
 import { VtpassElectricityAdapter } from '@axiapay/payments-runtime/modules/payments/adapters/vtpass-electricity.adapter';
@@ -111,6 +113,10 @@ beforeAll(async () => {
     ],
   })
     .overrideProvider(DatabaseConnection)
+    .useValue({ database: database.database })
+    .overrideProvider(SessionCacheInvalidationConnection)
+    .useValue({ database: database.database })
+    .overrideProvider(WalletSummaryInvalidationConnection)
     .useValue({ database: database.database })
     .overrideProvider(AUTHENTICATION.codeDelivery)
     .useValue({

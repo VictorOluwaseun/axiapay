@@ -5,6 +5,7 @@ import type {
 
 /** Authentication defaults are kept together so expiry and attempt policy cannot drift across flows. */
 export const authenticationPolicy = Object.freeze({
+  signupWalletCurrency: 'NGN',
   newPasswordMinCodePoints: 15,
   passwordMaxCodePoints: 128,
   codeLifetimeSeconds: 300,

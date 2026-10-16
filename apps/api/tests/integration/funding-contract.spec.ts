@@ -1,3 +1,5 @@
+import { WalletSummaryInvalidationConnection } from '../../src/infrastructure/database/wallet-summary-invalidation.connection.js';
+import { SessionCacheInvalidationConnection } from '../../src/infrastructure/database/session-cache-invalidation.connection.js';
 /** Exercise AxiaPay funding contracts against real PostgreSQL, with no external provider modules or protocols. */
 import { randomUUID } from 'node:crypto';
 import { Test } from '@nestjs/testing';
@@ -111,6 +113,10 @@ async function coreApplication(
     ],
   })
     .overrideProvider(DatabaseConnection)
+    .useValue({ database: database.database })
+    .overrideProvider(SessionCacheInvalidationConnection)
+    .useValue({ database: database.database })
+    .overrideProvider(WalletSummaryInvalidationConnection)
     .useValue({ database: database.database })
     .compile();
   const app = module.createNestApplication<NestFastifyApplication>(

@@ -16,7 +16,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { IsString, IsUUID, Matches } from 'class-validator';
+import { IsUUID, Matches } from 'class-validator';
 import { AuthenticatedAccount } from '../../authentication/decorators/authenticated-account.decorator.js';
 import type { AccountIdentity } from '../../authentication/domain/authentication-models.js';
 import { AuthenticationGuard } from '../../authentication/guards/authentication.guard.js';
@@ -30,7 +30,6 @@ export class PaymentDocumentParamsDto {
   @IsUUID()
   readonly paymentId!: string;
   @ApiProperty({ maxLength: 50 })
-  @IsString()
   @Matches(/^[a-z0-9][a-z0-9-]{0,49}(?![\s\S])/)
   readonly documentId!: string;
 }

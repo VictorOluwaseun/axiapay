@@ -7,30 +7,36 @@ import type {
   DeviceCredential,
 } from '../domain/device-authentication.js';
 import { deviceAuthenticationPolicy } from '../domain/device-authentication.js';
-import { PostgresAuthenticationRepository } from './postgres-authentication.repository.js';
+import { AuthenticationRepositoryImpl } from './authentication.repository.impl.js';
+import type { SessionCacheInvalidationRepository } from './contracts/session-cache-invalidation.repository.js';
 
 /** Persist device credentials and challenges directly in PostgreSQL; borrow the pool and never cache authentication authority. */
 export class PostgresDeviceAuthenticationRepository implements DeviceAuthenticationRepository {
   /** Accept a managed connection; lifecycle remains with DatabaseModule. */
-  constructor(private readonly database: Kysely<AuthenticationDatabase>) {}
+  constructor(
+    private readonly database: Kysely<AuthenticationDatabase>,
+    private readonly invalidations?: SessionCacheInvalidationRepository,
+  ) {}
   /** Reuse outer transactions and bind session writes to the same connection as device changes. */
-  transaction<T>(
+  async transaction<T>(
     work: (
       devices: DeviceAuthenticationRepository,
       authentication: AuthenticationRepository,
     ) => Promise<T>,
   ): Promise<T> {
     if (this.database.isTransaction) {
-      return work(this, new PostgresAuthenticationRepository(this.database));
+      return work(this, new AuthenticationRepositoryImpl(this.database));
     }
-    return this.database
+    const result = await this.database
       .transaction()
       .execute((transaction) =>
         work(
           new PostgresDeviceAuthenticationRepository(transaction),
-          new PostgresAuthenticationRepository(transaction),
+          new AuthenticationRepositoryImpl(transaction),
         ),
       );
+    await this.invalidations?.flush();
+    return result;
   }
   /** Store server-owned purpose and exact signable bytes; pending enrollment does not create a usable credential. */
   async storeChallenge(challenge: DeviceChallenge): Promise<void> {

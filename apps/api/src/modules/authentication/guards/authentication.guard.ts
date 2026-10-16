@@ -10,7 +10,7 @@ import {
   type AuthenticationHttpRequest,
 } from '../types/authentication-http.js';
 
-/** Resolve current session state before protected handlers execute; business permissions remain in the relevant service operations. */
+/** Require current PostgreSQL identity for protected mutations; read-only requests may use Redis. Business permissions remain in services. */
 @Injectable()
 export class AuthenticationGuard implements CanActivate {
   /** Inject the application query rather than accessing a repository or token library. */
@@ -18,14 +18,20 @@ export class AuthenticationGuard implements CanActivate {
     @Inject(AuthenticationService)
     private readonly authentication: AuthenticationService,
   ) {}
-  /** Attach the verified caller identity for the lifetime of this request only. */
+  /** Attach the verified caller identity and its Bearer token for the lifetime of this request only. */
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context
       .switchToHttp()
       .getRequest<AuthenticationHttpRequest>();
-    request.account = await this.authentication.authenticate(
-      readBearerToken(request.headers.authorization),
+    const token = readBearerToken(request.headers.authorization);
+    const requireCurrentState = !['GET', 'HEAD', 'OPTIONS'].includes(
+      request.method,
     );
+    request.account = await this.authentication.authenticate(
+      token,
+      requireCurrentState,
+    );
+    request.bearerToken = token;
     return true;
   }
 }

@@ -1,3 +1,4 @@
+import { SessionCacheInvalidationConnection } from '../../src/infrastructure/database/session-cache-invalidation.connection.js';
 import { asyncSignal } from '../../../../packages/payments-runtime/tests/support/async-signal.js';
 import { BadRequestException } from '@nestjs/common';
 import { withValidatedInput } from '@axiapay/payments-runtime/shared/validation/input-validation';
@@ -34,7 +35,7 @@ import type { AuthenticationCodeDelivery } from '../../src/modules/authenticatio
 import type { AuthenticationDatabase } from '../../src/modules/authentication/repositories/authentication-database.js';
 import type { AuthenticationResult } from '../../src/modules/authentication/services/authentication-session.js';
 import type { Contact } from '../../src/modules/authentication/domain/authentication-models.js';
-import { PostgresAuthenticationRepository } from '../../src/modules/authentication/repositories/postgres-authentication.repository.js';
+import { AuthenticationRepositoryImpl } from '../../src/modules/authentication/repositories/authentication.repository.impl.js';
 import { PostgresDeviceAuthenticationRepository } from '../../src/modules/authentication/repositories/postgres-device-authentication.repository.js';
 import { DeviceAuthenticationService } from '../../src/modules/authentication/services/device-authentication.service.js';
 
@@ -67,7 +68,7 @@ beforeAll(async () => {
   const migrator = new Migrator({
     db: database,
     provider: {
-      /** Device authentication depends only on the identity schema, independent of wallet migrations. */
+      /** Device fixtures use real signup, including its atomic wallet provisioning. */
       async getMigrations() {
         return {
           authentication: await import(
@@ -88,6 +89,24 @@ beforeAll(async () => {
               import.meta.url,
             ).href
           ),
+          sessionInvalidations: await import(
+            new URL(
+              '../../migrations/202610160014-auth-session-cache-invalidation.js',
+              import.meta.url,
+            ).href
+          ),
+          sessionCache: await import(
+            new URL(
+              '../../migrations/202610160013-authentication-session-cache.js',
+              import.meta.url,
+            ).href
+          ),
+          walletLedger: await import(
+            new URL(
+              '../../migrations/202610130001-wallet-ledger.js',
+              import.meta.url,
+            ).href
+          ),
         };
       },
     },
@@ -100,6 +119,8 @@ beforeAll(async () => {
     imports: [RequestValidationModule, AuthenticationModule],
   })
     .overrideProvider(DatabaseConnection)
+    .useValue({ database })
+    .overrideProvider(SessionCacheInvalidationConnection)
     .useValue({ database })
     .overrideProvider(AUTHENTICATION.codeDelivery)
     .useValue(delivery)
@@ -506,7 +527,7 @@ describe('device authentication', () => {
     const device = await enroll(session.accessToken);
     const challenge = await loginChallenge(device.credentialId);
     vi.spyOn(
-      PostgresAuthenticationRepository.prototype,
+      AuthenticationRepositoryImpl.prototype,
       'createSession',
     ).mockRejectedValueOnce(new Error('simulated storage failure'));
     expect(
@@ -964,12 +985,12 @@ describe('device access after password recovery', () => {
     const owner = await signup(email, true);
     const device = await enroll(owner.accessToken);
     const reset = await passwordResetProof();
-    const original = PostgresAuthenticationRepository.prototype.replacePassword;
+    const original = AuthenticationRepositoryImpl.prototype.replacePassword;
     vi.spyOn(
-      PostgresAuthenticationRepository.prototype,
+      AuthenticationRepositoryImpl.prototype,
       'replacePassword',
     ).mockImplementationOnce(async function (
-      this: PostgresAuthenticationRepository,
+      this: AuthenticationRepositoryImpl,
       account,
       hash,
       now,

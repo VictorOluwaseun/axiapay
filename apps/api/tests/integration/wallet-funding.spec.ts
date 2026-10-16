@@ -1,3 +1,5 @@
+import { WalletSummaryInvalidationConnection } from '../../src/infrastructure/database/wallet-summary-invalidation.connection.js';
+import { SessionCacheInvalidationConnection } from '../../src/infrastructure/database/session-cache-invalidation.connection.js';
 import type { AxiosAdapter, AxiosHeaders, AxiosResponse } from 'axios';
 import { axiosTextResponse } from '../../../../packages/payments-runtime/tests/support/axios-response-fixture.js';
 /** Exercise real partner adapters, signed HTTP callbacks, session guards, and restricted PostgreSQL posting without live payments. */
@@ -207,6 +209,10 @@ beforeAll(async () => {
     .execute();
   const module = await Test.createTestingModule({ imports: [ApiModule] })
     .overrideProvider(DatabaseConnection)
+    .useValue({ database: database.database })
+    .overrideProvider(SessionCacheInvalidationConnection)
+    .useValue({ database: database.database })
+    .overrideProvider(WalletSummaryInvalidationConnection)
     .useValue({ database: database.database })
     .overrideProvider(PROVIDER_FUNDING.clients)
     .useValue({

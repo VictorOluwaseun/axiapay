@@ -22,6 +22,8 @@ import type {
   AuthenticationAttemptLimiter,
 } from '../ports/authentication.ports.js';
 import type { AuthenticationRepository } from '../repositories/contracts/authentication.repository.js';
+import type { CodeRedemptionRepository } from '../repositories/contracts/code-redemption.repository.js';
+import type { WalletRepository } from '@axiapay/payments-runtime/modules/wallets/repositories/contracts/wallet.repository';
 import { AuthenticationRateLimiter } from './authentication-rate-limiter.service.js';
 import {
   issueSession,
@@ -36,13 +38,15 @@ interface CodeVerification {
   readonly clientIp: string;
 }
 
-/** Own code issuance, bounded single-use redemption, account activation, and atomic credential recovery. */
+/** Own code issuance, bounded redemption, atomic account/wallet activation, and credential recovery. */
 @Injectable()
 export class AuthenticationCodeService {
   /** Inject persistence and capability ports; storage and messaging clients stay behind their implementations. */
   constructor(
     @Inject(AUTHENTICATION.repository)
     private readonly repository: AuthenticationRepository,
+    @Inject(AUTHENTICATION.codeRedemption)
+    private readonly redemption: CodeRedemptionRepository,
     @Inject(AUTHENTICATION.codeDelivery)
     private readonly delivery: AuthenticationCodeDelivery,
     @Inject(AUTHENTICATION.secrets)
@@ -118,15 +122,21 @@ export class AuthenticationCodeService {
       resendAfterSeconds: authenticationPolicy.resendAfterSeconds,
     };
   }
-  /** Redeem signup/login only; reset-purpose codes never create a session through this operation. */
+  /** Activate signup with an empty NGN wallet before issuing its session; login never provisions wallets. */
   verify(
     input: CodeVerification & { purpose: 'signup' | 'login' },
   ): Promise<AuthenticationResult> {
-    return this.redeem(input, async (repository, challenge) => {
+    return this.redeem(input, async (repository, challenge, wallets) => {
       const now = this.clock.now();
       const account = await this.resolveAccount(repository, challenge, now);
       if (!account || account.disabledAt !== null) {
         return null;
+      }
+      if (challenge.purpose === 'signup') {
+        await wallets.createWallet(
+          account.id,
+          authenticationPolicy.signupWalletCurrency,
+        );
       }
       return issueSession(repository, this.secrets, account, now);
     });
@@ -163,29 +173,36 @@ export class AuthenticationCodeService {
     operation: (
       repository: AuthenticationRepository,
       challenge: CodeChallenge,
+      wallets: Pick<WalletRepository, 'createWallet'>,
     ) => Promise<Result | null>,
   ): Promise<Result> {
     await this.limiter.codeVerification(input.clientIp);
-    const result = await this.repository.transaction(async (repository) => {
-      const challenge = await repository.lockChallenge(input.challengeId);
-      if (
-        !challenge ||
-        !canRedeemChallenge(challenge, input.purpose, this.clock.now())
-      ) {
-        return null;
-      }
-      if (
-        !this.secrets.matches(
-          challenge.codeDigest,
-          this.secrets.codeDigest(challenge.id, input.code),
-        )
-      ) {
-        await repository.recordWrongCode(challenge.id);
-        return null;
-      }
-      await repository.changeChallengeStatus(challenge.id, 'ready', 'consumed');
-      return operation(repository, challenge);
-    });
+    const result = await this.redemption.transaction(
+      async (repository, wallets) => {
+        const challenge = await repository.lockChallenge(input.challengeId);
+        if (
+          !challenge ||
+          !canRedeemChallenge(challenge, input.purpose, this.clock.now())
+        ) {
+          return null;
+        }
+        if (
+          !this.secrets.matches(
+            challenge.codeDigest,
+            this.secrets.codeDigest(challenge.id, input.code),
+          )
+        ) {
+          await repository.recordWrongCode(challenge.id);
+          return null;
+        }
+        await repository.changeChallengeStatus(
+          challenge.id,
+          'ready',
+          'consumed',
+        );
+        return operation(repository, challenge, wallets);
+      },
+    );
     if (result === null) {
       throw invalidCredentials();
     }

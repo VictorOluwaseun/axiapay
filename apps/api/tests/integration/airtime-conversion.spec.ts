@@ -1,3 +1,5 @@
+import { WalletSummaryInvalidationConnection } from '../../src/infrastructure/database/wallet-summary-invalidation.connection.js';
+import { SessionCacheInvalidationConnection } from '../../src/infrastructure/database/session-cache-invalidation.connection.js';
 /** Exercise authenticated conversion contracts, immutable SQL evidence, exact ledger credit and failure recovery in disposable PostgreSQL. */
 import { randomUUID } from 'node:crypto';
 import { Test } from '@nestjs/testing';
@@ -183,6 +185,10 @@ async function createConversionApplication(
     ],
   })
     .overrideProvider(DatabaseConnection)
+    .useValue({ database: storage.database })
+    .overrideProvider(SessionCacheInvalidationConnection)
+    .useValue({ database: storage.database })
+    .overrideProvider(WalletSummaryInvalidationConnection)
     .useValue({ database: storage.database })
     .compile();
   const app = module.createNestApplication<NestFastifyApplication>(

@@ -5,9 +5,9 @@ import {
   Get,
   HttpCode,
   Inject,
+  Ip,
   Param,
   Post,
-  Req,
   UseFilters,
   UseGuards,
   UseInterceptors,
@@ -22,10 +22,7 @@ import { DeviceAuthenticationService } from '../services/device-authentication.s
 import { AuthenticationGuard } from '../guards/authentication.guard.js';
 import { AuthenticationExceptionFilter } from '../filters/authentication-exception.filter.js';
 import { AuthenticationCacheInterceptor } from '../interceptors/authentication-cache.interceptor.js';
-import {
-  readBearerToken,
-  type AuthenticationHttpRequest,
-} from '../types/authentication-http.js';
+import { BearerToken } from '../decorators/bearer-token.decorator.js';
 import {
   EnrollDeviceDto,
   DeviceIdentifierDto,
@@ -78,12 +75,13 @@ export class DeviceAuthenticationController {
   @ApiResponse({ status: 200, type: DeviceChallengeResponseDto })
   enroll(
     @Body() body: EnrollDeviceDto,
-    @Req() request: AuthenticationHttpRequest,
+    @BearerToken() token: string,
+    @Ip() clientIp: string,
   ) {
-    return this.devices.requestEnrollment(
-      readBearerToken(request.headers.authorization),
-      { ...body, clientIp: request.ip },
-    );
+    return this.devices.requestEnrollment(token, {
+      ...body,
+      clientIp,
+    });
   }
   /** Activate a key only after its signature and initiating primary session are both verified. */
   @Post('devices/enrollment/verify')
@@ -94,34 +92,29 @@ export class DeviceAuthenticationController {
   @ApiResponse({ status: 201, type: DeviceResponseDto })
   verifyEnrollment(
     @Body() body: DeviceProofDto,
-    @Req() request: AuthenticationHttpRequest,
+    @BearerToken() token: string,
+    @Ip() clientIp: string,
   ) {
-    return this.devices.verifyEnrollment(
-      readBearerToken(request.headers.authorization),
-      { ...body, clientIp: request.ip },
-    );
+    return this.devices.verifyEnrollment(token, {
+      ...body,
+      clientIp,
+    });
   }
   /** Issue an opaque login challenge without exposing device-registration status. */
   @Post('login/device/challenge')
   @HttpCode(200)
   @ApiOperation({ summary: 'Request a device login challenge' })
   @ApiResponse({ status: 200, type: DeviceChallengeResponseDto })
-  challenge(
-    @Body() body: DeviceIdentifierDto,
-    @Req() request: AuthenticationHttpRequest,
-  ) {
-    return this.devices.requestLogin({ ...body, clientIp: request.ip });
+  challenge(@Body() body: DeviceIdentifierDto, @Ip() clientIp: string) {
+    return this.devices.requestLogin({ ...body, clientIp });
   }
   /** Exchange one valid device signature for the existing opaque bearer-session response. */
   @Post('login/device/verify')
   @HttpCode(200)
   @ApiOperation({ summary: 'Verify device proof and issue a session' })
   @ApiResponse({ status: 200, type: AuthenticationResponseDto })
-  login(
-    @Body() body: DeviceProofDto,
-    @Req() request: AuthenticationHttpRequest,
-  ) {
-    return this.devices.verifyLogin({ ...body, clientIp: request.ip });
+  login(@Body() body: DeviceProofDto, @Ip() clientIp: string) {
+    return this.devices.verifyLogin({ ...body, clientIp });
   }
   /** List active device credentials belonging to the authenticated account. */
   @Get('devices')
@@ -129,8 +122,8 @@ export class DeviceAuthenticationController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'List registered devices' })
   @ApiResponse({ status: 200, type: DeviceResponseDto, isArray: true })
-  list(@Req() request: AuthenticationHttpRequest) {
-    return this.devices.list(readBearerToken(request.headers.authorization));
+  list(@BearerToken() token: string) {
+    return this.devices.list(token);
   }
   /** Revoke an owned credential and its device-issued sessions; ownership is rechecked by the service. */
   @Delete('devices/:credentialId')
@@ -144,11 +137,8 @@ export class DeviceAuthenticationController {
   })
   revoke(
     @Param() parameters: DeviceIdentifierDto,
-    @Req() request: AuthenticationHttpRequest,
+    @BearerToken() token: string,
   ) {
-    return this.devices.revoke(
-      readBearerToken(request.headers.authorization),
-      parameters.credentialId,
-    );
+    return this.devices.revoke(token, parameters.credentialId);
   }
 }

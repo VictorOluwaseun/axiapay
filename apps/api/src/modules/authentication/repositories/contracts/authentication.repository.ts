@@ -4,9 +4,10 @@ import type {
   AuthenticationSession,
   CodeChallenge,
   Contact,
+  AccountIdentity,
 } from '../../domain/authentication-models.js';
 
-/** Own authoritative authentication data access. Reads bypass cache; transaction callbacks share one connection. */
+/** Own authoritative authentication data; identity hits use Redis, and committed changes invalidate through a durable outbox. Transaction callbacks share one connection. */
 export interface AuthenticationRepository {
   /** Resolve device ownership to the current account; disabled state remains authoritative in the service and session insert. */
   findAccountById(id: string): Promise<AuthenticationAccount | null>;
@@ -50,11 +51,12 @@ export interface AuthenticationRepository {
     session: AuthenticationSession,
     credentialVersion: number,
   ): Promise<boolean>;
-  /** Resolve a live, unrevoked token only when its account is still active. */
+  /** Resolve a signed cached identity, or require current PostgreSQL state for protected writes. Transaction-local reads always bypass cache. */
   findSessionIdentity(
     tokenDigest: string,
     now: Date,
-  ): Promise<AuthenticationAccount | null>;
+    requireCurrentState?: boolean,
+  ): Promise<AccountIdentity | null>;
   /** Revoke a token idempotently; unknown and expired tokens disclose no extra information. */
   revokeSession(tokenDigest: string, now: Date): Promise<void>;
   /** Atomically consume a fixed-window allowance across API processes; return seconds until retry when exhausted. */

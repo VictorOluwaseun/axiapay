@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   Inject,
+  Ip,
   Post,
   Req,
   UseFilters,
@@ -21,10 +22,8 @@ import { AuthenticationService } from '../services/authentication.service.js';
 import { AuthenticationGuard } from '../guards/authentication.guard.js';
 import { AuthenticationCacheInterceptor } from '../interceptors/authentication-cache.interceptor.js';
 import { AuthenticationExceptionFilter } from '../filters/authentication-exception.filter.js';
-import {
-  readBearerToken,
-  type AuthenticationHttpRequest,
-} from '../types/authentication-http.js';
+import type { AuthenticationHttpRequest } from '../types/authentication-http.js';
+import { BearerToken } from '../decorators/bearer-token.decorator.js';
 import {
   SignupDto,
   VerifyCodeDto,
@@ -70,21 +69,18 @@ export class AuthenticationController {
   @ApiOperation({ summary: 'Request a signup verification code' })
   @ApiBody({ type: SignupDto })
   @ApiResponse({ status: 202, type: CodeChallengeResponseDto })
-  signup(@Body() body: SignupDto, @Req() request: AuthenticationHttpRequest) {
-    return this.authentication.signup({ ...body, clientIp: request.ip });
+  signup(@Body() body: SignupDto, @Ip() clientIp: string) {
+    return this.authentication.signup({ ...body, clientIp });
   }
 
-  /** Activate a verified contact and issue a session exactly once. */
+  /** Activate the verified contact with an empty NGN wallet and issue a session exactly once. */
   @Post('signup/verify')
   @HttpCode(201)
   @ApiOperation({ summary: 'Verify signup and create the account' })
   @ApiBody({ type: VerifyCodeDto })
   @ApiResponse({ status: 201, type: AuthenticationResponseDto })
-  verifySignup(
-    @Body() body: VerifyCodeDto,
-    @Req() request: AuthenticationHttpRequest,
-  ) {
-    return this.authentication.verifySignup({ ...body, clientIp: request.ip });
+  verifySignup(@Body() body: VerifyCodeDto, @Ip() clientIp: string) {
+    return this.authentication.verifySignup({ ...body, clientIp });
   }
 
   /** Sign in with a verified contact and its existing password. */
@@ -93,13 +89,10 @@ export class AuthenticationController {
   @ApiOperation({ summary: 'Log in with a phone number or email and password' })
   @ApiBody({ type: PasswordLoginDto })
   @ApiResponse({ status: 200, type: AuthenticationResponseDto })
-  loginWithPassword(
-    @Body() body: PasswordLoginDto,
-    @Req() request: AuthenticationHttpRequest,
-  ) {
+  loginWithPassword(@Body() body: PasswordLoginDto, @Ip() clientIp: string) {
     return this.authentication.loginWithPassword({
       ...body,
-      clientIp: request.ip,
+      clientIp,
     });
   }
 
@@ -109,13 +102,10 @@ export class AuthenticationController {
   @ApiOperation({ summary: 'Request a passwordless login code' })
   @ApiBody({ type: RequestLoginCodeDto })
   @ApiResponse({ status: 202, type: CodeChallengeResponseDto })
-  requestLoginCode(
-    @Body() body: RequestLoginCodeDto,
-    @Req() request: AuthenticationHttpRequest,
-  ) {
+  requestLoginCode(@Body() body: RequestLoginCodeDto, @Ip() clientIp: string) {
     return this.authentication.requestLoginCode({
       ...body,
-      clientIp: request.ip,
+      clientIp,
     });
   }
 
@@ -125,11 +115,8 @@ export class AuthenticationController {
   @ApiOperation({ summary: 'Verify a login code and create a session' })
   @ApiBody({ type: VerifyCodeDto })
   @ApiResponse({ status: 200, type: AuthenticationResponseDto })
-  loginWithCode(
-    @Body() body: VerifyCodeDto,
-    @Req() request: AuthenticationHttpRequest,
-  ) {
-    return this.authentication.loginWithCode({ ...body, clientIp: request.ip });
+  loginWithCode(@Body() body: VerifyCodeDto, @Ip() clientIp: string) {
+    return this.authentication.loginWithCode({ ...body, clientIp });
   }
 
   /** Request a recovery code with the same response for registered, disabled, and unknown contacts. */
@@ -140,11 +127,11 @@ export class AuthenticationController {
   @ApiResponse({ status: 202, type: CodeChallengeResponseDto })
   requestPasswordReset(
     @Body() body: RequestPasswordResetDto,
-    @Req() request: AuthenticationHttpRequest,
+    @Ip() clientIp: string,
   ) {
     return this.authentication.requestPasswordReset({
       ...body,
-      clientIp: request.ip,
+      clientIp,
     });
   }
 
@@ -160,9 +147,9 @@ export class AuthenticationController {
   })
   async resetPassword(
     @Body() body: ResetPasswordDto,
-    @Req() request: AuthenticationHttpRequest,
+    @Ip() clientIp: string,
   ): Promise<void> {
-    await this.authentication.resetPassword({ ...body, clientIp: request.ip });
+    await this.authentication.resetPassword({ ...body, clientIp });
   }
 
   /** Return only the identity established by the authentication guard. */
@@ -184,9 +171,7 @@ export class AuthenticationController {
     status: 204,
     description: 'Session revoked or already inactive.',
   })
-  async logout(@Req() request: AuthenticationHttpRequest): Promise<void> {
-    await this.authentication.logout(
-      readBearerToken(request.headers.authorization),
-    );
+  async logout(@BearerToken() token: string): Promise<void> {
+    await this.authentication.logout(token);
   }
 }

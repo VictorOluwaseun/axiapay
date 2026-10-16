@@ -5,18 +5,26 @@ import type {
   AuthenticationSession,
   CodeChallenge,
   Contact,
+  AccountIdentity,
 } from '../domain/authentication-models.js';
 import type { AuthenticationRepository } from './contracts/authentication.repository.js';
 import type { AuthenticationDatabase } from './authentication-database.js';
+import type { SessionIdentityCache } from './contracts/session-identity-cache.js';
+import type { SessionCacheInvalidationRepository } from './contracts/session-cache-invalidation.repository.js';
 
 /**
- * Implement {@link AuthenticationRepository} directly with PostgreSQL queries and domain mapping.
- * Reads bypass cache so revocation and attempts take effect immediately. Transaction callbacks
- * share one connection; services retain credential and authorization decisions.
+ * Implement {@link AuthenticationRepository} with authoritative PostgreSQL persistence and Redis cache coordination.
+ * Identity cache hits use Redis only; committed mutations invalidate through a durable outbox.
+ * Credentials, attempts and transaction reads bypass cache. Transaction callbacks share one
+ * connection; services retain credential and authorization decisions.
  */
-export class PostgresAuthenticationRepository implements AuthenticationRepository {
+export class AuthenticationRepositoryImpl implements AuthenticationRepository {
   /** Borrow the lifecycle-managed pool or a transaction connection; this repository never closes either. */
-  constructor(private readonly database: Kysely<AuthenticationDatabase>) {}
+  constructor(
+    private readonly database: Kysely<AuthenticationDatabase>,
+    private readonly sessionCache?: SessionIdentityCache,
+    private readonly invalidations?: SessionCacheInvalidationRepository,
+  ) {}
   /** Expose the atomic boundary through the contract without leaking SQL clients to workflows. */
   transaction<T>(
     work: (repository: AuthenticationRepository) => Promise<T>,
@@ -26,16 +34,18 @@ export class PostgresAuthenticationRepository implements AuthenticationRepositor
 
   /** Bind repository queries to one connection and reuse an outer transaction without committing it early. */
   private async withTransaction<T>(
-    work: (repository: PostgresAuthenticationRepository) => Promise<T>,
+    work: (repository: AuthenticationRepositoryImpl) => Promise<T>,
   ): Promise<T> {
     if (this.database.isTransaction) {
       return work(this);
     }
-    return this.database
+    const result = await this.database
       .transaction()
       .execute((transaction) =>
-        work(new PostgresAuthenticationRepository(transaction)),
+        work(new AuthenticationRepositoryImpl(transaction)),
       );
+    await this.invalidations?.flush();
+    return result;
   }
   /** Find canonical contact credentials without using Redis or transport DTOs. */
   async findAccount(contact: Contact): Promise<AuthenticationAccount | null> {
@@ -270,11 +280,37 @@ export class PostgresAuthenticationRepository implements AuthenticationRepositor
       );
     return result.rows.length === 1;
   }
-  /** Join current account state on every authentication; expiry and revocation are never cached. */
+  /** Require PostgreSQL for current-state authorization; eligible cached reads use generation-fenced fills and SQL-free hits. */
   async findSessionIdentity(
     tokenDigest: string,
     now: Date,
-  ): Promise<AuthenticationAccount | null> {
+    requireCurrentState = false,
+  ): Promise<AccountIdentity | null> {
+    if (
+      requireCurrentState ||
+      this.database.isTransaction ||
+      !this.sessionCache
+    ) {
+      return (
+        (await this.readSessionIdentity(tokenDigest, now))?.identity ?? null
+      );
+    }
+    const cached = await this.sessionCache.read(tokenDigest, now);
+    if (cached?.snapshot) {
+      return cached.snapshot.identity;
+    }
+    const snapshot = await this.readSessionIdentity(tokenDigest, now);
+    if (!snapshot) {
+      return null;
+    }
+    if (cached) {
+      await this.sessionCache.write(tokenDigest, snapshot, now, cached.ticket);
+    }
+    return snapshot.identity;
+  }
+
+  /** Load only public identity and session expiry on a miss, keeping credential columns out of Redis. */
+  private async readSessionIdentity(tokenDigest: string, now: Date) {
     const row = await this.database
       .selectFrom('auth_sessions')
       .innerJoin(
@@ -282,13 +318,32 @@ export class PostgresAuthenticationRepository implements AuthenticationRepositor
         'auth_accounts.id',
         'auth_sessions.account_id',
       )
-      .selectAll('auth_accounts')
+      .select([
+        'auth_accounts.id',
+        'auth_accounts.contact_kind',
+        'auth_accounts.contact_value',
+        'auth_accounts.verified_at',
+        'auth_sessions.expires_at',
+      ])
       .where('token_digest', '=', tokenDigest)
       .where('expires_at', '>', now)
       .where('revoked_at', 'is', null)
       .where('disabled_at', 'is', null)
       .executeTakeFirst();
-    return row ? mapAccount(row) : null;
+    if (!row) {
+      return null;
+    }
+    return {
+      identity: {
+        id: row.id,
+        contact: {
+          kind: readContactKind(row.contact_kind),
+          value: row.contact_value,
+        },
+        verifiedAt: row.verified_at.toISOString(),
+      },
+      expiresAtMs: row.expires_at.getTime(),
+    };
   }
   /** Revoke one digest without making account existence observable to the caller. */
   async revokeSession(tokenDigest: string, now: Date): Promise<void> {
@@ -298,6 +353,9 @@ export class PostgresAuthenticationRepository implements AuthenticationRepositor
       .where('token_digest', '=', tokenDigest)
       .where('revoked_at', 'is', null)
       .execute();
+    if (!this.database.isTransaction) {
+      await this.invalidations?.flush();
+    }
   }
   /** Atomically increment a shared fixed-window counter, resetting only after its existing window expires. */
   async takeRateLimit(

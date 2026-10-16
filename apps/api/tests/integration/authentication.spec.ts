@@ -1,3 +1,4 @@
+import { SessionCacheInvalidationConnection } from '../../src/infrastructure/database/session-cache-invalidation.connection.js';
 import { asyncSignal } from '../../../../packages/payments-runtime/tests/support/async-signal.js';
 /** Exercise public authentication flows and concurrency against an isolated PostgreSQL database. */
 import {
@@ -22,15 +23,18 @@ import {
 } from '@testcontainers/postgresql';
 import { sql, type Kysely } from 'kysely';
 import { Migrator } from 'kysely/migration';
-import { createDatabase } from '@axiapay/payments-runtime/infrastructure/database/create-database';
+import {
+  createDatabase,
+  type DatabaseSchema,
+} from '@axiapay/payments-runtime/infrastructure/database/create-database';
+import { WalletDataSource } from '@axiapay/payments-runtime/modules/wallets/data-sources/wallet.data-source';
 import { NodeAuthenticationSecrets } from '../../src/modules/authentication/security/node-authentication-secrets.js';
 import { AuthenticationModule } from '../../src/modules/authentication/authentication.module.js';
 import { DatabaseConnection } from '@axiapay/payments-runtime/infrastructure/database/database.module';
 import { RequestValidationModule } from '../../src/bootstrap/request-validation.module.js';
 import { AUTHENTICATION } from '../../src/modules/authentication/authentication.tokens.js';
-import { PostgresAuthenticationRepository } from '../../src/modules/authentication/repositories/postgres-authentication.repository.js';
+import { AuthenticationRepositoryImpl } from '../../src/modules/authentication/repositories/authentication.repository.impl.js';
 import type { AuthenticationCodeDelivery } from '../../src/modules/authentication/ports/authentication.ports.js';
-import type { AuthenticationDatabase } from '../../src/modules/authentication/repositories/authentication-database.js';
 import type { AuthenticationResult } from '../../src/modules/authentication/services/authentication-session.js';
 import type { Contact } from '../../src/modules/authentication/domain/authentication-models.js';
 
@@ -58,9 +62,12 @@ class CapturedCodeDelivery implements AuthenticationCodeDelivery {
 }
 
 let container: StartedPostgreSqlContainer;
-let database: Kysely<AuthenticationDatabase>;
+let database: Kysely<DatabaseSchema>;
 let application: NestFastifyApplication;
 let currentTime = new Date();
+let initialWalletCount = 0;
+let initialLedgerAccountCount = 0;
+let initialLedgerBalanceCount = 0;
 const clock = {
   /** Expose test time without changing global timers or database clocks. */ now: () =>
     new Date(currentTime),
@@ -72,9 +79,7 @@ const password = 'a longer private passphrase';
 
 beforeAll(async () => {
   container = await new PostgreSqlContainer('postgres:18-alpine').start();
-  database = createDatabase(
-    container.getConnectionUri(),
-  ).withTables<AuthenticationDatabase>();
+  database = createDatabase(container.getConnectionUri());
   const migrationPath = new URL(
     '../../migrations/202610130000-authentication.js',
     import.meta.url,
@@ -82,9 +87,27 @@ beforeAll(async () => {
   const migrator = new Migrator({
     db: database,
     provider: {
-      /** Load only this feature's migration so unrelated work is not required. */ getMigrations:
+      /** Include the ledger because verified signup provisions its wallet in the identity transaction. */ getMigrations:
         async () => ({
           authentication: await import(migrationPath),
+          sessionInvalidations: await import(
+            new URL(
+              '../../migrations/202610160014-auth-session-cache-invalidation.js',
+              import.meta.url,
+            ).href
+          ),
+          sessionCache: await import(
+            new URL(
+              '../../migrations/202610160013-authentication-session-cache.js',
+              import.meta.url,
+            ).href
+          ),
+          walletLedger: await import(
+            new URL(
+              '../../migrations/202610130001-wallet-ledger.js',
+              import.meta.url,
+            ).href
+          ),
           deviceAuthentication: await import(
             new URL(
               '../../migrations/202610130003-device-authentication.js',
@@ -109,6 +132,8 @@ beforeAll(async () => {
   })
     .overrideProvider(DatabaseConnection)
     .useValue({ database })
+    .overrideProvider(SessionCacheInvalidationConnection)
+    .useValue({ database })
     .overrideProvider(AUTHENTICATION.codeDelivery)
     .useValue(delivery)
     .overrideProvider(AUTHENTICATION.clock)
@@ -127,6 +152,16 @@ beforeEach(async () => {
   await sql`truncate auth_sessions, auth_accounts, auth_challenges, auth_rate_limits cascade`.execute(
     database,
   );
+  // Keep immutable ledger history; compare provisioning against this test's starting snapshot.
+  initialWalletCount = (
+    await database.selectFrom('wallets').select('id').execute()
+  ).length;
+  initialLedgerAccountCount = (
+    await database.selectFrom('ledger_accounts').select('id').execute()
+  ).length;
+  initialLedgerBalanceCount = (
+    await database.selectFrom('ledger_balances').select('account_id').execute()
+  ).length;
   currentTime = new Date('2030-01-01T00:00:00Z');
   delivery.messages = [];
   delivery.fail = false;
@@ -177,6 +212,60 @@ function me(token: string) {
 }
 
 describe('authentication HTTP and persistence', () => {
+  it.each([
+    { contact: email, method: 'password', selectedPassword: password },
+    { contact: phone, method: 'password', selectedPassword: password },
+    { contact: email, method: 'code', selectedPassword: undefined },
+    { contact: phone, method: 'code', selectedPassword: undefined },
+  ])(
+    'activates $contact.kind signup using $method with one empty NGN wallet',
+    async ({ contact, selectedPassword }) => {
+      const session = await signup(contact, selectedPassword);
+      const wallets = await database
+        .selectFrom('wallets')
+        .selectAll()
+        .where('owner_id', '=', session.account.id)
+        .execute();
+      expect(wallets).toHaveLength(1);
+      expect(wallets[0]).toMatchObject({
+        owner_id: session.account.id,
+        currency: 'NGN',
+        wallet_status: 'active',
+      });
+      const wallet = await new WalletDataSource(database).readWallet(
+        wallets[0]!.id,
+      );
+      expect(wallet).toMatchObject({
+        available_debits: '0',
+        available_credits: '0',
+        reserved_debits: '0',
+        reserved_credits: '0',
+      });
+      expect(
+        await database.selectFrom('ledger_accounts').selectAll().execute(),
+      ).toHaveLength(initialLedgerAccountCount + 2);
+
+      advance(60);
+      const login = await post('login/code', { contact });
+      expect(login.statusCode).toBe(202);
+      const challengeId = login.json().challengeId as string;
+      expect(
+        (
+          await post('login/code/verify', {
+            challengeId,
+            code: delivery.codeFor(challengeId),
+          })
+        ).statusCode,
+      ).toBe(200);
+      expect(
+        await database
+          .selectFrom('wallets')
+          .selectAll()
+          .where('owner_id', '=', session.account.id)
+          .execute(),
+      ).toEqual(wallets);
+    },
+  );
   it('preserves leading-zero codes and password whitespace through DTO transformation', async () => {
     vi.spyOn(NodeAuthenticationSecrets.prototype, 'code').mockReturnValueOnce(
       '012345',
@@ -273,12 +362,15 @@ describe('authentication HTTP and persistence', () => {
       expect((await me(response.json().accessToken)).statusCode).toBe(200);
     },
   );
-  it('does not create an account or permit password login before contact verification', async () => {
+  it('does not create an account or wallet or permit password login before contact verification', async () => {
     const response = await post('signup', { contact: email, password });
     expect(response.statusCode).toBe(202);
     expect(
       await database.selectFrom('auth_accounts').selectAll().execute(),
     ).toEqual([]);
+    expect(
+      await database.selectFrom('wallets').selectAll().execute(),
+    ).toHaveLength(initialWalletCount);
     expect(
       (await post('login/password', { contact: email, password })).statusCode,
     ).toBe(401);
@@ -291,7 +383,7 @@ describe('authentication HTTP and persistence', () => {
     expect((await post('signup/verify', body)).statusCode).toBe(201);
     expect((await post('signup/verify', body)).statusCode).toBe(401);
   });
-  it('allows only one concurrent redemption and commits one account and session', async () => {
+  it('allows only one concurrent redemption and commits one account, wallet and session', async () => {
     const request = await post('signup', { contact: email });
     const challengeId = request.json().challengeId as string;
     const body = { challengeId, code: delivery.codeFor(challengeId) };
@@ -305,6 +397,12 @@ describe('authentication HTTP and persistence', () => {
     expect(
       await database.selectFrom('auth_accounts').selectAll().execute(),
     ).toHaveLength(1);
+    expect(
+      await database.selectFrom('wallets').selectAll().execute(),
+    ).toHaveLength(initialWalletCount + 1);
+    expect(
+      await database.selectFrom('ledger_accounts').selectAll().execute(),
+    ).toHaveLength(initialLedgerAccountCount + 2);
     expect(
       await database.selectFrom('auth_sessions').selectAll().execute(),
     ).toHaveLength(1);
@@ -430,18 +528,27 @@ describe('authentication HTTP and persistence', () => {
     expect(challenge.status).toBe('invalidated');
     expect(challenge.password_hash).toBeNull();
   });
-  it('rolls back account creation and code consumption together when session persistence fails', async () => {
+  it('rolls back the account, wallet and code consumption when session persistence fails', async () => {
     const request = await post('signup', { contact: email });
     const challengeId = request.json().challengeId as string;
     const body = { challengeId, code: delivery.codeFor(challengeId) };
     const failure = vi
-      .spyOn(PostgresAuthenticationRepository.prototype, 'createSession')
+      .spyOn(AuthenticationRepositoryImpl.prototype, 'createSession')
       .mockRejectedValueOnce(new Error('simulated storage failure'));
     expect((await post('signup/verify', body)).statusCode).toBe(503);
     failure.mockRestore();
     expect(
       await database.selectFrom('auth_accounts').selectAll().execute(),
     ).toHaveLength(0);
+    expect(
+      await database.selectFrom('wallets').selectAll().execute(),
+    ).toHaveLength(initialWalletCount);
+    expect(
+      await database.selectFrom('ledger_accounts').selectAll().execute(),
+    ).toHaveLength(initialLedgerAccountCount);
+    expect(
+      await database.selectFrom('ledger_balances').selectAll().execute(),
+    ).toHaveLength(initialLedgerBalanceCount);
     expect(
       (
         await database
@@ -451,6 +558,49 @@ describe('authentication HTTP and persistence', () => {
       ).status,
     ).toBe('ready');
     expect((await post('signup/verify', body)).statusCode).toBe(201);
+    expect(
+      await database.selectFrom('wallets').selectAll().execute(),
+    ).toHaveLength(initialWalletCount + 1);
+  });
+  it('rolls back partial wallet provisioning and permits the same signup proof to be retried', async () => {
+    const request = await post('signup', { contact: email });
+    expect(request.statusCode).toBe(202);
+    const challengeId = request.json().challengeId as string;
+    const body = { challengeId, code: delivery.codeFor(challengeId) };
+    // Provisioning has inserted the wallet and ledger accounts before reading the resulting balance.
+    const failure = vi
+      .spyOn(WalletDataSource.prototype, 'readWallet')
+      .mockRejectedValueOnce(new Error('simulated wallet storage failure'));
+    const response = await post('signup/verify', body);
+    failure.mockRestore();
+    expect(response.statusCode).toBe(503);
+    expect(response.json().code).toBe('AUTHENTICATION_UNAVAILABLE');
+    expect(
+      await database.selectFrom('auth_accounts').selectAll().execute(),
+    ).toEqual([]);
+    expect(
+      await database.selectFrom('auth_sessions').selectAll().execute(),
+    ).toEqual([]);
+    expect(
+      await database.selectFrom('wallets').selectAll().execute(),
+    ).toHaveLength(initialWalletCount);
+    expect(
+      await database.selectFrom('ledger_accounts').selectAll().execute(),
+    ).toHaveLength(initialLedgerAccountCount);
+    expect(
+      await database.selectFrom('ledger_balances').selectAll().execute(),
+    ).toHaveLength(initialLedgerBalanceCount);
+    expect(
+      await database
+        .selectFrom('auth_challenges')
+        .select('status')
+        .where('id', '=', challengeId)
+        .executeTakeFirstOrThrow(),
+    ).toEqual({ status: 'ready' });
+    expect((await post('signup/verify', body)).statusCode).toBe(201);
+    expect(
+      await database.selectFrom('wallets').selectAll().execute(),
+    ).toHaveLength(initialWalletCount + 1);
   });
   it('rolls back challenge replacement inside nested repository transactions', async () => {
     const request = await post('signup', { contact: email });
@@ -460,7 +610,7 @@ describe('authentication HTTP and persistence', () => {
       .selectAll()
       .where('id', '=', challengeId)
       .executeTakeFirstOrThrow();
-    const repository = new PostgresAuthenticationRepository(database);
+    const repository = new AuthenticationRepositoryImpl(database);
 
     await expect(
       repository.transaction(async (outer) => {
@@ -844,11 +994,11 @@ describe('one-time-code password recovery', () => {
   it('rolls back password, version, consumption, and session revocation on storage failure', async () => {
     const owner = await signup(email, password);
     const proof = await requestReset(email);
-    const original = PostgresAuthenticationRepository.prototype.replacePassword;
+    const original = AuthenticationRepositoryImpl.prototype.replacePassword;
     const failure = vi
-      .spyOn(PostgresAuthenticationRepository.prototype, 'replacePassword')
+      .spyOn(AuthenticationRepositoryImpl.prototype, 'replacePassword')
       .mockImplementationOnce(async function (
-        this: PostgresAuthenticationRepository,
+        this: AuthenticationRepositoryImpl,
         account,
         hash,
         now,

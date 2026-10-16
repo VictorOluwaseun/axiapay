@@ -1,7 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { AUTHENTICATION } from '../authentication.tokens.js';
 import {
-  accountIdentity,
   type AccountIdentity,
   type Contact,
 } from '../domain/authentication-models.js';
@@ -52,7 +51,7 @@ export class AuthenticationService {
   signup(input: CodeRequest) {
     return this.codes.request({ ...input, purpose: 'signup' });
   }
-  /** Redeem only a signup challenge and activate the account atomically. */
+  /** Redeem signup proof and atomically activate the account, its empty NGN wallet and session. */
   verifySignup(input: CodeVerification): Promise<AuthenticationResult> {
     return this.codes.verify({ ...input, purpose: 'signup' });
   }
@@ -97,18 +96,22 @@ export class AuthenticationService {
       this.clock.now(),
     );
   }
-  /** Return only the caller's verified identity; expired, disabled, revoked, and unknown sessions share one failure. */
-  async authenticate(token: string): Promise<AccountIdentity> {
+  /** Resolve the caller; protected writes require current session/account state and never rely on cached revocation state. */
+  async authenticate(
+    token: string,
+    requireCurrentState = false,
+  ): Promise<AccountIdentity> {
     const account = await this.repository.findSessionIdentity(
       this.secrets.tokenDigest(token),
       this.clock.now(),
+      requireCurrentState,
     );
     if (!account) {
       throw invalidCredentials();
     }
-    return accountIdentity(account);
+    return account;
   }
-  /** End this bearer session immediately; an unknown or previously revoked token is already logged out. */
+  /** Commit bearer revocation and attempt bounded invalidation; durable recovery handles failed delivery and unknown tokens remain idempotent. */
   async logout(token: string): Promise<void> {
     await this.repository.revokeSession(
       this.secrets.tokenDigest(token),

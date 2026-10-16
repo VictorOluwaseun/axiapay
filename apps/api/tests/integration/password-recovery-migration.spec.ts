@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import { expect, it } from 'vitest';
 import { startWalletTestDatabase } from '../../../../packages/payments-runtime/tests/support/wallet-test-database.js';
-import { PostgresAuthenticationRepository } from '../../src/modules/authentication/repositories/postgres-authentication.repository.js';
+import { AuthenticationRepositoryImpl } from '../../src/modules/authentication/repositories/authentication.repository.impl.js';
 
 it('preserves established authentication when upgrading to password recovery', async () => {
   const baseline = await startWalletTestDatabase(
@@ -79,9 +79,7 @@ it('preserves established authentication when upgrading to password recovery', a
     if (result.error) {
       throw result.error;
     }
-    const repository = new PostgresAuthenticationRepository(
-      baseline.administrator,
-    );
+    const repository = new AuthenticationRepositoryImpl(baseline.administrator);
     expect(await repository.findAccount(contact)).toMatchObject({
       id: accountId,
       credentialVersion: 0,
