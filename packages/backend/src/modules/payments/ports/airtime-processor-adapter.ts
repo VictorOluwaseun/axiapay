@@ -9,7 +9,7 @@ export interface AirtimeProcessorAdapter<ProviderRequest, ProviderResponse> {
   /** Immutable deployment routing key, including the provider account/environment; it must match the accepted quote. */
   readonly providerKey: string;
 
-  /** Optional single pure validator for category, account routing and provider encodings. Product input lacks recipient details; quote input additionally checks those details. Throws before a new hold. */
+  /** Optional pure purchase validator for category, account routing and provider encodings. Product input lacks recipient details; quote input additionally checks those details. Throws before a new hold and is never invoked by lookup. */
   validate?(target: PaymentTermsInput): void;
 
   /** Translate already validated terms using payment.id as the logical merchant identity, preserving exact money and the explicitly selected network. Protocol encodings must be deterministic from persisted terms; no network I/O or new logical identity. */
@@ -24,6 +24,6 @@ export interface AirtimeProcessorAdapter<ProviderRequest, ProviderResponse> {
     payment: ServicePayment,
   ): ProviderPaymentResult;
 
-  /** Enquire about an already validated instruction using the same merchant identity without initiating a purchase. Own enquiry-specific translation/authentication and return correlated evidence with bounded timeouts. */
+  /** Enquire about previously accepted terms using the saved merchant identity without initiating a purchase or reapplying current purchase eligibility. Own enquiry-specific requirements, authentication and evidence correlation; retain historical protocol support for unresolved obligations. */
   lookup(payment: ServicePayment): Promise<ProviderPaymentResult>;
 }

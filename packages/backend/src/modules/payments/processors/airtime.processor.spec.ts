@@ -10,41 +10,35 @@ import { paymentTermsFingerprint } from '../domain/payment.js';
 import { AirtimeProcessor } from './airtime.processor.js';
 
 describe('AxiaPay airtime processor', () => {
-  it.each(['submit', 'lookup'] as const)(
-    'runs the injected validator once before the %s pipeline',
-    async (operation) => {
-      const payment = airtimeInstruction();
-      const adapter = {
-        ...testAirtimeAdapter(),
-        validate: vi.fn(),
-      };
-      await new AirtimeProcessor(adapter)[operation](payment);
-      expect(adapter.validate).toHaveBeenCalledExactlyOnceWith({
-        scope: 'quote',
-        terms: payment.quote,
-      });
-    },
-  );
+  it('runs the injected purchase validator once before submission', async () => {
+    const payment = airtimeInstruction();
+    const adapter = {
+      ...testAirtimeAdapter(),
+      validate: vi.fn(),
+    };
+    await new AirtimeProcessor(adapter).submit(payment);
+    expect(adapter.validate).toHaveBeenCalledExactlyOnceWith({
+      scope: 'quote',
+      terms: payment.quote,
+    });
+  });
 
-  it.each(['submit', 'lookup'] as const)(
-    'does not enter %s when the single injected validator rejects the terms',
-    async (operation) => {
-      const failure = new Error('Unsupported provider terms');
-      const adapter = {
-        ...testAirtimeAdapter(),
-        validate: vi.fn(() => {
-          throw failure;
-        }),
-      };
-      await expect(
-        new AirtimeProcessor(adapter)[operation](airtimeInstruction()),
-      ).rejects.toBe(failure);
-      expect(adapter.toRequest).not.toHaveBeenCalled();
-      expect(adapter.execute).not.toHaveBeenCalled();
-      expect(adapter.toSubmission).not.toHaveBeenCalled();
-      expect(adapter.lookup).not.toHaveBeenCalled();
-    },
-  );
+  it('does not submit when the injected purchase validator rejects the terms', async () => {
+    const failure = new Error('Unsupported provider terms');
+    const adapter = {
+      ...testAirtimeAdapter(),
+      validate: vi.fn(() => {
+        throw failure;
+      }),
+    };
+    await expect(
+      new AirtimeProcessor(adapter).submit(airtimeInstruction()),
+    ).rejects.toBe(failure);
+    expect(adapter.toRequest).not.toHaveBeenCalled();
+    expect(adapter.execute).not.toHaveBeenCalled();
+    expect(adapter.toSubmission).not.toHaveBeenCalled();
+    expect(adapter.lookup).not.toHaveBeenCalled();
+  });
 
   it('translates exact accepted terms and passes the original instruction into response mapping', async () => {
     const payment = airtimeInstruction();
@@ -157,39 +151,34 @@ describe('AxiaPay airtime processor', () => {
     },
   );
 
-  it.each([
-    ['submit', 'paymentId'],
-    ['submit', 'termsFingerprint'],
-    ['lookup', 'paymentId'],
-    ['lookup', 'termsFingerprint'],
-  ] as const)(
-    'rejects mismatched %s evidence for %s',
-    async (operation, field) => {
-      const payment = airtimeInstruction();
-      const adapter = testAirtimeAdapter();
-      const result = {
-        ...pendingAirtimeSubmission(payment),
-        [field]: 'mismatched-evidence',
-      };
-      adapter.toSubmission.mockReturnValueOnce(result);
-      adapter.lookup.mockResolvedValueOnce(result);
-
-      await expect(
-        new AirtimeProcessor(adapter)[operation](payment),
-      ).rejects.toMatchObject({ code: 'INVALID_PROVIDER_EVIDENCE' });
-    },
-  );
-
   it('keeps lookup separate from every purchase stage', async () => {
     const payment = airtimeInstruction();
-    const adapter = testAirtimeAdapter();
+    const adapter = {
+      ...testAirtimeAdapter(),
+      validate: vi.fn(() => {
+        throw new Error('This product is no longer available for purchase');
+      }),
+    };
     expect(await new AirtimeProcessor(adapter).lookup(payment)).toEqual(
       pendingAirtimeSubmission(payment),
     );
     expect(adapter.lookup).toHaveBeenCalledExactlyOnceWith(payment);
+    expect(adapter.validate).not.toHaveBeenCalled();
     expect(adapter.toRequest).not.toHaveBeenCalled();
     expect(adapter.execute).not.toHaveBeenCalled();
     expect(adapter.toSubmission).not.toHaveBeenCalled();
+  });
+
+  it('rejects another provider account during lookup even when a custom purchase validator exists', async () => {
+    const adapter = { ...testAirtimeAdapter(), validate: vi.fn() };
+    await expect(
+      new AirtimeProcessor(adapter).lookup(airtimeInstruction('other-account')),
+    ).rejects.toMatchObject({
+      code: 'PAYMENT_UNAVAILABLE',
+      reason: 'PROVIDER_ROUTE_MISMATCH',
+    });
+    expect(adapter.validate).not.toHaveBeenCalled();
+    expect(adapter.lookup).not.toHaveBeenCalled();
   });
 
   it('propagates enquiry failure without falling back to a new purchase', async () => {

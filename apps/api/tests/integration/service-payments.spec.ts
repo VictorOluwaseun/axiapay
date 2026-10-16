@@ -1,3 +1,5 @@
+import { PaymentRecoveryService } from '@axiapay/backend/modules/payments/services/payment-recovery.service';
+import { PostgresPaymentRecoveryRepository } from '@axiapay/backend/modules/payments/repositories/postgres-payment-recovery.repository';
 /** Verify the first-party airtime/data contract, real PostgreSQL invariants and recovery using test-only fulfilment adapters. */
 import { AxiosError, type AxiosAdapter } from 'axios';
 import { axiosTextResponse } from '../../../../packages/backend/tests/support/axios-response-fixture.js';
@@ -18,6 +20,7 @@ import type { AuthenticationResult } from '../../src/modules/authentication/serv
 import { PaymentsModule } from '../../src/modules/payments/payments.module.js';
 import { PAYMENTS } from '@axiapay/backend/modules/payments/payments.tokens';
 import {
+  PaymentError,
   paymentTermsFingerprint,
   type ServicePayment,
 } from '@axiapay/backend/modules/payments/domain/payment';
@@ -81,6 +84,7 @@ const fundingEvidence = new Map<string, ConfirmedFunding>();
 beforeAll(async () => {
   database = await startWalletTestDatabase();
   await sql`select grant_service_payments_runtime_access('wallet_runtime');
+    select grant_payment_recovery_runtime_access('wallet_runtime');
     grant select, insert, update, delete on auth_accounts, auth_sessions, auth_challenges, auth_rate_limits to wallet_runtime;`.execute(
     database.administrator,
   );
@@ -959,30 +963,51 @@ describe('first-party service payments', () => {
     expect(context.submit).toHaveBeenCalledTimes(1);
   });
 
-  it('rejects mismatched evidence without capturing or releasing a reservation', async () => {
-    const context = await fixture();
-    context.setResult((payment) => ({
-      ...succeeded(payment),
-      paymentId: randomUUID(),
-    }));
-    const quote = (await context.quote()).json<PaymentQuoteResponseDto>();
-    const requestKey = randomUUID();
-    expect((await context.pay(quote.id, requestKey)).statusCode).toBe(503);
-    const retry = await context.pay(quote.id, requestKey);
-    context.setResult((payment) => ({
-      ...succeeded(payment),
-      termsFingerprint: 'different recipient/amount',
-    }));
-    expect((await context.reconcile(retry.json().id)).statusCode).toBe(503);
-    expect((await context.balance()).reservedMinorUnits).toBe(10_050n);
-    expect(
-      await database.database
-        .selectFrom('service_payment_outcomes')
-        .selectAll()
-        .where('payment_id', '=', retry.json().id)
-        .execute(),
-    ).toHaveLength(0);
-  });
+  it.each(['airtime', 'data'] as const)(
+    'rejects mismatched %s evidence without capturing or releasing a reservation',
+    async (serviceType) => {
+      const context = await fixture(serviceType);
+      context.setResult((payment) => ({
+        ...succeeded(payment),
+        paymentId: randomUUID(),
+      }));
+      const quote = (await context.quote()).json<PaymentQuoteResponseDto>();
+      const requestKey = randomUUID();
+      const rejected = await context.pay(quote.id, requestKey);
+      expect(rejected.statusCode).toBe(503);
+      expect(rejected.json()).toMatchObject({
+        code: 'PAYMENT_UNAVAILABLE',
+        message: 'The provider result refers to a different payment.',
+      });
+      const retry = await context.pay(quote.id, requestKey);
+      context.setResult((payment) => ({
+        ...succeeded(payment),
+        termsFingerprint: 'different recipient/amount',
+      }));
+      const reconciliation = await context.reconcile(retry.json().id);
+      expect(reconciliation.statusCode).toBe(503);
+      expect(reconciliation.json()).toMatchObject({
+        code: 'PAYMENT_UNAVAILABLE',
+        message:
+          'The provider result does not match the accepted payment terms.',
+      });
+      expect((await context.balance()).reservedMinorUnits).toBe(
+        BigInt(quote.totalDebitMinorUnits),
+      );
+      expect((await context.balance()).availableMinorUnits).toBe(
+        100_000n - BigInt(quote.totalDebitMinorUnits),
+      );
+      expect(context.submit).toHaveBeenCalledTimes(1);
+      expect(context.lookup).toHaveBeenCalledTimes(1);
+      expect(
+        await database.database
+          .selectFrom('service_payment_outcomes')
+          .selectAll()
+          .where('payment_id', '=', retry.json().id)
+          .execute(),
+      ).toHaveLength(0);
+    },
+  );
 
   it('recovers a crash after reservation commit without reserving or dispatching twice', async () => {
     const context = await fixture();
@@ -3392,24 +3417,24 @@ async function vtpassPaymentFixture(networkCode = 'mtn') {
       }),
     );
   });
+  const adapter = new VtpassAirtimeAdapter(
+    {
+      providerKey,
+      environment: 'sandbox',
+      apiKey: 'test-api-key',
+      secretKey: 'test-secret-key',
+    },
+    transport,
+  );
   registrations[providerKey] = {
     partnerAccountId: context.partnerAccountId,
     feeAccountId: context.feeAccountId,
-    adapter: new AirtimeProcessor(
-      new VtpassAirtimeAdapter(
-        {
-          providerKey,
-          environment: 'sandbox',
-          apiKey: 'test-api-key',
-          secretKey: 'test-secret-key',
-        },
-        transport,
-      ),
-    ),
+    adapter: new AirtimeProcessor(adapter),
   };
   return {
     ...context,
     transport,
+    adapter,
     /** Change test-authenticated provider state without bypassing its HTTP mapping or wallet settlement. */
     setOutcome(next: typeof outcome) {
       outcome = next;
@@ -3496,6 +3521,286 @@ describe('VTpass airtime with authoritative wallet settlement', () => {
       'PAYMENT_UNAVAILABLE',
     );
     expect((await context.balance()).reservedMinorUnits).toBe(0n);
+    expect(context.transport).not.toHaveBeenCalled();
+  });
+});
+
+/** Isolate the next recovery candidate without moving the application or database clock. */
+async function makeRecoveryDue(paymentId: string): Promise<void> {
+  await sql`update service_payment_recovery set next_attempt_at = now() + interval '1 day'
+    where recovery_status = 'pending'`.execute(database.administrator);
+  await sql`update service_payment_recovery set next_attempt_at = now() - interval '1 second'
+    where payment_id = ${paymentId}`.execute(database.administrator);
+}
+
+describe('durable payment recovery', () => {
+  it('settles an accepted payment after its adapter stops accepting those terms for new purchases', async () => {
+    const context = await vtpassPaymentFixture();
+    context.setOutcome('timeout');
+    const quote = (await context.quote()).json<PaymentQuoteResponseDto>();
+    const key = randomUUID();
+    expect((await context.pay(quote.id, key)).statusCode).toBe(503);
+    const payments = new PostgresPaymentRepository(database.database);
+    const accepted = (await payments.findByRequestKey(
+      context.session.account.id,
+      key,
+    ))!;
+    const validate = vi
+      .spyOn(context.adapter, 'validate')
+      .mockImplementation(() => {
+        throw new PaymentError('PAYMENT_UNAVAILABLE', {
+          reason: 'PRODUCT_NOT_SUPPORTED',
+        });
+      });
+    try {
+      expect(() =>
+        context.adapter.validate({ scope: 'quote', terms: accepted.quote }),
+      ).toThrow(expect.objectContaining({ reason: 'PRODUCT_NOT_SUPPORTED' }));
+      validate.mockClear();
+      context.setOutcome('delivered');
+      await makeRecoveryDue(accepted.id);
+      await application.get(PaymentRecoveryService).recoverDueBatch(4);
+      expect(validate).not.toHaveBeenCalled();
+      expect(await payments.getPayment(accepted.id)).toMatchObject({
+        submissionStartedAt: accepted.submissionStartedAt,
+        reservationStatus: 'captured',
+        outcome: { outcome: 'succeeded' },
+      });
+      expect(
+        await new PostgresPaymentRecoveryRepository(
+          database.database,
+        ).getProgress(accepted.id),
+      ).toMatchObject({ status: 'completed' });
+      expect((await context.balance()).reservedMinorUnits).toBe(0n);
+      expect((await context.balance()).availableMinorUnits).toBe(89_950n);
+      expect(
+        context.transport.mock.calls.map(([config]) =>
+          config.url?.split('/').at(-1),
+        ),
+      ).toEqual(['pay', 'requery']);
+      expect(
+        parseVtpassJson(context.transport.mock.calls[1]![0].data as string)
+          .request_id,
+      ).toBe(
+        parseVtpassJson(context.transport.mock.calls[0]![0].data as string)
+          .request_id,
+      );
+    } finally {
+      validate.mockRestore();
+    }
+  });
+
+  it('persists intent with the hold and settles a timed-out purchase without another purchase or client request', async () => {
+    const context = await vtpassPaymentFixture();
+    context.setOutcome('timeout');
+    const quote = (await context.quote()).json<PaymentQuoteResponseDto>();
+    const key = randomUUID();
+    expect((await context.pay(quote.id, key)).statusCode).toBe(503);
+    const payments = new PostgresPaymentRepository(database.database);
+    const payment = (await payments.findByRequestKey(
+      context.session.account.id,
+      key,
+    ))!;
+    const recovery = new PostgresPaymentRecoveryRepository(database.database);
+    expect(await recovery.getProgress(payment.id)).toMatchObject({
+      status: 'pending',
+      automaticAttempts: 0,
+    });
+    await makeRecoveryDue(payment.id);
+    context.setOutcome('delivered');
+    await application.get(PaymentRecoveryService).recoverDueBatch(4);
+    expect(await recovery.getProgress(payment.id)).toMatchObject({
+      status: 'completed',
+      automaticAttempts: 1,
+      totalAttempts: 1,
+    });
+    expect(
+      (await payments.getPayment(payment.id))?.submissionStartedAt,
+    ).toEqual(payment.submissionStartedAt);
+    expect((await context.balance()).availableMinorUnits).toBe(89_950n);
+    expect((await context.balance()).reservedMinorUnits).toBe(0n);
+    expect(
+      context.transport.mock.calls.map(([config]) =>
+        config.url?.split('/').at(-1),
+      ),
+    ).toEqual(['pay', 'requery']);
+  });
+
+  it('recovers a process exit after the hold but before the first dispatch', async () => {
+    const context = await vtpassPaymentFixture();
+    const quote = (await context.quote()).json<PaymentQuoteResponseDto>();
+    const key = randomUUID();
+    const dispatch = vi
+      .spyOn(application.get(PaymentExecutionService), 'dispatch')
+      .mockRejectedValueOnce(new Error('process exit before dispatch'));
+    try {
+      expect((await context.pay(quote.id, key)).statusCode).toBe(503);
+    } finally {
+      dispatch.mockRestore();
+    }
+    const payment = (await new PostgresPaymentRepository(
+      database.database,
+    ).findByRequestKey(context.session.account.id, key))!;
+    expect(payment.submissionStartedAt).toBeNull();
+    expect((await context.balance()).reservedMinorUnits).toBe(10_050n);
+    await makeRecoveryDue(payment.id);
+    await application.get(PaymentRecoveryService).recoverDueBatch(4);
+    expect((await context.balance()).reservedMinorUnits).toBe(0n);
+    expect(context.transport).toHaveBeenCalledTimes(1);
+    expect(context.transport.mock.calls[0]![0].url).toContain('/api/pay');
+  });
+
+  it('escalates a crash after the claim with only not-found observations, retaining the hold and original identity through operator retry', async () => {
+    const context = await vtpassPaymentFixture();
+    const quote = (await context.quote()).json<PaymentQuoteResponseDto>();
+    const key = randomUUID();
+    const payments = new PostgresPaymentRepository(database.database);
+    const dispatch = vi
+      .spyOn(application.get(PaymentExecutionService), 'dispatch')
+      .mockImplementationOnce(async (payment) => {
+        await payments.claimSubmission(payment.id);
+        throw new Error('process exit after claim');
+      });
+    try {
+      expect((await context.pay(quote.id, key)).statusCode).toBe(503);
+    } finally {
+      dispatch.mockRestore();
+    }
+    const payment = (await payments.findByRequestKey(
+      context.session.account.id,
+      key,
+    ))!;
+    context.transport.mockResolvedValue(axiosTextResponse('{"code":"015"}'));
+    const service = application.get(PaymentRecoveryService);
+    const recovery = new PostgresPaymentRecoveryRepository(database.database);
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      await makeRecoveryDue(payment.id);
+      await service.recoverDueBatch(4);
+    }
+    expect(await recovery.getProgress(payment.id)).toMatchObject({
+      status: 'needs_review',
+      automaticAttempts: 8,
+      totalAttempts: 8,
+      lastFailureCode: 'PROVIDER_UNCONFIRMED',
+    });
+    await makeRecoveryDue(payment.id);
+    await service.recoverDueBatch(4);
+    expect(context.transport).toHaveBeenCalledTimes(8);
+    expect(await service.retryReview(payment.id)).toBe(true);
+    await service.recoverDueBatch(4);
+    expect(await recovery.getProgress(payment.id)).toMatchObject({
+      status: 'pending',
+      automaticAttempts: 1,
+      totalAttempts: 9,
+    });
+    expect((await context.balance()).reservedMinorUnits).toBe(10_050n);
+    expect((await context.balance()).availableMinorUnits).toBe(89_950n);
+    expect(
+      (await payments.getPayment(payment.id))?.submissionStartedAt,
+    ).toEqual(payment.submissionStartedAt);
+    expect(
+      context.transport.mock.calls.every(([config]) =>
+        config.url?.endsWith('/api/requery'),
+      ),
+    ).toBe(true);
+    const references = context.transport.mock.calls.map(
+      ([config]) => parseVtpassJson(config.data as string).request_id,
+    );
+    expect(new Set(references).size).toBe(1);
+  });
+
+  it('fences concurrent claims and stale completions, recovering an expired lease without resetting its attempts', async () => {
+    const context = await vtpassPaymentFixture();
+    context.setOutcome('timeout');
+    const quote = (await context.quote()).json<PaymentQuoteResponseDto>();
+    const key = randomUUID();
+    await context.pay(quote.id, key);
+    const payment = (await new PostgresPaymentRepository(
+      database.database,
+    ).findByRequestKey(context.session.account.id, key))!;
+    await makeRecoveryDue(payment.id);
+    const repository = new PostgresPaymentRecoveryRepository(database.database);
+    const batches = await Promise.all([
+      repository.claimDue(1),
+      repository.claimDue(1),
+    ]);
+    const claims = batches.flat();
+    expect(claims).toHaveLength(1);
+    const original = claims[0]!;
+    await sql`update service_payment_recovery set lease_expires_at = now() - interval '1 second'
+      where payment_id = ${payment.id}`.execute(database.administrator);
+    const replacement = (await repository.claimDue(1))[0]!;
+    expect(replacement.automaticAttempts).toBe(2);
+    expect(replacement.leaseToken).not.toBe(original.leaseToken);
+    expect(
+      await repository.finishAttempt(original, {
+        status: 'completed',
+        retryDelaySeconds: 0,
+        failureCode: null,
+      }),
+    ).toBe(false);
+    expect(await repository.getProgress(payment.id)).toMatchObject({
+      status: 'pending',
+      totalAttempts: 2,
+    });
+    expect(
+      await repository.finishAttempt(replacement, {
+        status: 'pending',
+        retryDelaySeconds: 60,
+        failureCode: 'PROVIDER_UNCONFIRMED',
+      }),
+    ).toBe(true);
+  });
+
+  it('escalates expired leases whose automatic budget was consumed by repeated process exits', async () => {
+    const context = await vtpassPaymentFixture();
+    context.setOutcome('timeout');
+    const quote = (await context.quote()).json<PaymentQuoteResponseDto>();
+    const key = randomUUID();
+    await context.pay(quote.id, key);
+    const payment = (await new PostgresPaymentRepository(
+      database.database,
+    ).findByRequestKey(context.session.account.id, key))!;
+    await makeRecoveryDue(payment.id);
+    const repository = new PostgresPaymentRecoveryRepository(database.database);
+    await sql`update service_payment_recovery set automatic_attempts = 8, total_attempts = 8,
+      lease_token = gen_random_uuid(), lease_expires_at = now() - interval '1 second'
+      where payment_id = ${payment.id}`.execute(database.administrator);
+    expect(await repository.claimDue(1)).toEqual([]);
+    expect(await repository.getProgress(payment.id)).toMatchObject({
+      status: 'needs_review',
+      totalAttempts: 8,
+      lastFailureCode: 'RECOVERY_INTERRUPTED',
+    });
+    expect((await context.balance()).reservedMinorUnits).toBe(10_050n);
+  });
+
+  it('rolls back recovery intent when the hold transaction fails after reservation insertion', async () => {
+    const context = await vtpassPaymentFixture();
+    const quote = (await context.quote()).json<PaymentQuoteResponseDto>();
+    const key = randomUUID();
+    await sql`create function fail_recovery_hold_test() returns trigger language plpgsql as $$
+      begin raise exception 'simulated ledger write outage'; end $$;
+      create trigger fail_recovery_hold_test before insert on ledger_entries
+      for each row execute function fail_recovery_hold_test();`.execute(
+      database.administrator,
+    );
+    try {
+      expect((await context.pay(quote.id, key)).statusCode).toBe(503);
+    } finally {
+      await sql`drop trigger fail_recovery_hold_test on ledger_entries; drop function fail_recovery_hold_test();`.execute(
+        database.administrator,
+      );
+    }
+    const payment = (await new PostgresPaymentRepository(
+      database.database,
+    ).findByRequestKey(context.session.account.id, key))!;
+    expect(
+      await new PostgresPaymentRecoveryRepository(
+        database.database,
+      ).getProgress(payment.id),
+    ).toBeNull();
+    expect((await context.balance()).availableMinorUnits).toBe(100_000n);
     expect(context.transport).not.toHaveBeenCalled();
   });
 });

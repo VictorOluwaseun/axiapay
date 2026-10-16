@@ -219,16 +219,20 @@ export class PaymentExecutionService implements PaymentOutcomeVerification {
     return provider;
   }
 
-  /** Validate first-party correlation before persisting a safe final result; pending and unsafe failures leave the hold intact. */
+  /** Own payment-ID/fingerprint correlation for every provider observation before accepting pending progress or recording evidence. Adapters authenticate upstream proof; pending and unsafe failures leave the hold intact. */
   private async recordResult(
     payment: ServicePayment,
     result: ProviderPaymentResult,
   ): Promise<void> {
-    if (
-      result.paymentId !== payment.id ||
-      result.termsFingerprint !== paymentTermsFingerprint(payment)
-    ) {
-      throw new PaymentError('INVALID_PROVIDER_EVIDENCE');
+    if (result.paymentId !== payment.id) {
+      throw new PaymentError('INVALID_PROVIDER_EVIDENCE', {
+        reason: 'PAYMENT_ID_MISMATCH',
+      });
+    }
+    if (result.termsFingerprint !== paymentTermsFingerprint(payment)) {
+      throw new PaymentError('INVALID_PROVIDER_EVIDENCE', {
+        reason: 'PAYMENT_TERMS_MISMATCH',
+      });
     }
     if (result.outcome === 'pending') {
       return;

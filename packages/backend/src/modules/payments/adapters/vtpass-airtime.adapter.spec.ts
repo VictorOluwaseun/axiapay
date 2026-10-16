@@ -342,6 +342,47 @@ describe('VTpass airtime protocol', () => {
     );
   });
 
+  it('enquires about accepted terms even when their old network alias no longer passes purchase validation', async () => {
+    const { processor, payment, transport } = adapterFixture();
+    const accepted = {
+      ...payment,
+      quote: { ...payment.quote, networkCode: 'retired-mtn-alias' },
+    };
+    await expect(processor.submit(accepted)).rejects.toMatchObject({
+      reason: 'NETWORK_PRODUCT_MISMATCH',
+    });
+    expect((await processor.lookup(accepted)).outcome).toBe('succeeded');
+    expect(transport).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        url: 'https://sandbox.vtpass.com/api/requery',
+        data: JSON.stringify({ request_id: vtpassRequestId(accepted) }),
+      }),
+    );
+  });
+
+  it('still rejects mismatched final evidence during lookup of historical terms', async () => {
+    const { processor, payment, transport } = adapterFixture();
+    const accepted = {
+      ...payment,
+      quote: { ...payment.quote, networkCode: 'retired-mtn-alias' },
+    };
+    const response = vtpassDelivered(accepted);
+    (
+      response.content as { transactions: Record<string, unknown> }
+    ).transactions.amount = '99';
+    transport.mockResolvedValueOnce(
+      axiosTextResponse(JSON.stringify(response)),
+    );
+    await expect(processor.lookup(accepted)).rejects.toMatchObject({
+      code: 'INVALID_PROVIDER_EVIDENCE',
+      reason: 'PROVIDER_AMOUNT_MISMATCH',
+    });
+    expect(transport).toHaveBeenCalledTimes(1);
+    expect(transport.mock.calls[0]![0].url).toBe(
+      'https://sandbox.vtpass.com/api/requery',
+    );
+  });
+
   it('rejects unsupported products through the same validation contract used for quotes', () => {
     const { adapter, payment } = adapterFixture();
     const product = vtpassProduct(payment);

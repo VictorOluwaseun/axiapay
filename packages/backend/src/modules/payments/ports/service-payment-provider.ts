@@ -9,7 +9,7 @@ import type { InsuranceEligibility } from './insurance-eligibility.js';
 import type { PaymentDocumentRetrieval } from './payment-document-retrieval.js';
 import type { PaymentDocument } from '../domain/payment-document.js';
 
-/** First-party evidence contract. Adapters authenticate upstream results and verify recipient, product, amount and logical identity before returning it. */
+/** First-party evidence contract. Adapters authenticate upstream results and correlate provider references, recipient, product and amount. The execution workflow owns checking the returned payment ID and terms fingerprint against the accepted payment. */
 export type ProviderPaymentResult = {
   readonly paymentId: string;
   readonly termsFingerprint: string;
@@ -45,7 +45,7 @@ export interface ServicePaymentProvider {
   validate?(target: PaymentTermsInput): void;
   /** Submit once using payment.id as the stable merchant identity. Never retry an uncertain upstream submission blindly. */
   submit(payment: ServicePayment): Promise<ProviderPaymentResult>;
-  /** Query independently authenticated evidence for that same identity; no new purchase may be sent by this method. */
+  /** Query independently authenticated evidence for the saved identity and accepted terms, without current purchase-eligibility validation or another purchase. Retain historical evidence support for unresolved obligations. */
   lookup(payment: ServicePayment): Promise<ProviderPaymentResult>;
 }
 

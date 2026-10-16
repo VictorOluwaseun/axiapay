@@ -329,6 +329,19 @@ export interface ServicePaymentQuotes {
   wallet_id: string;
 }
 
+export interface ServicePaymentRecovery {
+  automatic_attempts: Generated<number>;
+  created_at: Generated<Timestamp>;
+  last_failure_code: string | null;
+  lease_expires_at: Timestamp | null;
+  lease_token: string | null;
+  next_attempt_at: Generated<Timestamp>;
+  payment_id: string;
+  recovery_status: Generated<string>;
+  total_attempts: Generated<number>;
+  updated_at: Generated<Timestamp>;
+}
+
 export interface ServicePayments {
   created_at: Generated<Timestamp>;
   fee_account_id: string | null;
@@ -429,6 +442,7 @@ export interface DB {
   service_payment_fulfilments: ServicePaymentFulfilments;
   service_payment_outcomes: ServicePaymentOutcomes;
   service_payment_quotes: ServicePaymentQuotes;
+  service_payment_recovery: ServicePaymentRecovery;
   service_payments: ServicePayments;
   wallet_funding_payments: WalletFundingPayments;
   wallet_funding_requests: WalletFundingRequests;
