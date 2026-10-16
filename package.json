@@ -8,7 +8,9 @@
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "turbo run check-types",
-    "build:api": "turbo run build --filter=@axiapay/api"
+    "dev:worker": "turbo watch dev --filter=@axiapay/worker",
+    "build:api": "turbo run build --filter=@axiapay/api",
+    "build:worker": "turbo run build --filter=@axiapay/worker"
   },
   "devDependencies": {
     "prettier": "3.9.6",

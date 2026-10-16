@@ -1,0 +1,35 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "outputs": ["dist/**"]
+    },
+    "check-types": {
+      "dependsOn": ["^build"]
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "format:check": {
+      "outputs": []
+    },
+    "dev": {
+      "dependsOn": ["^build"],
+      "interruptible": true,
+      "passThroughEnv": [
+        "NODE_ENV",
+        "LOG_LEVEL",
+        "DATABASE_URL",
+        "REDIS_QUEUE_URL",
+        "VTPASS_*",
+        "PAYMENT_RECOVERY_*"
+      ]
+    },
+    "test:integration": {
+      "dependsOn": ["build"],
+      "cache": false,
+      "passThroughEnv": ["DOCKER_HOST", "DOCKER_CONTEXT", "TESTCONTAINERS_*"]
+    }
+  }
+}

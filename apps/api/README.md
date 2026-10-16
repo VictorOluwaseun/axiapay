@@ -13,12 +13,12 @@ pnpm install --frozen-lockfile
 docker compose -f compose.api.yaml up -d --wait
 cp -n apps/api/.env.example apps/api/.env
 pnpm --filter @axiapay/api auth:setup
-pnpm --filter @axiapay/api build
+pnpm run build:api
 pnpm --filter @axiapay/api db:migrate
 pnpm run dev:api
 ```
 
-The root `dev:api` script starts only the API in watch mode. You can also invoke it with `npm run dev:api`; it delegates to the workspace's pinned pnpm toolchain.
+The root `dev:api` script builds shared backend dependencies and starts only the API in watch mode. Turbo restarts it when shared backend code changes. You can also invoke it with `npm run dev:api`; it delegates to the workspace's pinned pnpm toolchain.
 
 The local environment contains development credentials only. Never use them in a deployment. Existing environment files must not be overwritten. The HTTP listener defaults to `127.0.0.1:4000`.
 
@@ -42,7 +42,7 @@ pnpm --filter @axiapay/api format:check
 pnpm --filter @axiapay/api lint
 pnpm --filter @axiapay/api check-types
 pnpm --filter @axiapay/api test
-pnpm --filter @axiapay/api build
+pnpm run build:api
 pnpm --filter @axiapay/api test:integration
 ```
 
@@ -54,9 +54,9 @@ The API has its own Turborepo configuration for build outputs and runtime enviro
 
 ## Layout and dependencies
 
-See [architecture](docs/architecture.md), [stack practices](docs/stack-practices.md), [the foundation decision](docs/decisions/0001-api-foundation.md), and each feature's README. `package.json` records exact versions. Kysely/pg provide SQL access; ioredis provides cache connectivity; BullMQ is available for future workers. Class-validator/class-transformer DTOs validate HTTP requests through Nest pipes; Config/Zod validate settings; Pino supplies redacted diagnostics; Argon2id protects passwords; authentication uses revocable opaque sessions and keyed code digests. A validated configuration never logs invalid supplied values.
+See [architecture](docs/architecture.md), [stack practices](docs/stack-practices.md), [the foundation decision](docs/decisions/0001-api-foundation.md), and each feature's README. `package.json` records exact versions. Kysely/pg provide SQL access; BullMQ recovery runs separately in [apps/worker](../worker/README.md). Shared financial workflows, repositories and adapters live in [packages/backend](../../packages/backend/README.md); the API never starts a queue consumer. Class-validator/class-transformer DTOs validate HTTP requests through Nest pipes; Config/Zod validate settings; Pino supplies redacted diagnostics; Argon2id protects passwords; authentication uses revocable opaque sessions and keyed code digests. A validated configuration never logs invalid supplied values.
 
-Migrations are explicit: after building, run `pnpm --filter @axiapay/api db:migrate`. See [migration responsibilities](migrations/README.md). The wallet migration defines the customer subledger, reservations, idempotency records, and outbox; the funding migration adds immutable funding requests and verified payment identities. `WalletHttpModule` connects authenticated customer routes to `WalletService`; `WalletFundingModule.register()` composes provider-neutral funding with no adapters by default. The bootstrap integration module optionally supplies retained OPay/Paystack adapters and their authenticated callbacks. Generate database types with `db:types` after reviewed schema changes.
+Migrations are explicit: after building, run `pnpm --filter @axiapay/api db:migrate`. See [migration responsibilities](migrations/README.md). The wallet migration defines the customer subledger, reservations, idempotency records, and outbox; the funding migration adds immutable funding requests and verified payment identities. `WalletHttpModule` connects authenticated customer routes to `WalletService`; `WalletFundingModule.register()` composes provider-neutral funding with no adapters by default. The bootstrap integration module optionally supplies retained OPay/Paystack adapters and their authenticated callbacks. Generate database types with `db:types` after reviewed schema changes; output belongs to `packages/backend/src/infrastructure/database/database.generated.ts`.
 
 ## Wallet implementation
 

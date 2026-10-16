@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 const configurations = [
   ['API', '../../../../apps/api/'],
+  ['worker', '../../../../apps/worker/'],
   ['shared backend', '../../'],
 ] as const;
 

@@ -2,14 +2,14 @@ import {
   Inject,
   Injectable,
   Module,
-  type OnModuleDestroy,
+  type OnApplicationShutdown,
 } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { createDatabase } from './create-database.js';
 
 /** Own the shared Kysely pool; only repository/data-source composition may access this connection. */
 @Injectable()
-export class DatabaseConnection implements OnModuleDestroy {
+export class DatabaseConnection implements OnApplicationShutdown {
   readonly database;
   /** Construct a lazy bounded pool, shared by features importing DatabaseModule. */
   constructor(@Inject(ConfigService) configuration: ConfigService) {
@@ -17,8 +17,8 @@ export class DatabaseConnection implements OnModuleDestroy {
       configuration.getOrThrow<string>('DATABASE_URL'),
     );
   }
-  /** Nest closes the shared pool once at application shutdown. */
-  async onModuleDestroy(): Promise<void> {
+  /** Close the shared pool after background workers have drained in onModuleDestroy. */
+  async onApplicationShutdown(): Promise<void> {
     await this.database.destroy();
   }
 }

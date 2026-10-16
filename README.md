@@ -2,7 +2,7 @@
 
 AxiaPay is being built for wallet-funded airtime, data, and bill payments, with transfers, bulk payments, scheduled transactions, and notifications. The MVP serves individuals; agent and business features are future scope. The first offline payment pilot will cover airtime and data through an SMS gateway.
 
-Development currently focuses on the API. Authentication supports verified phone or email signup, password and one-time-code login, and revocable sessions. Codes are captured locally in Mailpit for development. The application also provides wallet operations, first-party airtime/data/TV/electricity/education/insurance/bank-transfer catalogue, recipient verification and quote APIs, duplicate-safe payment submission/recovery, liveness, OpenAPI documentation, migrations, and tests. Service fulfilment adapters and real SMS delivery remain to be connected; absent adapters disable purchases before funds are held. See the [payment contract guide](apps/api/src/modules/payments/README.md).
+Development currently focuses on the API and its separate background worker. Authentication supports verified phone or email signup, password and one-time-code login, and revocable sessions. Codes are captured locally in Mailpit for development. The application also provides wallet operations, first-party airtime/data/TV/electricity/education/insurance/bank-transfer catalogue, recipient verification and quote APIs, duplicate-safe payment submission/recovery, liveness, OpenAPI documentation, migrations, and tests. Service fulfilment adapters and real SMS delivery remain to be connected; absent adapters disable purchases before funds are held. See the [payment contract guide](apps/api/src/modules/payments/README.md).
 
 ## Project structure
 
@@ -11,15 +11,17 @@ apps/
   api/                     NestJS and Fastify API
     src/
       bootstrap/           Application composition and dependency wiring
-      modules/             Controllers, services, repositories, and domain rules
-      infrastructure/      Configuration, database access, and diagnostics
+      modules/             HTTP features and API-owned workflows
+      infrastructure/      API configuration, migrations, and diagnostics
       shared/              Shared domain values and capability contracts
     migrations/            Reviewed database migrations
     tests/                 HTTP and persistence integration checks
     docs/                  Architecture and implementation decisions
+  worker/                  Standalone Nest/BullMQ recovery process (no HTTP listener)
   web/                     Next.js web application scaffold
   docs/                    Next.js documentation application scaffold
 packages/
+  backend/                 Shared payment/wallet/catalogue rules, workflows and adapters
   ui/                      Shared React components
   eslint-config/           Shared web lint configuration
   typescript-config/       Shared TypeScript configuration
@@ -44,7 +46,7 @@ The web and documentation applications still contain starter screens. The API us
 
 Exact dependency versions are recorded in each application's `package.json` and the workspace lockfile. See the [API foundation decision](apps/api/docs/decisions/0001-api-foundation.md) for compatibility choices.
 
-## Run the API locally
+## Run locally
 
 Install Node.js **24.15 or newer within the 24.x release line**, **pnpm 11.25.0**, and Docker with Docker Compose. Start Docker before bringing up the local services. Run these commands from the repository root:
 
@@ -52,15 +54,27 @@ Install Node.js **24.15 or newer within the 24.x release line**, **pnpm 11.25.0*
 pnpm install --frozen-lockfile
 docker compose -f compose.api.yaml up -d --wait
 cp -n apps/api/.env.example apps/api/.env
+cp -n apps/worker/.env.example apps/worker/.env
 pnpm --filter @axiapay/api auth:setup
-pnpm --filter @axiapay/api build
+pnpm run build:api
 pnpm --filter @axiapay/api db:migrate
-pnpm run dev:api
+npm run dev
 ```
 
 The environment copy preserves an existing `.env` file. The example contains local development credentials; deployment environments require their own configuration.
 
-`npm run dev:api` also starts the API in watch mode by delegating to pnpm. Use pnpm for dependency installation to keep the workspace lockfile consistent.
+`npm run dev` starts the API, recovery worker, web application on port 3000, and documentation application on port 3001 together. Turborepo builds the shared backend before starting the API and worker, then rebuilds shared code and restarts those applications when it changes. Keep the Docker Compose services running for PostgreSQL, Redis and Mailpit; apply migrations explicitly during setup.
+
+To run just the API or worker, use the focused commands instead:
+
+```sh
+pnpm run dev:api
+pnpm run dev:worker
+```
+
+Use matching database, queue and VTpass settings in both apps. The worker needs no API authentication settings. See the [worker setup guide](apps/worker/README.md) and [shared backend boundaries](packages/backend/README.md).
+
+`npm run dev:api` and `npm run dev:worker` also run the focused watch tasks. Use pnpm for dependency installation to keep the workspace lockfile consistent.
 
 | Resource                      | Local address                       |
 | ----------------------------- | ----------------------------------- |
@@ -75,7 +89,7 @@ The environment copy preserves an existing `.env` file. The example contains loc
 
 The liveness endpoint reports that the API process is responding; it does not check the database, queues, or payment providers. Interactive documentation is disabled in production.
 
-Stop the API with `Ctrl+C`. Stop the local services while preserving their data with:
+Stop the development applications together with `Ctrl+C`. Stop the local services while preserving their data with:
 
 ```sh
 docker compose -f compose.api.yaml stop
@@ -88,14 +102,18 @@ Run commands from the repository root.
 | Command                                       | Purpose                                                       |
 | --------------------------------------------- | ------------------------------------------------------------- |
 | `pnpm run dev:api`                            | Start the API with automatic reload                           |
-| `pnpm run dev`                                | Start all application development tasks                       |
+| `pnpm run dev:worker`                         | Start the standalone worker and watch shared code             |
+| `pnpm run build:worker`                       | Build shared backend and worker                               |
+| `pnpm --filter @axiapay/worker start`         | Run the compiled standalone worker                            |
+| `pnpm --filter @axiapay/backend test`         | Test shared payment, wallet and provider behavior             |
+| `npm run dev`                                 | Start API, worker, web and docs with shared-backend watching  |
 | `pnpm run build`                              | Build the workspace applications                              |
 | `pnpm run lint`                               | Run workspace lint checks                                     |
 | `pnpm run check-types`                        | Run workspace TypeScript checks                               |
 | `pnpm --filter @axiapay/api format:check`     | Check API formatting                                          |
 | `pnpm --filter @axiapay/api test`             | Run configuration and HTTP tests                              |
 | `pnpm --filter @axiapay/api test:integration` | Check PostgreSQL and Redis using disposable Docker containers |
-| `pnpm --filter @axiapay/api build`            | Compile the API to `apps/api/dist`                            |
+| `pnpm run build:api`                          | Build shared backend and API to their own `dist` folders      |
 | `pnpm --filter @axiapay/api start`            | Run the compiled API                                          |
 | `pnpm --filter @axiapay/api db:migrate`       | Apply migrations after building the API                       |
 
