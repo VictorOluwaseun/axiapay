@@ -3,20 +3,11 @@ import {
   IsReadableText,
 } from '../../../shared/validation/input-constraints.js';
 import { ApiProperty } from '@nestjs/swagger';
-import {
-  IsString,
-  IsUUID,
-  Length,
-  Matches,
-  MaxLength,
-  MinLength,
-} from 'class-validator';
+import { IsBase64, IsUUID, Length, MaxLength } from 'class-validator';
 
 /** Accept an explicitly consented installation label and its public SPKI key; ownership comes from the bearer session. */
 export class EnrollDeviceDto {
   @ApiProperty({ minLength: 1, maxLength: 80 })
-  @IsString()
-  @MinLength(1)
   @MaxLength(80)
   @IsUnpaddedText()
   @IsReadableText()
@@ -27,9 +18,8 @@ export class EnrollDeviceDto {
     description:
       'Unpadded base64url DER SubjectPublicKeyInfo, ECDSA P-256 only.',
   })
-  @IsString()
-  @MaxLength(256)
-  @Matches(/^[A-Za-z0-9_-]+(?![\s\S])/)
+  @IsBase64({ urlSafe: true, padding: false })
+  @Length(1, 256)
   readonly publicKey!: string;
 }
 
@@ -37,7 +27,6 @@ export class EnrollDeviceDto {
 export class DeviceIdentifierDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
-  @Length(36, 36)
   readonly credentialId!: string;
 }
 
@@ -45,7 +34,6 @@ export class DeviceIdentifierDto {
 export class DeviceProofDto extends DeviceIdentifierDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
-  @Length(36, 36)
   readonly challengeId!: string;
 
   @ApiProperty({
@@ -53,9 +41,8 @@ export class DeviceProofDto extends DeviceIdentifierDto {
     description:
       'Unpadded base64url ASN.1 DER SHA256withECDSA signature over decoded message bytes.',
   })
-  @IsString()
-  @MaxLength(128)
-  @Matches(/^[A-Za-z0-9_-]+(?![\s\S])/)
+  @IsBase64({ urlSafe: true, padding: false })
+  @Length(1, 128)
   readonly signature!: string;
 }
 

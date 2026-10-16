@@ -1,6 +1,12 @@
 import { IsReadableText } from '../../../shared/validation/input-constraints.js';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsUUID, Length, Matches, ValidateIf } from 'class-validator';
+import {
+  IsNumberString,
+  IsUUID,
+  Length,
+  Matches,
+  ValidateIf,
+} from 'class-validator';
 import type {
   Bank,
   BankPage,
@@ -23,7 +29,6 @@ import { SubmitServicePaymentDto } from './payment-request.dto.js';
 export class BankTransferPageQueryDto {
   @ApiPropertyOptional({ example: 'NGN' })
   @ValidateIf((_object, value) => value !== undefined)
-  @IsString()
   @Matches(/^[A-Z]{3}(?![\s\S])/)
   readonly currency?: string;
   @ApiPropertyOptional({ format: 'uuid' })
@@ -32,7 +37,6 @@ export class BankTransferPageQueryDto {
   readonly afterId?: string;
   @ApiPropertyOptional({ type: String, default: '50' })
   @ValidateIf((_object, value) => value !== undefined)
-  @IsString()
   @Matches(/^(?:[1-9][0-9]?|100)(?![\s\S])/)
   readonly limit?: string;
 }
@@ -41,7 +45,6 @@ export class BankTransferPageQueryDto {
 export class BankDirectoryQueryDto extends BankTransferPageQueryDto {
   @ApiPropertyOptional({ example: 'NG' })
   @ValidateIf((_object, value) => value !== undefined)
-  @IsString()
   @Matches(/^[A-Z]{2}(?![\s\S])/)
   readonly countryCode?: string;
 }
@@ -72,8 +75,8 @@ export class CreateBankBeneficiaryValidationDto {
     description:
       'Numeric account identifier, preserving leading zeros. The selected bank profile defines valid length.',
   })
-  @IsString()
-  @Matches(/^[0-9]{1,34}(?![\s\S])/)
+  @IsNumberString({ no_symbols: true })
+  @Length(1, 34)
   readonly accountNumber!: string;
 }
 
@@ -101,12 +104,10 @@ export class CreateBankTransferQuoteDto {
     description:
       'Exact recipient principal in currency minor units. Server fees are added to the wallet debit.',
   })
-  @IsString()
   @Matches(/^[1-9][0-9]{0,18}(?![\s\S])/)
   readonly amountMinorUnits!: string;
   @ApiPropertyOptional({ minLength: 1, maxLength: 140 })
   @ValidateIf((_object, value) => value !== undefined)
-  @IsString()
   @Length(1, 140)
   @IsReadableText()
   readonly narration?: string;

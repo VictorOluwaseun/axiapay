@@ -1,3 +1,4 @@
+import { isPhoneNumber } from 'class-validator';
 import { PaymentError, type ServicePayment } from '../domain/payment.js';
 import { maximumMinorUnits } from '../../wallets/domain/money.js';
 import {
@@ -36,13 +37,9 @@ export function vtpassRequestId(payment: ServicePayment): string {
   return `${values.year}${values.month}${values.day}${values.hour}${values.minute}${payment.id.replaceAll('-', '')}`;
 }
 
-/** Check VTpass's country and national-number length for an already normalized, boundary-validated E.164 phone. Generic phone syntax is not revalidated here. */
+/** Check Nigeria-specific phone eligibility for VTpass using class-validator; callers supply boundary-normalized E.164 numbers. */
 export function supportsVtpassPhoneNumber(phoneNumber: string): boolean {
-  return (
-    phoneNumber.startsWith('+234') &&
-    phoneNumber.length === 14 &&
-    phoneNumber[4] !== '0'
-  );
+  return isPhoneNumber(phoneNumber, 'NG');
 }
 
 /** Format an already validated Nigerian E.164 recipient as domestic digits. Validation belongs to validate; this function only transforms its input. */

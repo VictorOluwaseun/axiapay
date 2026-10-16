@@ -1,7 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsIn,
-  IsString,
   Length,
   Validate,
   ValidateIf,
@@ -58,7 +57,6 @@ export class InsuranceOptionsQueryDto {
       value !== undefined ||
       ['vehicleModel', 'localGovernmentArea'].includes(object.field),
   )
-  @IsString()
   @Length(1, 200)
   @IsReadableText()
   readonly parentValue?: string;

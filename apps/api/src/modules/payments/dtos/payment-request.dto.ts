@@ -3,11 +3,11 @@ import {
   IsUnpaddedText,
   HasExactlyOneField,
 } from '../../../shared/validation/input-constraints.js';
+import { IsE164PhoneNumber } from '../../../shared/validation/contact-format.js';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import type { ServiceType } from '@axiapay/payments-runtime/modules/service-catalog/domain/service-product';
 import {
   IsIn,
-  IsString,
   IsUUID,
   Length,
   Matches,
@@ -40,8 +40,7 @@ export class CreatePaymentQuoteDto {
       'Explicit international recipient. The selected product determines the network; phone prefixes do not.',
   })
   @ValidateIf((_object, value) => value !== undefined)
-  @IsString()
-  @Matches(/^\+[1-9][0-9]{7,14}(?![\s\S])/)
+  @IsE164PhoneNumber()
   readonly recipientPhoneNumber?: string;
 
   @ApiPropertyOptional({
@@ -49,8 +48,7 @@ export class CreatePaymentQuoteDto {
       'Service delivery contact, distinct from a verified meter, smartcard or candidate.',
   })
   @ValidateIf((_object, value) => value !== undefined)
-  @IsString()
-  @Matches(/^\+[1-9][0-9]{7,14}(?![\s\S])/)
+  @IsE164PhoneNumber()
   readonly contactPhoneNumber?: string;
 
   @ApiPropertyOptional({
@@ -58,8 +56,6 @@ export class CreatePaymentQuoteDto {
       'Merchant account or invoice to review; required only for merchant products.',
   })
   @ValidateIf((_object, value) => value !== undefined)
-  @IsString()
-  @Length(1, 100)
   @Matches(/^[\x20-\x7e]{1,100}(?![\s\S])/)
   @IsUnpaddedText()
   readonly merchantRecipientIdentifier?: string;
@@ -89,7 +85,6 @@ export class CreatePaymentQuoteDto {
       'Optional only for bank transfers; preserved in reviewed terms.',
   })
   @ValidateIf((_object, value) => value !== undefined)
-  @IsString()
   @Length(1, 140)
   @IsReadableText()
   readonly narration?: string;
@@ -119,7 +114,6 @@ export class CreatePaymentQuoteDto {
       'Exact positive minor units, at most 9223372036854775807. Required for variable-price products; forbidden for fixed-price products including insurance and vouchers.',
   })
   @ValidateIf((_object, value) => value !== undefined)
-  @IsString()
   @Matches(/^[1-9][0-9]{0,18}(?![\s\S])/)
   readonly amountMinorUnits?: string;
 }
@@ -132,7 +126,6 @@ export class PaymentRequestIdentityDto {
     description:
       'Persist this logical identity and reuse it with the same quote after uncertainty; use the same identity across online and future SMS transport.',
   })
-  @IsString()
   @MaxLength(200)
   @NotContains('\u0000')
   @IsUnpaddedText()
@@ -192,7 +185,6 @@ export class ProductQueryDto {
     maxLength: 50,
   })
   @ValidateIf((_object, value) => value !== undefined)
-  @IsString()
   @Matches(/^[a-z0-9][a-z0-9-]{0,49}(?![\s\S])/)
   readonly billerCode?: string;
 
@@ -203,7 +195,6 @@ export class ProductQueryDto {
 
   @ApiPropertyOptional({ example: 'mtn', maxLength: 50 })
   @ValidateIf((_object, value) => value !== undefined)
-  @IsString()
   @Matches(/^[a-z0-9][a-z0-9-]{0,49}(?![\s\S])/)
   readonly networkCode?: string;
 
@@ -213,7 +204,6 @@ export class ProductQueryDto {
   readonly bankId?: string;
   @ApiPropertyOptional({ example: 'NGN' })
   @ValidateIf((_object, value) => value !== undefined)
-  @IsString()
   @Matches(/^[A-Z]{3}(?![\s\S])/)
   readonly currency?: string;
 
@@ -231,7 +221,6 @@ export class ProductQueryDto {
     description: 'Page size, from 1 to 100.',
   })
   @ValidateIf((_object, value) => value !== undefined)
-  @IsString()
   @Matches(/^(?:[1-9][0-9]?|100)(?![\s\S])/)
   readonly limit?: string;
 }

@@ -3943,7 +3943,7 @@ describe('VTpass airtime with authoritative wallet settlement', () => {
   it('rejects unsupported recipient encoding before accepting or reserving money', async () => {
     const context = await vtpassPaymentFixture();
     const quote = (
-      await context.quote({ recipientPhoneNumber: '+15551234567' })
+      await context.quote({ recipientPhoneNumber: '+12025550123' })
     ).json<PaymentQuoteResponseDto>();
     expect(quote.isSubmissionAvailable).toBe(false);
     const response = await context.pay(quote.id);

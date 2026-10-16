@@ -1,12 +1,7 @@
 import { IsUnpaddedText } from '../../../shared/validation/input-constraints.js';
+import { IsE164PhoneNumber } from '../../../shared/validation/contact-format.js';
 import { ApiProperty } from '@nestjs/swagger';
-import {
-  IsString,
-  IsUUID,
-  Matches,
-  MaxLength,
-  NotContains,
-} from 'class-validator';
+import { IsUUID, Matches, MaxLength, NotContains } from 'class-validator';
 import {
   conversionStatus,
   type ConversionOffer,
@@ -20,12 +15,10 @@ export class CreateConversionQuoteDto {
   @IsUUID()
   readonly walletId!: string;
   @ApiProperty({ example: 'eligible-network-airtime' })
-  @IsString()
   @Matches(/^[a-z][a-z0-9-]{0,63}(?![\s\S])/)
   readonly offerId!: string;
   @ApiProperty({ example: '+2348012345678' })
-  @IsString()
-  @Matches(/^\+[1-9][0-9]{7,14}(?![\s\S])/)
+  @IsE164PhoneNumber()
   readonly sourcePhoneNumber!: string;
   @ApiProperty({
     type: String,
@@ -33,7 +26,6 @@ export class CreateConversionQuoteDto {
     description:
       'Airtime face value in the wallet currency minor units; exact positive integer, bounded by the offer and SQL bigint.',
   })
-  @IsString()
   @Matches(/^[1-9][0-9]{0,18}(?![\s\S])/)
   readonly airtimeMinorUnits!: string;
 }
@@ -41,7 +33,6 @@ export class CreateConversionQuoteDto {
 /** Owner-scoped logical acceptance identity; persist before submission and reuse after response loss. */
 export class ConversionRequestKeyDto {
   @ApiProperty({ maxLength: 200, minLength: 1 })
-  @IsString()
   @MaxLength(200)
   @NotContains('\u0000')
   @IsUnpaddedText()

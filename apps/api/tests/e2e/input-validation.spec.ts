@@ -30,7 +30,10 @@ import {
   ProductQueryDto,
 } from '../../src/modules/payments/dtos/payment-request.dto.js';
 import { CreateInsuranceApplicationDto } from '../../src/modules/payments/dtos/education-insurance.dto.js';
-import { CreateBankTransferQuoteDto } from '../../src/modules/payments/dtos/bank-transfer.dto.js';
+import {
+  CreateBankBeneficiaryValidationDto,
+  CreateBankTransferQuoteDto,
+} from '../../src/modules/payments/dtos/bank-transfer.dto.js';
 import { TransferWalletFundsDto } from '../../src/modules/wallets/dtos/wallet-request.dto.js';
 import type { AuthenticationResult } from '../../src/modules/authentication/services/authentication-session.js';
 
@@ -102,7 +105,7 @@ describe('HTTP input boundary', () => {
       expect(operation).not.toHaveBeenCalled();
     },
   );
-  it('normalizes contact identity before entering the service while preserving every password character', async () => {
+  it('normalizes contact, preserves passwords and forwards the connection IP without trusting forwarded headers', async () => {
     const operation = vi
       .spyOn(application.get(AuthenticationService), 'loginWithPassword')
       .mockResolvedValue(session);
@@ -110,6 +113,8 @@ describe('HTTP input boundary', () => {
     const response = await application.inject({
       method: 'POST',
       url: '/v1/auth/login/password',
+      remoteAddress: '198.51.100.10',
+      headers: { 'x-forwarded-for': '203.0.113.20' },
       payload: {
         contact: { kind: 'email', value: ' Alice+Home@Example.COM ' },
         password,
@@ -120,6 +125,7 @@ describe('HTTP input boundary', () => {
       expect.objectContaining({
         contact: { kind: 'email', value: 'alice+home@example.com' },
         password,
+        clientIp: '198.51.100.10',
       }),
     );
   });
@@ -152,6 +158,7 @@ describe('non-HTTP validation wrapper', () => {
     'a..b@example.com',
     '.alice@example.com',
     'alice\n@example.com',
+    '"alice\nsmith"@example.com',
   ])(
     'rejects invalid email %j without invoking the operation',
     async (value) => {
@@ -173,7 +180,15 @@ describe('non-HTTP validation wrapper', () => {
       (input) => input.contact.value,
     );
     expect(result).toBe('+2348012345678');
-    for (const value of ['08012345678', '+123', 2348012345678]) {
+    for (const value of [
+      '08012345678',
+      '+123',
+      '+2341234567890',
+      '+234 8012345678',
+      'call +2348012345678',
+      '+2348012345678 ext 1',
+      2348012345678,
+    ]) {
       const operation = vi.fn();
       await expect(
         withValidatedInput(
@@ -328,12 +343,69 @@ describe('non-HTTP validation wrapper', () => {
     }
     expect(operation).not.toHaveBeenCalled();
   });
+  it.each(['recipientPhoneNumber', 'contactPhoneNumber'])(
+    'requires canonical phone digits and a valid numbering plan for %s before payment workflow entry',
+    async (field) => {
+      const payload = {
+        walletId: id,
+        productId: id,
+        recipientPhoneNumber: '+2348012345678',
+      };
+      expect(
+        await withValidatedInput(
+          CreatePaymentQuoteDto,
+          { ...payload, [field]: '+12025550123' },
+          (input) => input[field as keyof CreatePaymentQuoteDto],
+        ),
+      ).toBe('+12025550123');
+      const operation = vi.fn();
+      for (const phoneNumber of [
+        '+2341234567890',
+        '+234 8012345678',
+        '+2348012345678 ext 1',
+        '+2348012345678\n',
+        2348012345678,
+      ]) {
+        await expect(
+          withValidatedInput(
+            CreatePaymentQuoteDto,
+            { ...payload, [field]: phoneNumber },
+            operation,
+          ),
+        ).rejects.toBeInstanceOf(BadRequestException);
+      }
+      expect(operation).not.toHaveBeenCalled();
+    },
+  );
+  it('preserves bank-account leading zeros while rejecting non-digit identifiers before beneficiary verification', async () => {
+    expect(
+      await withValidatedInput(
+        CreateBankBeneficiaryValidationDto,
+        { productId: id, accountNumber: '0012345678' },
+        (input) => input.accountNumber,
+      ),
+    ).toBe('0012345678');
+    const operation = vi.fn();
+    for (const accountNumber of ['0012345678\n', '+12345', '1e3', 12345]) {
+      await expect(
+        withValidatedInput(
+          CreateBankBeneficiaryValidationDto,
+          { productId: id, accountNumber },
+          operation,
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    }
+    expect(operation).not.toHaveBeenCalled();
+  });
   it('rejects malformed nested insurance profiles and dates before product-specific eligibility logic', async () => {
     const operation = vi.fn();
     for (const insuredProfile of [
       { fullName: 'Alice', dateOfBirth: '2024-02-30' },
       { fullName: 'Alice', phoneNumber: '08012345678' },
+      { fullName: 'Alice', nextOfKinPhoneNumber: '+2348012345678 ext 1' },
       { fullName: 'Alice', email: 'invalid' },
+      { fullName: 'Alice', email: 'alice..smith@example.com' },
+      { fullName: 'Alice', email: '"alice\nsmith"@example.com' },
       { fullName: 'Alice', identityNumber: ' 001' },
       { fullName: 'Alice\nSmith' },
     ]) {

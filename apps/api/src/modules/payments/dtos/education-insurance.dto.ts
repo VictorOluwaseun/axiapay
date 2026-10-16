@@ -2,15 +2,18 @@ import {
   IsReadableText,
   IsUnpaddedText,
 } from '../../../shared/validation/input-constraints.js';
+import {
+  emailValidationOptions,
+  IsE164PhoneNumber,
+} from '../../../shared/validation/contact-format.js';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   Equals,
-  IsBoolean,
   IsDefined,
+  IsEmail,
   IsISO8601,
   IsObject,
-  IsString,
   IsUUID,
   Length,
   Matches,
@@ -33,7 +36,6 @@ export class CreateEducationValidationDto {
   @IsUUID()
   readonly productId!: string;
   @ApiProperty({ example: '001234567', maxLength: 100 })
-  @IsString()
   @Matches(/^[\x20-\x7e]{1,100}(?![\s\S])/)
   @IsUnpaddedText()
   readonly beneficiaryIdentifier!: string;
@@ -161,109 +163,87 @@ export class InsuranceTermsResponseDto implements InsuranceProductTerms {
 /** Whitelist typed insured inputs; product policy further rejects any field it does not request. No implicit primitive conversion is permitted. */
 export class InsuredProfileDto {
   @ApiProperty()
-  @IsString()
   @Length(1, 200)
   @IsReadableText()
   readonly fullName!: string;
   @ApiPropertyOptional({ format: 'date' })
   @ValidateIf((_object, value) => value !== undefined)
-  @IsString()
   @Matches(/^\d{4}-\d{2}-\d{2}(?![\s\S])/)
   @IsISO8601({ strict: true })
   readonly dateOfBirth?: string;
   @ApiPropertyOptional()
   @ValidateIf((_object, value) => value !== undefined)
-  @IsString()
-  @Matches(/^\+[1-9][0-9]{7,14}(?![\s\S])/)
+  @IsE164PhoneNumber()
   readonly phoneNumber?: string;
   @ApiPropertyOptional()
   @ValidateIf((_object, value) => value !== undefined)
-  @IsString()
-  @Length(1, 254)
-  @Matches(/^[^\s@]+@[^\s@]+\.[^\s@]+(?![\s\S])/)
-  @IsReadableText()
+  @IsEmail(emailValidationOptions)
   readonly email?: string;
   @ApiPropertyOptional()
   @ValidateIf((_object, value) => value !== undefined)
-  @IsString()
   @Length(1, 500)
   @IsReadableText()
   readonly address?: string;
   @ApiPropertyOptional()
   @ValidateIf((_object, value) => value !== undefined)
-  @IsString()
-  @Length(1, 100)
   @Matches(/^[\x20-\x7e]{1,100}(?![\s\S])/)
   @IsUnpaddedText()
   readonly identityNumber?: string;
   @ApiPropertyOptional()
   @ValidateIf((_object, value) => value !== undefined)
-  @IsString()
-  @Length(1, 100)
   @Matches(/^[\x20-\x7e]{1,100}(?![\s\S])/)
   @IsUnpaddedText()
   readonly assetReference?: string;
   @ApiPropertyOptional()
   @ValidateIf((_object, value) => value !== undefined)
-  @IsString()
   @Length(1, 200)
   @IsReadableText()
   readonly nextOfKinName?: string;
   @ApiPropertyOptional()
   @ValidateIf((_object, value) => value !== undefined)
-  @IsString()
-  @Matches(/^\+[1-9][0-9]{7,14}(?![\s\S])/)
+  @IsE164PhoneNumber()
   readonly nextOfKinPhoneNumber?: string;
   @ApiPropertyOptional()
   @ValidateIf((_object, value) => value !== undefined)
-  @IsString()
   @Length(1, 200)
   @IsReadableText()
   readonly occupation?: string;
   @ApiPropertyOptional()
   @ValidateIf((_object, value) => value !== undefined)
-  @IsString()
   @Length(1, 200)
   @IsReadableText()
   readonly engineCapacityBand?: string;
   @ApiPropertyOptional()
   @ValidateIf((_object, value) => value !== undefined)
-  @IsString()
   @Length(1, 200)
   @IsReadableText()
   readonly chassisNumber?: string;
   @ApiPropertyOptional()
   @ValidateIf((_object, value) => value !== undefined)
-  @IsString()
   @Length(1, 200)
   @IsReadableText()
   readonly vehicleMake?: string;
   @ApiPropertyOptional()
   @ValidateIf((_object, value) => value !== undefined)
-  @IsString()
   @Length(1, 200)
   @IsReadableText()
   readonly vehicleModel?: string;
   @ApiPropertyOptional()
   @ValidateIf((_object, value) => value !== undefined)
-  @IsString()
   @Length(1, 200)
   @IsReadableText()
   readonly vehicleColour?: string;
   @ApiPropertyOptional()
   @ValidateIf((_object, value) => value !== undefined)
-  @IsString()
   @Matches(/^(?:19|20)[0-9]{2}(?![\s\S])/)
   readonly manufactureYear?: string;
   @ApiPropertyOptional()
   @ValidateIf((_object, value) => value !== undefined)
-  @IsString()
   @Length(1, 200)
   @IsReadableText()
   readonly state?: string;
   @ApiPropertyOptional()
   @ValidateIf((_object, value) => value !== undefined)
-  @IsString()
   @Length(1, 200)
   @IsReadableText()
   readonly localGovernmentArea?: string;
@@ -307,13 +287,11 @@ export class CreateInsuranceApplicationDto {
   @ValidateNested()
   @Type(() => InsuredProfileDto)
   readonly insuredProfile!: InsuredProfileDto;
-  @ApiProperty() @IsString() @Length(1, 100) readonly termsVersion!: string;
+  @ApiProperty() @Length(1, 100) readonly termsVersion!: string;
   @ApiProperty({ enum: [true] })
-  @IsBoolean()
   @Equals(true)
   readonly acceptedTerms!: boolean;
   @ApiProperty({ format: 'date' })
-  @IsString()
   @Matches(/^\d{4}-\d{2}-\d{2}(?![\s\S])/)
   @IsISO8601({ strict: true })
   readonly coverageStartsOn!: string;

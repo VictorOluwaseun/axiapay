@@ -1,6 +1,6 @@
 import { IsUnpaddedText } from '../../../shared/validation/input-constraints.js';
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsUUID, Matches } from 'class-validator';
+import { IsUUID, Matches } from 'class-validator';
 import type { BillAccountValidation } from '@axiapay/payments-runtime/modules/payments/domain/bill-account';
 
 /** Non-financial account verification request; product identifies the biller/package or prepaid/postpaid mode. */
@@ -16,7 +16,6 @@ export class CreateBillAccountValidationDto {
     description:
       'Exact customer/decoder/meter identifier. Leading zeros are preserved; no implicit number conversion or trimming.',
   })
-  @IsString()
   @Matches(/^[\x20-\x7e]{1,100}(?![\s\S])/)
   @IsUnpaddedText()
   readonly accountNumber!: string;

@@ -7,16 +7,14 @@ import { IsCodePointLength } from '../../../shared/validation/input-constraints.
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
+  IsBase64,
   IsDefined,
   IsIn,
+  IsNumberString,
   IsObject,
-  IsString,
   IsUUID,
   Validate,
   Length,
-  Matches,
-  MaxLength,
-  MinLength,
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
@@ -35,9 +33,6 @@ export class ContactDto implements Contact {
     { toClassOnly: true },
   )
   @Validate(ContactValueConstraint)
-  @IsString()
-  @MinLength(1)
-  @MaxLength(254)
   readonly value!: string;
 }
 
@@ -60,7 +55,6 @@ export class SignupDto extends RequestLoginCodeDto {
       'Optional passphrase; omit for code-only signup. Whitespace is preserved.',
   })
   @ValidateIf((_object: unknown, value: unknown) => value !== undefined)
-  @IsString()
   @IsCodePointLength(
     authenticationPolicy.newPasswordMinCodePoints,
     authenticationPolicy.passwordMaxCodePoints,
@@ -74,7 +68,6 @@ export class PasswordLoginDto extends RequestLoginCodeDto {
     minLength: 1,
     maxLength: authenticationPolicy.passwordMaxCodePoints,
   })
-  @IsString()
   @IsCodePointLength(1, authenticationPolicy.passwordMaxCodePoints)
   readonly password!: string;
 }
@@ -83,20 +76,19 @@ export class PasswordLoginDto extends RequestLoginCodeDto {
 export class VerifyCodeDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
-  @Length(36, 36)
   readonly challengeId!: string;
 
   @ApiProperty({ pattern: '^\\d{6}$', example: '012345' })
-  @IsString()
-  @Matches(/^\d{6}(?![\s\S])/)
+  @IsNumberString({ no_symbols: true })
+  @Length(6, 6)
   readonly code!: string;
 }
 
 /** Validate an opaque credential for a non-HTTP authentication adapter; HTTP uses the existing bearer-header reader. */
 export class SessionTokenInputDto {
   @ApiProperty({ pattern: '^[A-Za-z0-9_-]{43}$' })
-  @IsString()
-  @Matches(/^[A-Za-z0-9_-]{43}(?![\s\S])/)
+  @IsBase64({ urlSafe: true, padding: false })
+  @Length(43, 43)
   readonly token!: string;
 }
 
@@ -110,7 +102,6 @@ export class ResetPasswordDto extends VerifyCodeDto {
     maxLength: authenticationPolicy.passwordMaxCodePoints,
     description: 'New passphrase; whitespace is preserved.',
   })
-  @IsString()
   @IsCodePointLength(
     authenticationPolicy.newPasswordMinCodePoints,
     authenticationPolicy.passwordMaxCodePoints,

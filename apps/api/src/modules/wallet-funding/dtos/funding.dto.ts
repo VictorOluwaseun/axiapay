@@ -1,13 +1,10 @@
 import { IsUnpaddedText } from '../../../shared/validation/input-constraints.js';
+import { emailValidationOptions } from '../../../shared/validation/contact-format.js';
 import { Transform } from 'class-transformer';
-import {
-  ContactValueConstraint,
-  canonicalContactValue,
-} from '../../authentication/validation/contact-input.js';
+import { canonicalContactValue } from '../../authentication/validation/contact-input.js';
 import { ApiProperty } from '@nestjs/swagger';
 import {
-  Validate,
-  IsString,
+  IsEmail,
   IsUUID,
   Matches,
   MaxLength,
@@ -22,13 +19,11 @@ export class CreateFundingRequestDto {
     description:
       'An ID returned by the wallet funding-options endpoint. AxiaPay selects and persists its adapter binding.',
   })
-  @IsString()
   @Matches(/^[a-z][a-z0-9-]{0,63}(?![\s\S])/)
   readonly fundingOptionId!: string;
 
   @ApiProperty({ example: 'NGN', pattern: '^[A-Z]{3}$' })
   @Matches(/^[A-Z]{3}(?![\s\S])/)
-  @IsString()
   readonly currency!: string;
 
   @ApiProperty({
@@ -36,7 +31,6 @@ export class CreateFundingRequestDto {
     pattern: '^[1-9][0-9]{0,18}(?![\\s\\S])',
     example: '100000',
   })
-  @IsString()
   @Matches(/^[1-9][0-9]{0,18}(?![\s\S])/)
   readonly amountMinorUnits!: string;
 
@@ -49,9 +43,7 @@ export class CreateFundingRequestDto {
     ({ value }: { value: unknown }) => canonicalContactValue(value, 'email'),
     { toClassOnly: true },
   )
-  @Validate(ContactValueConstraint, ['email'])
-  @IsString()
-  @MaxLength(254)
+  @IsEmail(emailValidationOptions)
   readonly payerEmail!: string;
 
   @ApiProperty({
@@ -60,7 +52,6 @@ export class CreateFundingRequestDto {
     description:
       'Owner-scoped logical request key; persist before submitting and reuse after uncertainty.',
   })
-  @IsString()
   @MaxLength(200)
   @NotContains('\u0000')
   @IsUnpaddedText()
