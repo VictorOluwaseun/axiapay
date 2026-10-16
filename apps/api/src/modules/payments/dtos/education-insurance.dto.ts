@@ -1,4 +1,7 @@
-import { IsReadableText } from '../../../shared/validation/input-constraints.js';
+import {
+  IsReadableText,
+  IsUnpaddedText,
+} from '../../../shared/validation/input-constraints.js';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
@@ -11,7 +14,6 @@ import {
   IsUUID,
   Length,
   Matches,
-  MaxLength,
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
@@ -29,12 +31,11 @@ import type {
 export class CreateEducationValidationDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
-  @Length(36, 36)
   readonly productId!: string;
   @ApiProperty({ example: '001234567', maxLength: 100 })
   @IsString()
   @Matches(/^[\x20-\x7e]{1,100}(?![\s\S])/)
-  @Matches(/^\S(?:[\s\S]*\S)?(?![\s\S])/)
+  @IsUnpaddedText()
   readonly beneficiaryIdentifier!: string;
 }
 
@@ -42,7 +43,6 @@ export class CreateEducationValidationDto {
 export class PreparationIdParamsDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
-  @Length(36, 36)
   readonly preparationId!: string;
 }
 
@@ -79,6 +79,12 @@ export class EducationValidationResponseDto {
 /** Full reviewable product terms; exclusions, cancellation rules and requested insured fields come from the immutable selected revision. */
 export class InsuranceTermsResponseDto implements InsuranceProductTerms {
   @ApiProperty() readonly version!: string;
+  @ApiPropertyOptional({
+    enum: ['provider_verified', 'submission_requirements'],
+  })
+  readonly eligibilityMode?: InsuranceProductTerms['eligibilityMode'];
+  @ApiPropertyOptional({ enum: ['requested', 'provider_assigned'] })
+  readonly coverageStartMode?: InsuranceProductTerms['coverageStartMode'];
   @ApiProperty() readonly coverageSummary!: string;
   @ApiProperty({ type: [String] }) readonly exclusions!: readonly string[];
   @ApiProperty({
@@ -96,6 +102,17 @@ export class InsuranceTermsResponseDto implements InsuranceProductTerms {
       'address',
       'identityNumber',
       'assetReference',
+      'nextOfKinName',
+      'nextOfKinPhoneNumber',
+      'occupation',
+      'engineCapacityBand',
+      'chassisNumber',
+      'vehicleMake',
+      'vehicleModel',
+      'vehicleColour',
+      'manufactureYear',
+      'state',
+      'localGovernmentArea',
     ],
     isArray: true,
   })
@@ -110,6 +127,17 @@ export class InsuranceTermsResponseDto implements InsuranceProductTerms {
       'address',
       'identityNumber',
       'assetReference',
+      'nextOfKinName',
+      'nextOfKinPhoneNumber',
+      'occupation',
+      'engineCapacityBand',
+      'chassisNumber',
+      'vehicleMake',
+      'vehicleModel',
+      'vehicleColour',
+      'manufactureYear',
+      'state',
+      'localGovernmentArea',
     ],
     isArray: true,
   })
@@ -118,6 +146,8 @@ export class InsuranceTermsResponseDto implements InsuranceProductTerms {
   static fromTerms(terms: InsuranceProductTerms): InsuranceTermsResponseDto {
     return {
       version: terms.version,
+      eligibilityMode: terms.eligibilityMode,
+      coverageStartMode: terms.coverageStartMode,
       coverageSummary: terms.coverageSummary,
       exclusions: terms.exclusions,
       coverageDurationDays: terms.coverageDurationDays,
@@ -144,7 +174,6 @@ export class InsuredProfileDto {
   @ApiPropertyOptional()
   @ValidateIf((_object, value) => value !== undefined)
   @IsString()
-  @MaxLength(16)
   @Matches(/^\+[1-9][0-9]{7,14}(?![\s\S])/)
   readonly phoneNumber?: string;
   @ApiPropertyOptional()
@@ -165,15 +194,79 @@ export class InsuredProfileDto {
   @IsString()
   @Length(1, 100)
   @Matches(/^[\x20-\x7e]{1,100}(?![\s\S])/)
-  @Matches(/^\S(?:[\s\S]*\S)?(?![\s\S])/)
+  @IsUnpaddedText()
   readonly identityNumber?: string;
   @ApiPropertyOptional()
   @ValidateIf((_object, value) => value !== undefined)
   @IsString()
   @Length(1, 100)
   @Matches(/^[\x20-\x7e]{1,100}(?![\s\S])/)
-  @Matches(/^\S(?:[\s\S]*\S)?(?![\s\S])/)
+  @IsUnpaddedText()
   readonly assetReference?: string;
+  @ApiPropertyOptional()
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsString()
+  @Length(1, 200)
+  @IsReadableText()
+  readonly nextOfKinName?: string;
+  @ApiPropertyOptional()
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsString()
+  @Matches(/^\+[1-9][0-9]{7,14}(?![\s\S])/)
+  readonly nextOfKinPhoneNumber?: string;
+  @ApiPropertyOptional()
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsString()
+  @Length(1, 200)
+  @IsReadableText()
+  readonly occupation?: string;
+  @ApiPropertyOptional()
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsString()
+  @Length(1, 200)
+  @IsReadableText()
+  readonly engineCapacityBand?: string;
+  @ApiPropertyOptional()
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsString()
+  @Length(1, 200)
+  @IsReadableText()
+  readonly chassisNumber?: string;
+  @ApiPropertyOptional()
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsString()
+  @Length(1, 200)
+  @IsReadableText()
+  readonly vehicleMake?: string;
+  @ApiPropertyOptional()
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsString()
+  @Length(1, 200)
+  @IsReadableText()
+  readonly vehicleModel?: string;
+  @ApiPropertyOptional()
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsString()
+  @Length(1, 200)
+  @IsReadableText()
+  readonly vehicleColour?: string;
+  @ApiPropertyOptional()
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsString()
+  @Matches(/^(?:19|20)[0-9]{2}(?![\s\S])/)
+  readonly manufactureYear?: string;
+  @ApiPropertyOptional()
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsString()
+  @Length(1, 200)
+  @IsReadableText()
+  readonly state?: string;
+  @ApiPropertyOptional()
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsString()
+  @Length(1, 200)
+  @IsReadableText()
+  readonly localGovernmentArea?: string;
   /** Whitelist the supported effective fields, excluding undeclared storage/adapter extensions. */
   static fromProfile(profile: InsuredProfile): InsuredProfileDto {
     return Object.fromEntries(
@@ -185,6 +278,17 @@ export class InsuredProfileDto {
         'address',
         'identityNumber',
         'assetReference',
+        'nextOfKinName',
+        'nextOfKinPhoneNumber',
+        'occupation',
+        'engineCapacityBand',
+        'chassisNumber',
+        'vehicleMake',
+        'vehicleModel',
+        'vehicleColour',
+        'manufactureYear',
+        'state',
+        'localGovernmentArea',
       ]
         .filter((field) => profile[field as keyof InsuredProfile] !== undefined)
         .map((field) => [field, profile[field as keyof InsuredProfile]]),
@@ -196,7 +300,6 @@ export class InsuredProfileDto {
 export class CreateInsuranceApplicationDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
-  @Length(36, 36)
   readonly productId!: string;
   @ApiProperty({ type: InsuredProfileDto })
   @IsDefined()
@@ -224,7 +327,16 @@ export class InsuranceApplicationResponseDto {
   readonly insuredProfile!: InsuredProfileDto;
   @ApiProperty() readonly termsVersion!: string;
   @ApiProperty({ enum: [true] }) readonly acceptedTerms!: true;
-  @ApiProperty({ enum: ['eligible'] }) readonly eligibilityStatus!: 'eligible';
+  @ApiProperty({
+    enum: ['eligible', 'submission_ready'],
+    description:
+      'Submission readiness confirms protocol requirements only, without insurer underwriting approval.',
+  })
+  readonly eligibilityStatus!: 'eligible' | 'submission_ready';
+  @ApiProperty({ enum: ['provider_verified', 'submission_requirements'] })
+  readonly eligibilityMode!: 'provider_verified' | 'submission_requirements';
+  @ApiProperty({ enum: ['requested', 'provider_assigned'] })
+  readonly coverageStartMode!: 'requested' | 'provider_assigned';
   @ApiProperty({ format: 'date' }) readonly coverageStartsOn!: string;
   @ApiProperty({
     format: 'date',
@@ -244,7 +356,12 @@ export class InsuranceApplicationResponseDto {
       insuredProfile: InsuredProfileDto.fromProfile(application.insuredProfile),
       termsVersion: application.termsVersion,
       acceptedTerms: true,
-      eligibilityStatus: 'eligible',
+      eligibilityStatus:
+        application.eligibilityMode === 'submission_requirements'
+          ? 'submission_ready'
+          : 'eligible',
+      eligibilityMode: application.eligibilityMode ?? 'provider_verified',
+      coverageStartMode: application.coverageStartMode ?? 'requested',
       coverageStartsOn: application.coverageStartsOn,
       coverageEndsOn: application.coverageEndsOn,
       createdAt: application.createdAt.toISOString(),

@@ -17,13 +17,24 @@ describe('API configuration', () => {
       VTPASS_PARTNER_ACCOUNT_ID: '8f819840-74b1-4822-a55b-f4fbaf1f2c90',
     };
     expect(validateEnvironment(vtpass).VTPASS_ENVIRONMENT).toBe('sandbox');
+    expect(
+      validateEnvironment({
+        ...vtpass,
+        VTPASS_PARTNER_ACCOUNT_ID:
+          vtpass.VTPASS_PARTNER_ACCOUNT_ID.toUpperCase(),
+        VTPASS_FEE_ACCOUNT_ID: '7A819840-74B1-4822-A55B-F4FBAF1F2C91',
+      }),
+    ).toMatchObject({
+      VTPASS_PARTNER_ACCOUNT_ID: vtpass.VTPASS_PARTNER_ACCOUNT_ID,
+      VTPASS_FEE_ACCOUNT_ID: '7a819840-74b1-4822-a55b-f4fbaf1f2c91',
+    });
     expect(() =>
       validateEnvironment({ ...settings, VTPASS_API_KEY: 'private-value' }),
     ).toThrow('VTPASS_SECRET_KEY');
     expect(() =>
       validateEnvironment({
         ...vtpass,
-        VTPASS_FEE_ACCOUNT_ID: vtpass.VTPASS_PARTNER_ACCOUNT_ID,
+        VTPASS_FEE_ACCOUNT_ID: vtpass.VTPASS_PARTNER_ACCOUNT_ID.toUpperCase(),
       }),
     ).toThrow('VTPASS_FEE_ACCOUNT_ID');
     expect(() =>

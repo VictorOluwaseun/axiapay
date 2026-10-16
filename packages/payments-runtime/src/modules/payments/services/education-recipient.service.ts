@@ -34,7 +34,10 @@ export class EducationRecipientService {
     readonly beneficiaryIdentifier: string;
   }): Promise<EducationRecipientValidation> {
     const product = await this.catalogue.getProduct(input.productId);
-    if (product.serviceType !== 'education') {
+    if (
+      product.serviceType !== 'education' ||
+      product.educationRecipientVerificationRequired === false
+    ) {
       throw new PaymentError('INVALID_PAYMENT');
     }
     const verifier = Object.hasOwn(this.providers, product.providerKey)

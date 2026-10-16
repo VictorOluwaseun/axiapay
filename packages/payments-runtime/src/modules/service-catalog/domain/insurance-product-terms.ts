@@ -6,11 +6,26 @@ export type InsuredField =
   | 'email'
   | 'address'
   | 'identityNumber'
-  | 'assetReference';
+  | 'assetReference'
+  | 'nextOfKinName'
+  | 'nextOfKinPhoneNumber'
+  | 'occupation'
+  | 'engineCapacityBand'
+  | 'chassisNumber'
+  | 'vehicleMake'
+  | 'vehicleModel'
+  | 'vehicleColour'
+  | 'manufactureYear'
+  | 'state'
+  | 'localGovernmentArea';
 
 /** Immutable reviewable terms for a fixed-premium individual product; no provider defaults or coverage guarantees are inferred. */
 export interface InsuranceProductTerms {
   readonly version: string;
+  /** Provider verification is the legacy default. Submission requirements explicitly authorize local product-rule and authenticated option/price checks without claiming underwriting or coverage. */
+  readonly eligibilityMode?: 'provider_verified' | 'submission_requirements';
+  /** Requested periods remain the legacy default; provider-assigned starts require explicit reviewed consent and same-day application creation. */
+  readonly coverageStartMode?: 'requested' | 'provider_assigned';
   readonly coverageSummary: string;
   readonly exclusions: readonly string[];
   readonly coverageDurationDays: number;

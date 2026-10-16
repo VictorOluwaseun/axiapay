@@ -241,6 +241,7 @@ export interface ServiceCatalogProducts {
   display_name: string;
   education_payment_type: string | null;
   education_purpose: string | null;
+  education_recipient_verification_required: Generated<boolean>;
   education_validation_lifetime_seconds: number | null;
   electricity_meter_type: string | null;
   fee_minor_units: Int8;
@@ -313,6 +314,7 @@ export interface ServicePaymentOutcomes {
 export interface ServicePaymentQuotes {
   account_validation_id: string | null;
   bank_beneficiary_validation_id: string | null;
+  contact_phone_number: string | null;
   created_at: Timestamp;
   currency: string;
   education_validation_id: string | null;
@@ -320,6 +322,7 @@ export interface ServicePaymentQuotes {
   fee_minor_units: Int8;
   id: string;
   insurance_application_id: string | null;
+  merchant_recipient_identifier: string | null;
   narration: string | null;
   owner_id: string;
   principal_minor_units: Int8;

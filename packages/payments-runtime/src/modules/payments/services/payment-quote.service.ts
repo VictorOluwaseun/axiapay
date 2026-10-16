@@ -56,6 +56,8 @@ interface QuoteRecipient {
 /** Input recipient selectors are mutually exclusive and never silently ignored. */
 interface QuoteRecipientInput {
   readonly recipientPhoneNumber?: string;
+  readonly contactPhoneNumber?: string;
+  readonly merchantRecipientIdentifier?: string;
   readonly accountValidationId?: string;
   readonly bankBeneficiaryValidationId?: string;
   readonly educationValidationId?: string;
@@ -88,6 +90,8 @@ export class PaymentQuoteService {
     readonly wallet: Wallet;
     readonly productId: string;
     readonly recipientPhoneNumber?: string;
+    readonly contactPhoneNumber?: string;
+    readonly merchantRecipientIdentifier?: string;
     readonly accountValidationId?: string;
     readonly narration?: string;
     readonly bankBeneficiaryValidationId?: string;
@@ -113,6 +117,13 @@ export class PaymentQuoteService {
       throw new PaymentError('INVALID_PAYMENT');
     }
 
+    if (
+      product.serviceType === 'airtime' &&
+      input.contactPhoneNumber !== undefined &&
+      input.contactPhoneNumber !== input.recipientPhoneNumber
+    ) {
+      throw new PaymentError('INVALID_PAYMENT');
+    }
     const principal = quotePrincipal(product, input.amountMinorUnits);
     const createdAt = this.clock.now();
     if (recipient.bankBeneficiaryValidation) {
@@ -133,7 +144,7 @@ export class PaymentQuoteService {
         createdAt,
       );
     }
-    return this.payments.createQuote({
+    const quote: PaymentQuote = {
       id: randomUUID(),
       ownerId: input.actorId,
       walletId: input.wallet.id,
@@ -149,6 +160,8 @@ export class PaymentQuoteService {
       insuranceTerms: product.insuranceTerms,
       displayName: product.displayName,
       recipientPhoneNumber: input.recipientPhoneNumber ?? null,
+      contactPhoneNumber: input.contactPhoneNumber ?? null,
+      merchantRecipientIdentifier: input.merchantRecipientIdentifier ?? null,
       principal,
       feeMinorUnits: product.feeMinorUnits,
       totalDebitMinorUnits: principal.amountMinorUnits + product.feeMinorUnits,
@@ -166,7 +179,12 @@ export class PaymentQuoteService {
           recipient.insuranceApplication?.expiresAt.getTime() ?? Infinity,
         ),
       ),
-    });
+    };
+    const registration = Object.hasOwn(this.providers, quote.providerKey)
+      ? this.providers[quote.providerKey]
+      : undefined;
+    await registration?.adapter.verifyPurchaseTerms?.(quote);
+    return this.payments.createQuote(quote);
   }
 
   /** Return only the owner's quote; expiry remains visible for review and does not silently generate fresh prices. */
@@ -199,6 +217,7 @@ export class PaymentQuoteService {
       return hasProductSubmissionCapabilities(
         product.serviceType,
         registration,
+        product,
       );
     } catch (error) {
       if (isSubmissionUnavailable(error)) {
@@ -230,6 +249,7 @@ export class PaymentQuoteService {
       return hasProductSubmissionCapabilities(
         product.serviceType,
         registration,
+        product,
       );
     } catch (error) {
       if (isSubmissionUnavailable(error)) {
@@ -265,7 +285,22 @@ export class PaymentQuoteService {
       };
     }
     if (
+      product.serviceType === 'merchant' &&
+      input.merchantRecipientIdentifier !== undefined
+    ) {
+      return empty;
+    }
+    if (
       product.serviceType === 'education' &&
+      product.educationPaymentType === 'voucher' &&
+      product.educationRecipientVerificationRequired === false &&
+      input.recipientPhoneNumber !== undefined
+    ) {
+      return empty;
+    }
+    if (
+      product.serviceType === 'education' &&
+      product.educationRecipientVerificationRequired !== false &&
       input.educationValidationId !== undefined
     ) {
       return {

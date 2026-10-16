@@ -1,4 +1,9 @@
 import {
+  InsuranceOptionsQueryDto,
+  InsuranceOptionsResponseDto,
+} from '../dtos/insurance-options.dto.js';
+import { ProductIdParamsDto } from '../dtos/payment-request.dto.js';
+import {
   Body,
   Controller,
   Get,
@@ -7,6 +12,7 @@ import {
   Inject,
   Param,
   Post,
+  Query,
   UseFilters,
   UseGuards,
 } from '@nestjs/common';
@@ -88,6 +94,24 @@ export class EducationInsuranceController {
     return EducationValidationResponseDto.fromValidation(
       await this.education.get(account.id, params.preparationId.toLowerCase()),
     );
+  }
+
+  /** Expose product-specific insured choices without leaking provider identifiers or invoking a purchase. */
+  @Get('insurance-products/:productId/options')
+  @Header('Cache-Control', 'no-store')
+  @Header('Pragma', 'no-cache')
+  @ApiOperation({
+    summary: 'List supported insured values for the selected insurance product',
+  })
+  @ApiResponse({ status: 200, type: InsuranceOptionsResponseDto })
+  insuranceOptions(
+    @Param() params: ProductIdParamsDto,
+    @Query() query: InsuranceOptionsQueryDto,
+  ): Promise<InsuranceOptionsResponseDto> {
+    return this.insurance.options({
+      ...query,
+      productId: params.productId.toLowerCase(),
+    });
   }
 
   /** Accept explicit reviewed terms, typed insured fields and requested dates, then confirm eligibility without purchasing. */

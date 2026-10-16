@@ -157,6 +157,7 @@ describe('airtime/data public contracts', () => {
       'education',
       'insurance',
       'bank_transfer',
+      'merchant',
     ]);
     expect(
       document.components.schemas.ServicePaymentResponseDto.properties

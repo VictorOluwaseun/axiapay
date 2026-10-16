@@ -27,6 +27,8 @@ export function productFromRecord(
     educationPaymentType:
       record.education_payment_type as ServiceProduct['educationPaymentType'],
     educationPurpose: record.education_purpose,
+    educationRecipientVerificationRequired:
+      record.education_recipient_verification_required,
     educationValidationLifetimeSeconds:
       record.education_validation_lifetime_seconds,
     insuranceTerms:

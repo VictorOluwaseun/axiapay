@@ -197,12 +197,23 @@ export class PostgresPaymentRepository implements PaymentRepository {
     applicationId: string,
   ): Promise<InsuranceApplication | null> {
     const record = await this.database
-      .selectFrom('service_insurance_applications')
-      .selectAll()
-      .where('id', '=', applicationId)
-      .where('owner_id', '=', ownerId)
+      .selectFrom('service_insurance_applications as application')
+      .innerJoin(
+        'service_catalog_products as product',
+        'product.id',
+        'application.product_id',
+      )
+      .selectAll('application')
+      .select('product.insurance_terms')
+      .where('application.id', '=', applicationId)
+      .where('application.owner_id', '=', ownerId)
       .executeTakeFirst();
-    return record ? insuranceFromRecord(record) : null;
+    return record
+      ? insuranceFromRecord(
+          record,
+          record.insurance_terms as unknown as InsuranceProductTerms,
+        )
+      : null;
   }
 
   /** @inheritdoc PaymentRepository.createAccountValidation */
@@ -277,6 +288,9 @@ export class PostgresPaymentRepository implements PaymentRepository {
         wallet_id: quote.walletId,
         product_id: quote.productId,
         recipient_phone_number: quote.recipientPhoneNumber,
+        contact_phone_number: quote.contactPhoneNumber ?? null,
+        merchant_recipient_identifier:
+          quote.merchantRecipientIdentifier ?? null,
         account_validation_id: quote.accountValidation?.id ?? null,
         bank_beneficiary_validation_id:
           quote.bankBeneficiaryValidation?.id ?? null,
@@ -778,6 +792,12 @@ function quoteFromRecord(record: QuoteRecord): PaymentQuote {
             insuredProfile: record.insured_profile as unknown as InsuredProfile,
             termsVersion: record.terms_version!,
             acceptedTerms: true,
+            eligibilityMode: (
+              record.insurance_terms as unknown as InsuranceProductTerms
+            ).eligibilityMode,
+            coverageStartMode: (
+              record.insurance_terms as unknown as InsuranceProductTerms
+            ).coverageStartMode,
             coverageStartsOn: databaseDate(record.coverage_starts_on!),
             coverageEndsOn: databaseDate(record.coverage_ends_on!),
             evidenceReference: record.insurance_evidence!,
@@ -786,6 +806,8 @@ function quoteFromRecord(record: QuoteRecord): PaymentQuote {
           },
     displayName: record.display_name,
     recipientPhoneNumber: record.recipient_phone_number,
+    contactPhoneNumber: record.contact_phone_number ?? null,
+    merchantRecipientIdentifier: record.merchant_recipient_identifier ?? null,
     principal: {
       currency: record.currency,
       amountMinorUnits: BigInt(record.principal_minor_units),
@@ -809,11 +831,12 @@ function databaseDate(value: Date | string): string {
   return `${value.getFullYear().toString().padStart(4, '0')}-${(value.getMonth() + 1).toString().padStart(2, '0')}-${value.getDate().toString().padStart(2, '0')}`;
 }
 
-/** Map one application record into exact immutable consent and eligibility evidence. */
+/** Map consent and preparation modes from its immutable product revision; no current provider observation is inferred. */
 function insuranceFromRecord(
   record: import('kysely').Selectable<
     import('../../../infrastructure/database/database.generated.js').ServiceInsuranceApplications
   >,
+  terms: InsuranceProductTerms,
 ): InsuranceApplication {
   return {
     id: record.id,
@@ -822,6 +845,8 @@ function insuranceFromRecord(
     insuredProfile: record.insured_profile as unknown as InsuredProfile,
     termsVersion: record.terms_version,
     acceptedTerms: true,
+    eligibilityMode: terms.eligibilityMode,
+    coverageStartMode: terms.coverageStartMode,
     coverageStartsOn: databaseDate(record.coverage_starts_on),
     coverageEndsOn: databaseDate(record.coverage_ends_on),
     evidenceReference: record.evidence_reference,

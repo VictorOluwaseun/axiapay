@@ -1,5 +1,6 @@
 import {
   IsReadableText,
+  IsUnpaddedText,
   HasExactlyOneField,
 } from '../../../shared/validation/input-constraints.js';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -19,18 +20,17 @@ import {
 export class CreatePaymentQuoteDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
-  @Length(36, 36)
   readonly walletId!: string;
 
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
-  @Length(36, 36)
   @HasExactlyOneField([
     'recipientPhoneNumber',
     'accountValidationId',
     'bankBeneficiaryValidationId',
     'educationValidationId',
     'insuranceApplicationId',
+    'merchantRecipientIdentifier',
   ])
   readonly productId!: string;
 
@@ -45,13 +45,32 @@ export class CreatePaymentQuoteDto {
   readonly recipientPhoneNumber?: string;
 
   @ApiPropertyOptional({
+    description:
+      'Service delivery contact, distinct from a verified meter, smartcard or candidate.',
+  })
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsString()
+  @Matches(/^\+[1-9][0-9]{7,14}(?![\s\S])/)
+  readonly contactPhoneNumber?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Merchant account or invoice to review; required only for merchant products.',
+  })
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsString()
+  @Length(1, 100)
+  @Matches(/^[\x20-\x7e]{1,100}(?![\s\S])/)
+  @IsUnpaddedText()
+  readonly merchantRecipientIdentifier?: string;
+
+  @ApiPropertyOptional({
     format: 'uuid',
     description:
       'Required for TV/electricity and forbidden for mobile products. Server-owned validated account and selected product must match.',
   })
   @ValidateIf((_object, value) => value !== undefined)
   @IsUUID()
-  @Length(36, 36)
   readonly accountValidationId?: string;
 
   @ApiPropertyOptional({
@@ -61,7 +80,6 @@ export class CreatePaymentQuoteDto {
   })
   @ValidateIf((_object, value) => value !== undefined)
   @IsUUID()
-  @Length(36, 36)
   readonly bankBeneficiaryValidationId?: string;
 
   @ApiPropertyOptional({
@@ -83,7 +101,6 @@ export class CreatePaymentQuoteDto {
   })
   @ValidateIf((_object, value) => value !== undefined)
   @IsUUID()
-  @Length(36, 36)
   readonly educationValidationId?: string;
 
   @ApiPropertyOptional({
@@ -93,7 +110,6 @@ export class CreatePaymentQuoteDto {
   })
   @ValidateIf((_object, value) => value !== undefined)
   @IsUUID()
-  @Length(36, 36)
   readonly insuranceApplicationId?: string;
 
   @ApiPropertyOptional({
@@ -119,7 +135,7 @@ export class PaymentRequestIdentityDto {
   @IsString()
   @MaxLength(200)
   @NotContains('\u0000')
-  @Matches(/^\S(?:[\s\S]*\S)?(?![\s\S])/)
+  @IsUnpaddedText()
   readonly requestKey!: string;
 }
 
@@ -127,7 +143,6 @@ export class PaymentRequestIdentityDto {
 export class SubmitServicePaymentDto extends PaymentRequestIdentityDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
-  @Length(36, 36)
   readonly quoteId!: string;
 }
 
@@ -135,7 +150,6 @@ export class SubmitServicePaymentDto extends PaymentRequestIdentityDto {
 export class PaymentIdParamsDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
-  @Length(36, 36)
   readonly paymentId!: string;
 }
 
@@ -143,7 +157,6 @@ export class PaymentIdParamsDto {
 export class QuoteIdParamsDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
-  @Length(36, 36)
   readonly quoteId!: string;
 }
 
@@ -158,6 +171,7 @@ export class ProductQueryDto {
       'education',
       'insurance',
       'bank_transfer',
+      'merchant',
     ],
   })
   @ValidateIf((_object, value) => value !== undefined)
@@ -169,6 +183,7 @@ export class ProductQueryDto {
     'education',
     'insurance',
     'bank_transfer',
+    'merchant',
   ])
   readonly serviceType?: ServiceType;
 
@@ -195,7 +210,6 @@ export class ProductQueryDto {
   @ApiPropertyOptional({ format: 'uuid' })
   @ValidateIf((_object, value) => value !== undefined)
   @IsUUID()
-  @Length(36, 36)
   readonly bankId?: string;
   @ApiPropertyOptional({ example: 'NGN' })
   @ValidateIf((_object, value) => value !== undefined)
@@ -209,7 +223,6 @@ export class ProductQueryDto {
   })
   @ValidateIf((_object, value) => value !== undefined)
   @IsUUID()
-  @Length(36, 36)
   readonly afterId?: string;
 
   @ApiPropertyOptional({
@@ -227,6 +240,5 @@ export class ProductQueryDto {
 export class ProductIdParamsDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
-  @Length(36, 36)
   readonly productId!: string;
 }

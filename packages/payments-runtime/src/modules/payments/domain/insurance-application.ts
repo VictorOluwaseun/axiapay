@@ -14,9 +14,20 @@ export interface InsuredProfile {
   readonly address?: string;
   readonly identityNumber?: string;
   readonly assetReference?: string;
+  readonly nextOfKinName?: string;
+  readonly nextOfKinPhoneNumber?: string;
+  readonly occupation?: string;
+  readonly engineCapacityBand?: string;
+  readonly chassisNumber?: string;
+  readonly vehicleMake?: string;
+  readonly vehicleModel?: string;
+  readonly vehicleColour?: string;
+  readonly manufactureYear?: string;
+  readonly state?: string;
+  readonly localGovernmentArea?: string;
 }
 
-/** Consented, eligible insurance application. Eligibility, payment, policy issuance and active coverage remain distinct facts. */
+/** Consented preparation under immutable product terms. Submission readiness, underwriting, payment, issuance and active coverage remain distinct facts. */
 export interface InsuranceApplication {
   readonly id: string;
   readonly ownerId: string;
@@ -24,6 +35,9 @@ export interface InsuranceApplication {
   readonly insuredProfile: InsuredProfile;
   readonly termsVersion: string;
   readonly acceptedTerms: true;
+  /** Absent historical modes retain provider-verified eligibility and requested-date semantics. */
+  readonly eligibilityMode?: InsuranceProductTerms['eligibilityMode'];
+  readonly coverageStartMode?: InsuranceProductTerms['coverageStartMode'];
   readonly coverageStartsOn: string;
   readonly coverageEndsOn: string;
   readonly evidenceReference: string;
@@ -31,25 +45,7 @@ export interface InsuranceApplication {
   readonly expiresAt: Date;
 }
 
-/** Validate exact calendar dates, preventing rollover, timezone guessing and non-date inputs. */
-export function calendarDate(value: string): Date {
-  if (
-    typeof value !== 'string' ||
-    !/^\d{4}-\d{2}-\d{2}(?![\s\S])/.test(value)
-  ) {
-    throw new PaymentError('INVALID_PAYMENT');
-  }
-  const parsed = new Date(`${value}T00:00:00.000Z`);
-  if (
-    !Number.isFinite(parsed.getTime()) ||
-    parsed.toISOString().slice(0, 10) !== value
-  ) {
-    throw new PaymentError('INVALID_PAYMENT');
-  }
-  return parsed;
-}
-
-/** Construct an exclusive requested end date from operator-defined duration; actual issued-policy bounds must still be independently confirmed. */
+/** Derive the exclusive end from a boundary-validated YYYY-MM-DD start and operator duration; issued-policy bounds still require independent confirmation. */
 export function requestedCoverageEnd(
   startsOn: string,
   durationDays: number,
@@ -62,11 +58,12 @@ export function requestedCoverageEnd(
     throw new PaymentError('PRODUCT_UNAVAILABLE');
   }
   const end = new Date(
-    calendarDate(startsOn).getTime() + durationDays * 86_400_000,
+    new Date(`${startsOn}T00:00:00.000Z`).getTime() + durationDays * 86_400_000,
   );
-  const endDate = end.toISOString().slice(0, 10);
-  calendarDate(endDate);
-  return endDate;
+  if (end.getUTCFullYear() > 9999) {
+    throw new PaymentError('INVALID_PAYMENT');
+  }
+  return end.toISOString().slice(0, 10);
 }
 
 /** Enforce product-specific required/allowed fields and birth-date eligibility on an adapter-validated profile. */
@@ -83,6 +80,17 @@ export function validatedInsuredProfile(
     'address',
     'identityNumber',
     'assetReference',
+    'nextOfKinName',
+    'nextOfKinPhoneNumber',
+    'occupation',
+    'engineCapacityBand',
+    'chassisNumber',
+    'vehicleMake',
+    'vehicleModel',
+    'vehicleColour',
+    'manufactureYear',
+    'state',
+    'localGovernmentArea',
   ];
   const allowed = [
     ...terms.requiredInsuredFields,
@@ -102,6 +110,12 @@ export function validatedInsuredProfile(
         value !== undefined && !allowed.includes(field as InsuredField),
     ) ||
     terms.requiredInsuredFields.some((field) => profile[field] === undefined)
+  ) {
+    throw new PaymentError('INVALID_PAYMENT');
+  }
+  if (
+    profile.manufactureYear !== undefined &&
+    Number(profile.manufactureYear) > now.getUTCFullYear()
   ) {
     throw new PaymentError('INVALID_PAYMENT');
   }

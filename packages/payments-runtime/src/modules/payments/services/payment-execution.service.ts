@@ -7,7 +7,6 @@ import type {
 } from '../../wallets/ports/wallet-verification.js';
 import { assertReference } from '../../wallets/domain/money.js';
 import {
-  assertUuidReference,
   assertQuoteCurrent,
   PaymentError,
   paymentTermsFingerprint,
@@ -70,7 +69,11 @@ export class PaymentExecutionService implements PaymentOutcomeVerification {
         }
         const registration = this.providerFor(quote.providerKey);
         if (
-          !hasProductSubmissionCapabilities(product.serviceType, registration)
+          !hasProductSubmissionCapabilities(
+            product.serviceType,
+            registration,
+            product,
+          )
         ) {
           throw new PaymentError('PAYMENT_UNAVAILABLE');
         }
@@ -112,13 +115,24 @@ export class PaymentExecutionService implements PaymentOutcomeVerification {
     }
     assertQuoteCurrent(payment.quote, this.clock.now());
     const product = await this.catalogue.getProduct(payment.quote.productId);
-    if (!hasProductSubmissionCapabilities(product.serviceType, registration)) {
+    if (
+      !hasProductSubmissionCapabilities(
+        product.serviceType,
+        registration,
+        product,
+      )
+    ) {
       throw new PaymentError('PAYMENT_UNAVAILABLE');
+    }
+    if (registration.adapter.preparePurchase) {
+      await registration.adapter.preparePurchase(payment.quote);
+      return;
     }
     registration.adapter.validate?.({
       scope: 'quote',
       terms: payment.quote,
     });
+    await registration.adapter.verifyPurchaseTerms?.(payment.quote);
   }
 
   /** Submit only after a durable hold, claiming once before network I/O. Crashes and transport exceptions never reset or retry this boundary. */
@@ -190,17 +204,13 @@ export class PaymentExecutionService implements PaymentOutcomeVerification {
     };
   }
 
-  /** Resolve only explicitly registered provider keys, including protection against inherited object properties. */
+  /** Resolve validated deployment registrations, protecting against inherited object properties; account ID syntax belongs to configuration validation. */
   private providerFor(providerKey: string): PaymentProviderRegistration {
     const provider = Object.hasOwn(this.providers, providerKey)
       ? this.providers[providerKey]
       : undefined;
     if (!provider) {
       throw new PaymentError('PAYMENT_UNAVAILABLE');
-    }
-    assertUuidReference(provider.partnerAccountId);
-    if (provider.feeAccountId !== null) {
-      assertUuidReference(provider.feeAccountId);
     }
     return provider;
   }

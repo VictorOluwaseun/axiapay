@@ -77,6 +77,8 @@ export class PaymentsController {
       walletId: body.walletId.toLowerCase(),
       productId: body.productId.toLowerCase(),
       recipientPhoneNumber: body.recipientPhoneNumber,
+      contactPhoneNumber: body.contactPhoneNumber,
+      merchantRecipientIdentifier: body.merchantRecipientIdentifier,
       accountValidationId: body.accountValidationId?.toLowerCase(),
       bankBeneficiaryValidationId:
         body.bankBeneficiaryValidationId?.toLowerCase(),

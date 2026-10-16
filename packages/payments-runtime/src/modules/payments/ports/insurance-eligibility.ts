@@ -1,7 +1,7 @@
 import type { ServiceProduct } from '../../service-catalog/domain/service-product.js';
 import type { InsuredProfile } from '../domain/insurance-application.js';
 
-/** Correlated eligibility evidence is independent of premium payment and actual policy issuance. */
+/** Correlated preparation evidence under the product's explicit eligibility mode, independent of premium payment and actual policy issuance. */
 export type InsuranceEligibilityResult = {
   readonly applicationFingerprint: string;
 } & (
@@ -12,7 +12,7 @@ export type InsuranceEligibilityResult = {
     }
 );
 
-/** Non-purchasing eligibility/underwriting capability for supported fixed-premium products; adapters cannot silently reprice accepted terms. */
+/** Non-purchasing preparation capability for fixed-premium products. Legacy/provider_verified terms require authenticated insurer eligibility; submission_requirements confirms only current protocol readiness and must never claim underwriting. Adapters cannot silently reprice accepted terms. */
 export interface InsuranceEligibility {
   /** Verify submitted insured details and requested period under the selected reviewed terms; no payment or policy purchase may be sent. */
   verify(input: {

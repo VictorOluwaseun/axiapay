@@ -1,3 +1,8 @@
+import type {
+  InsuranceOptionField,
+  InsuranceInputOption,
+} from '../ports/insurance-input-options.js';
+import { assertBillDisplayText } from '../domain/bill-account.js';
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { ServiceCatalogService } from '../../service-catalog/services/service-catalog.service.js';
@@ -18,7 +23,7 @@ import type {
 } from '../ports/service-payment-provider.js';
 import { PAYMENTS } from '../payments.tokens.js';
 
-/** Own explicit terms consent and confirmed eligibility for fixed-premium individual products; never infer policy issuance or active coverage. */
+/** Own explicit terms consent and product-defined preparation for fixed-premium individual products; never infer underwriting from readiness, policy issuance or active coverage. */
 @Injectable()
 export class InsuranceApplicationService {
   /** Inject authoritative product terms, owner-scoped storage and replaceable non-purchasing eligibility capability. */
@@ -29,6 +34,50 @@ export class InsuranceApplicationService {
     @Inject(PAYMENTS.providers) private readonly providers: PaymentProviders,
     @Inject(PAYMENTS.clock) private readonly clock: PaymentClock,
   ) {}
+
+  /** Discover product-requested insured choices without spending, disclosing provider identifiers or creating eligibility evidence. */
+  async options(input: {
+    readonly productId: string;
+    readonly field: InsuranceOptionField;
+    readonly parentValue?: string;
+  }): Promise<{
+    readonly field: InsuranceOptionField;
+    readonly options: readonly InsuranceInputOption[];
+  }> {
+    const product = await this.catalogue.getProduct(input.productId);
+    const terms = product.insuranceTerms;
+    if (
+      product.serviceType !== 'insurance' ||
+      !terms ||
+      ![
+        ...terms.requiredInsuredFields,
+        ...terms.optionalInsuredFields,
+      ].includes(input.field)
+    ) {
+      throw new PaymentError('INVALID_PAYMENT');
+    }
+    const discovery = Object.hasOwn(this.providers, product.providerKey)
+      ? this.providers[product.providerKey]?.insuranceInputOptions
+      : undefined;
+    if (!discovery) {
+      throw new PaymentError('PAYMENT_UNAVAILABLE');
+    }
+    const options = await discovery.list({ ...input, product });
+    if (
+      options.length > 2000 ||
+      new Set(options.map((option) => option.value)).size !== options.length
+    ) {
+      throw new PaymentError('INVALID_PROVIDER_EVIDENCE');
+    }
+    return {
+      field: input.field,
+      options: options.map((option) => {
+        assertBillDisplayText(option.value, 200);
+        assertBillDisplayText(option.label, 200);
+        return { value: option.value, label: option.label };
+      }),
+    };
+  }
 
   /** Validate requested fields and reviewed terms, derive the exclusive period end, and persist consent only after correlated eligibility confirmation. */
   async create(input: {
@@ -51,6 +100,12 @@ export class InsuranceApplicationService {
     }
     const now = this.clock.now();
     if (input.coverageStartsOn < now.toISOString().slice(0, 10)) {
+      throw new PaymentError('INVALID_PAYMENT');
+    }
+    if (
+      product.insuranceTerms.coverageStartMode === 'provider_assigned' &&
+      input.coverageStartsOn !== now.toISOString().slice(0, 10)
+    ) {
       throw new PaymentError('INVALID_PAYMENT');
     }
     const profile = validatedInsuredProfile(
@@ -101,6 +156,8 @@ export class InsuranceApplicationService {
       insuredProfile: profile,
       termsVersion: input.termsVersion,
       acceptedTerms: true,
+      eligibilityMode: product.insuranceTerms.eligibilityMode,
+      coverageStartMode: product.insuranceTerms.coverageStartMode,
       coverageStartsOn: input.coverageStartsOn,
       coverageEndsOn,
       evidenceReference: result.evidenceReference,

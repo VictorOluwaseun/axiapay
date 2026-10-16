@@ -8,7 +8,8 @@ export type ServiceType =
   | 'electricity'
   | 'education'
   | 'insurance'
-  | 'bank_transfer';
+  | 'bank_transfer'
+  | 'merchant';
 
 /** Education products identify the financial purpose and whether a voucher or institution reference is delivered. */
 export type EducationPaymentType = 'institution_fee' | 'voucher';
@@ -28,6 +29,8 @@ export interface ServiceProduct {
   readonly accountValidationLifetimeSeconds: number | null;
   readonly educationPaymentType: EducationPaymentType | null;
   readonly educationPurpose: string | null;
+  /** False only for delivery-phone vouchers that have no candidate verification protocol; legacy products default to true. */
+  readonly educationRecipientVerificationRequired?: boolean;
   readonly educationValidationLifetimeSeconds: number | null;
   readonly insuranceTerms: InsuranceProductTerms | null;
   readonly insuranceApplicationLifetimeSeconds: number | null;

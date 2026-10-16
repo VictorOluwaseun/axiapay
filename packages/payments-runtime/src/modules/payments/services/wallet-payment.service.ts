@@ -23,6 +23,8 @@ export class WalletPaymentService {
     readonly walletId: string;
     readonly productId: string;
     readonly recipientPhoneNumber?: string;
+    readonly contactPhoneNumber?: string;
+    readonly merchantRecipientIdentifier?: string;
     readonly accountValidationId?: string;
     readonly bankBeneficiaryValidationId?: string;
     readonly narration?: string;

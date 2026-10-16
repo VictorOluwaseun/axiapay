@@ -78,28 +78,6 @@ export class PaymentError extends Error {
   }
 }
 
-/** Require canonical UUIDs at application boundaries, including non-HTTP callers. */
-export function assertUuidReference(id: string): void {
-  if (
-    typeof id !== 'string' ||
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![\s\S])/.test(
-      id,
-    )
-  ) {
-    throw new PaymentError('INVALID_PAYMENT');
-  }
-}
-
-/** Bind quotes to a canonical international recipient, without guessing country or ported network. */
-export function assertRecipientPhoneNumber(phoneNumber: string): void {
-  if (
-    typeof phoneNumber !== 'string' ||
-    !/^\+[1-9][0-9]{7,14}(?![\s\S])/.test(phoneNumber)
-  ) {
-    throw new PaymentError('INVALID_PAYMENT');
-  }
-}
-
 /** Immutable owner/wallet-bound review terms. Prices and adapter routing come only from a server catalogue revision. */
 export interface PaymentQuote {
   readonly id: string;
@@ -120,6 +98,10 @@ export interface PaymentQuote {
   readonly insuranceTerms: InsuranceProductTerms | null;
   readonly displayName: string;
   readonly recipientPhoneNumber: string | null;
+  /** Delivery contact, distinct from the service recipient; immutable once reviewed. */
+  readonly contactPhoneNumber?: string | null;
+  /** Customer-reviewed merchant account or invoice identifier; it is not independently verified merely by being well-shaped. */
+  readonly merchantRecipientIdentifier?: string | null;
   readonly principal: Money;
   readonly feeMinorUnits: bigint;
   readonly totalDebitMinorUnits: bigint;
@@ -237,6 +219,13 @@ export function paymentTermsFingerprint(payment: ServicePayment): string {
     quote.principal.amountMinorUnits.toString(),
     quote.feeMinorUnits.toString(),
   ];
+  if (quote.contactPhoneNumber || quote.merchantRecipientIdentifier) {
+    terms.push(
+      'service-contact-v1',
+      quote.contactPhoneNumber ?? null,
+      quote.merchantRecipientIdentifier ?? null,
+    );
+  }
   if (quote.accountValidation) {
     terms.push(
       quote.accountValidation.id,

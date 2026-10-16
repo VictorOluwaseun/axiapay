@@ -14,14 +14,20 @@ export const paymentProviderEnvironmentSchema = z
       .max(512)
       .regex(/^[\x21-\x7e]+(?![\s\S])/)
       .optional(),
+    VTPASS_PUBLIC_KEY: z
+      .string()
+      .min(1)
+      .max(512)
+      .regex(/^[\x21-\x7e]+(?![\s\S])/)
+      .optional(),
     VTPASS_SECRET_KEY: z
       .string()
       .min(1)
       .max(512)
       .regex(/^[\x21-\x7e]+(?![\s\S])/)
       .optional(),
-    VTPASS_PARTNER_ACCOUNT_ID: z.uuid().optional(),
-    VTPASS_FEE_ACCOUNT_ID: z.uuid().optional(),
+    VTPASS_PARTNER_ACCOUNT_ID: z.uuid().toLowerCase().optional(),
+    VTPASS_FEE_ACCOUNT_ID: z.uuid().toLowerCase().optional(),
   })
   .superRefine((settings, context) => {
     const fields = [
@@ -29,9 +35,11 @@ export const paymentProviderEnvironmentSchema = z
       'VTPASS_SECRET_KEY',
       'VTPASS_PARTNER_ACCOUNT_ID',
     ] as const;
-    const requiresVtpass = [...fields, 'VTPASS_FEE_ACCOUNT_ID' as const].some(
-      (field) => settings[field] !== undefined,
-    );
+    const requiresVtpass = [
+      ...fields,
+      'VTPASS_FEE_ACCOUNT_ID' as const,
+      'VTPASS_PUBLIC_KEY' as const,
+    ].some((field) => settings[field] !== undefined);
     if (!requiresVtpass) {
       return;
     }
@@ -40,7 +48,7 @@ export const paymentProviderEnvironmentSchema = z
         context.addIssue({
           code: 'custom',
           path: [field],
-          message: 'Required for VTpass airtime.',
+          message: 'Required for VTpass payments.',
         });
       }
     }

@@ -1,3 +1,4 @@
+import type { InsuranceInputOptions } from './insurance-input-options.js';
 import type { BankBeneficiaryVerification } from './bank-beneficiary-verification.js';
 import type { BankTransferFailureReason } from '../domain/bank-beneficiary.js';
 import type { PaymentQuote, ServicePayment } from '../domain/payment.js';
@@ -43,19 +44,24 @@ export type PaymentTermsInput =
 export interface ServicePaymentProvider {
   /** Optional pure protocol validation for a product or quote; throws a PaymentError before any new hold and performs no I/O or financial authorization. */
   validate?(target: PaymentTermsInput): void;
+  /** Prepare a fresh purchase with one protocol validation followed by current external-term checks, without holding funds or purchasing. When supplied, this owns both checks; callers must not repeat validate/verifyPurchaseTerms in the same preparation. Legacy providers may expose those operations separately. Recovery of existing holds bypasses preparation. */
+  preparePurchase?(quote: PaymentQuote): Promise<void>;
+  /** Optional non-purchasing check of current external terms before review or a fresh hold; never run for recovery of an existing reservation. */
+  verifyPurchaseTerms?(quote: PaymentQuote): Promise<void>;
   /** Submit once using payment.id as the stable merchant identity. Never retry an uncertain upstream submission blindly. */
   submit(payment: ServicePayment): Promise<ProviderPaymentResult>;
   /** Query independently authenticated evidence for the saved identity and accepted terms, without current purchase-eligibility validation or another purchase. Retain historical evidence support for unresolved obligations. */
   lookup(payment: ServicePayment): Promise<ProviderPaymentResult>;
 }
 
-/** Explicit adapter registration includes administratively provisioned retail clearing/fee accounts; no SDK or credential enters workflow code. */
+/** Composition supplies validated deployment registrations, including provisioned clearing/fee account UUIDs; workflow code does not reparse configuration or receive SDKs/credentials. */
 export interface PaymentProviderRegistration {
   readonly adapter: ServicePaymentProvider;
   readonly bankBeneficiaryVerification?: BankBeneficiaryVerification;
   readonly accountVerification?: BillAccountVerification;
   readonly educationVerification?: EducationBeneficiaryVerification;
   readonly insuranceEligibility?: InsuranceEligibility;
+  readonly insuranceInputOptions?: InsuranceInputOptions;
   readonly documentRetrieval?: PaymentDocumentRetrieval;
   readonly partnerAccountId: string;
   readonly feeAccountId: string | null;

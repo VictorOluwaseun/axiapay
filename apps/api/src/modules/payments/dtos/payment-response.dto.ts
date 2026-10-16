@@ -40,6 +40,7 @@ export class ServiceProductResponseDto {
       'education',
       'insurance',
       'bank_transfer',
+      'merchant',
     ],
   })
   readonly serviceType!: string;
@@ -55,6 +56,7 @@ export class ServiceProductResponseDto {
     nullable: true,
   })
   readonly educationPaymentType!: string | null;
+  @ApiProperty() readonly educationRecipientVerificationRequired!: boolean;
   @ApiProperty({ type: String, nullable: true }) readonly educationPurpose!:
     string | null;
   @ApiProperty({ type: InsuranceTermsResponseDto, nullable: true })
@@ -91,6 +93,9 @@ export class ServiceProductResponseDto {
       billerCode: product.billerCode,
       electricityMeterType: product.electricityMeterType,
       educationPaymentType: product.educationPaymentType,
+      educationRecipientVerificationRequired:
+        product.serviceType === 'education' &&
+        product.educationRecipientVerificationRequired !== false,
       educationPurpose: product.educationPurpose,
       insuranceTerms: product.insuranceTerms
         ? InsuranceTermsResponseDto.fromTerms(product.insuranceTerms)
@@ -132,6 +137,7 @@ export class PaymentReviewResponseDto {
       'education',
       'insurance',
       'bank_transfer',
+      'merchant',
     ],
   })
   readonly serviceType!: string;
@@ -157,6 +163,7 @@ export class PaymentReviewResponseDto {
     nullable: true,
   })
   readonly educationPaymentType!: string | null;
+  @ApiProperty() readonly educationRecipientVerificationRequired!: boolean;
   @ApiProperty({ type: String, nullable: true }) readonly educationPurpose!:
     string | null;
   @ApiProperty({ type: InsuranceTermsResponseDto, nullable: true })
@@ -164,6 +171,10 @@ export class PaymentReviewResponseDto {
   @ApiProperty() readonly displayName!: string;
   @ApiProperty({ type: String, nullable: true })
   readonly recipientPhoneNumber!: string | null;
+  @ApiProperty({ type: String, nullable: true }) readonly contactPhoneNumber!:
+    string | null;
+  @ApiProperty({ type: String, nullable: true })
+  readonly merchantRecipientIdentifier!: string | null;
   @ApiProperty({ example: 'NGN' }) readonly currency!: string;
   @ApiProperty({ type: String }) readonly principalMinorUnits!: string;
   @ApiProperty({ type: String }) readonly feeMinorUnits!: string;
@@ -201,6 +212,8 @@ export class PaymentReviewResponseDto {
           )
         : null,
       educationPaymentType: quote.educationPaymentType,
+      educationRecipientVerificationRequired:
+        quote.educationValidation !== null,
       educationPurpose: quote.educationPurpose,
       insuranceTerms: quote.insuranceTerms
         ? InsuranceTermsResponseDto.fromTerms(quote.insuranceTerms)
@@ -213,6 +226,8 @@ export class PaymentReviewResponseDto {
       narration: quote.narration,
       displayName: quote.displayName,
       recipientPhoneNumber: quote.recipientPhoneNumber,
+      contactPhoneNumber: quote.contactPhoneNumber ?? null,
+      merchantRecipientIdentifier: quote.merchantRecipientIdentifier ?? null,
       currency: quote.principal.currency,
       principalMinorUnits: quote.principal.amountMinorUnits.toString(),
       feeMinorUnits: quote.feeMinorUnits.toString(),

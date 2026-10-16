@@ -6,12 +6,16 @@ import type { PaymentProviderRegistration } from '../ports/service-payment-provi
 export function hasProductSubmissionCapabilities(
   serviceType: ServiceType,
   registration: PaymentProviderRegistration,
+  product?: { readonly educationRecipientVerificationRequired?: boolean },
 ): boolean {
   if (serviceType === 'bank_transfer') {
     return registration.bankBeneficiaryVerification !== undefined;
   }
   if (serviceType === 'education') {
-    return registration.educationVerification !== undefined;
+    return (
+      product?.educationRecipientVerificationRequired === false ||
+      registration.educationVerification !== undefined
+    );
   }
   if (serviceType === 'insurance') {
     return (
