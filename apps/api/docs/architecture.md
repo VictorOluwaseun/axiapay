@@ -1,6 +1,6 @@
 # API architecture
 
-The API owns HTTP delivery and API-only features under `apps/api/src/modules`. Reusable payment, wallet and catalogue features live under `packages/backend/src/modules`; API and worker both depend on that library, never on each other. `apps/worker` owns job adapters and headless bootstrap.
+The API owns HTTP delivery and API-only features under `apps/api/src/modules`. Reusable payment, wallet and catalogue features live under `packages/payments-runtime/src/modules`; API and worker both depend on that library, never on each other. `apps/worker` owns job adapters and headless bootstrap.
 
 Code is grouped by feature under `src/modules` in each owning package. Feature folders use concrete responsibilities: `controllers`, `services`, and `repositories`, with `dtos`, `domain`, and optional `data-sources` added as needed. There are no `application` or `delivery` wrapper folders inside features. The dependency rules of Clean Architecture still apply.
 
@@ -50,7 +50,7 @@ Nest modules assemble the dependency graph through constructor injection, class 
 
 ## Outbound HTTP
 
-Provider adapters and local Mailpit delivery use Axios 1.20.0, pinned in the owning API/shared-backend manifests and pnpm lockfile. The shared `packages/backend/src/infrastructure/http/axios-client.ts` factory owns Node HTTP transport defaults: no redirects or environment proxy routing, 256 KiB request/decoded-response limits, finite timeouts, and raw text without implicit JSON transformations. Feature adapters own fixed destinations, credentials, exact body serialization, provider parsing and business error mapping. Axios types remain inside infrastructure and concrete adapters, outside services, domain models and capability contracts.
+Provider adapters and local Mailpit delivery use Axios 1.20.0, pinned in the owning API/shared payments runtime manifests and pnpm lockfile. The shared `packages/payments-runtime/src/infrastructure/http/axios-client.ts` factory owns Node HTTP transport defaults: no redirects or environment proxy routing, 256 KiB request/decoded-response limits, finite timeouts, and raw text without implicit JSON transformations. Feature adapters own fixed destinations, credentials, exact body serialization, provider parsing and business error mapping. Axios types remain inside infrastructure and concrete adapters, outside services, domain models and capability contracts.
 
 Each client registers its request and response interceptors once on that instance. The request interceptor composes the configured full-read deadline with optional caller cancellation, leaving credentials and signed bytes unchanged. The response interceptor rejects non-2xx statuses and projects transport failures into `OutboundHttpError`, retaining only a controlled code and optional HTTP status. Raw Axios configuration, requests, responses, exception messages and causes are never retained. Feature adapters map these safe failures to their existing payment/funding/delivery errors; authentication, rate-limit meanings, provider payloads and financial outcomes remain their responsibility. No global interceptors, automatic retries, token refresh or implicit purchase replay is introduced.
 

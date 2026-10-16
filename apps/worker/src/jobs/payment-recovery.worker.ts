@@ -8,8 +8,8 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Queue, Worker, UnrecoverableError } from 'bullmq';
 import { Redis } from 'ioredis';
-import { withValidatedInput } from '@axiapay/backend/shared/validation/input-validation';
-import { PaymentRecoveryService } from '@axiapay/backend/modules/payments/services/payment-recovery.service';
+import { withValidatedInput } from '@axiapay/payments-runtime/shared/validation/input-validation';
+import { PaymentRecoveryService } from '@axiapay/payments-runtime/modules/payments/services/payment-recovery.service';
 import { PaymentRecoverySweepDto } from './payment-recovery-job.dto.js';
 
 /** Own the BullMQ wake-up scheduler, bounded consumer and Redis lifecycle. PostgreSQL recovery rows survive lost queue jobs; this adapter invokes existing workflows and never supplies a payment outcome. */

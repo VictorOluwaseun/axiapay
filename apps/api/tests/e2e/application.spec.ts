@@ -2,8 +2,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { createApplication } from '../../src/bootstrap/create-application.js';
-import { WalletService } from '@axiapay/backend/modules/wallets/services/wallet.service';
-import { WalletModule } from '@axiapay/backend/modules/wallets/wallet.module';
+import { WalletService } from '@axiapay/payments-runtime/modules/wallets/services/wallet.service';
+import { WalletModule } from '@axiapay/payments-runtime/modules/wallets/wallet.module';
 
 let application: NestFastifyApplication;
 beforeAll(async () => {

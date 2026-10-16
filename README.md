@@ -21,9 +21,9 @@ apps/
   web/                     Next.js web application scaffold
   docs/                    Next.js documentation application scaffold
 packages/
-  backend/                 Shared payment/wallet/catalogue rules, workflows and adapters
+  payments-runtime/        Shared payment/wallet/catalogue rules, workflows and adapters
   ui/                      Shared React components
-  eslint-config/           Shared web lint configuration
+  eslint-config/           Shared Node service and web lint policies
   typescript-config/       Shared TypeScript configuration
 compose.api.yaml           Local PostgreSQL, Redis, and Mailpit services
 ```
@@ -63,7 +63,7 @@ npm run dev
 
 The environment copy preserves an existing `.env` file. The example contains local development credentials; deployment environments require their own configuration.
 
-`npm run dev` starts the API, recovery worker, web application on port 3000, and documentation application on port 3001 together. Turborepo builds the shared backend before starting the API and worker, then rebuilds shared code and restarts those applications when it changes. Keep the Docker Compose services running for PostgreSQL, Redis and Mailpit; apply migrations explicitly during setup.
+`npm run dev` starts the API, recovery worker, web application on port 3000, and documentation application on port 3001 together. Turborepo builds the payments runtime before starting the API and worker, then rebuilds shared code and restarts those applications when it changes. Keep the Docker Compose services running for PostgreSQL, Redis and Mailpit; apply migrations explicitly during setup.
 
 To run just the API or worker, use the focused commands instead:
 
@@ -72,7 +72,7 @@ pnpm run dev:api
 pnpm run dev:worker
 ```
 
-Use matching database, queue and VTpass settings in both apps. The worker needs no API authentication settings. See the [worker setup guide](apps/worker/README.md) and [shared backend boundaries](packages/backend/README.md).
+Use matching database, queue and VTpass settings in both apps. The worker needs no API authentication settings. See the [worker setup guide](apps/worker/README.md) and [payments runtime boundaries](packages/payments-runtime/README.md).
 
 `npm run dev:api` and `npm run dev:worker` also run the focused watch tasks. Use pnpm for dependency installation to keep the workspace lockfile consistent.
 
@@ -99,23 +99,23 @@ docker compose -f compose.api.yaml stop
 
 Run commands from the repository root.
 
-| Command                                       | Purpose                                                       |
-| --------------------------------------------- | ------------------------------------------------------------- |
-| `pnpm run dev:api`                            | Start the API with automatic reload                           |
-| `pnpm run dev:worker`                         | Start the standalone worker and watch shared code             |
-| `pnpm run build:worker`                       | Build shared backend and worker                               |
-| `pnpm --filter @axiapay/worker start`         | Run the compiled standalone worker                            |
-| `pnpm --filter @axiapay/backend test`         | Test shared payment, wallet and provider behavior             |
-| `npm run dev`                                 | Start API, worker, web and docs with shared-backend watching  |
-| `pnpm run build`                              | Build the workspace applications                              |
-| `pnpm run lint`                               | Run workspace lint checks                                     |
-| `pnpm run check-types`                        | Run workspace TypeScript checks                               |
-| `pnpm --filter @axiapay/api format:check`     | Check API formatting                                          |
-| `pnpm --filter @axiapay/api test`             | Run configuration and HTTP tests                              |
-| `pnpm --filter @axiapay/api test:integration` | Check PostgreSQL and Redis using disposable Docker containers |
-| `pnpm run build:api`                          | Build shared backend and API to their own `dist` folders      |
-| `pnpm --filter @axiapay/api start`            | Run the compiled API                                          |
-| `pnpm --filter @axiapay/api db:migrate`       | Apply migrations after building the API                       |
+| Command                                        | Purpose                                                               |
+| ---------------------------------------------- | --------------------------------------------------------------------- |
+| `pnpm run dev:api`                             | Start the API with automatic reload                                   |
+| `pnpm run dev:worker`                          | Start the standalone worker and watch shared code                     |
+| `pnpm run build:worker`                        | Build payments runtime and worker                                     |
+| `pnpm --filter @axiapay/worker start`          | Run the compiled standalone worker                                    |
+| `pnpm --filter @axiapay/payments-runtime test` | Test shared payment, wallet and provider behavior                     |
+| `npm run dev`                                  | Start API, worker, web and docs with shared payments runtime watching |
+| `pnpm run build`                               | Build the workspace applications                                      |
+| `pnpm run lint`                                | Run workspace lint checks                                             |
+| `pnpm run check-types`                         | Run workspace TypeScript checks                                       |
+| `pnpm --filter @axiapay/api format:check`      | Check API formatting                                                  |
+| `pnpm --filter @axiapay/api test`              | Run configuration and HTTP tests                                      |
+| `pnpm --filter @axiapay/api test:integration`  | Check PostgreSQL and Redis using disposable Docker containers         |
+| `pnpm run build:api`                           | Build payments runtime and API to their own `dist` folders            |
+| `pnpm --filter @axiapay/api start`             | Run the compiled API                                                  |
+| `pnpm --filter @axiapay/api db:migrate`        | Apply migrations after building the API                               |
 
 Integration tests use disposable databases rather than the local development database. API startup never runs migrations automatically. See the [API setup guide](apps/api/README.md) and [migration guide](apps/api/migrations/README.md) for more detail.
 

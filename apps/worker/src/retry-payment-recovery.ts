@@ -1,9 +1,9 @@
 /** Trusted-host operation: reopen bounded recovery after investigation. It cannot mark a payment failed, refund funds or generate another purchase identity. */
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
-import { withValidatedInput } from '@axiapay/backend/shared/validation/input-validation';
+import { withValidatedInput } from '@axiapay/payments-runtime/shared/validation/input-validation';
 import { RetryPaymentRecoveryDto } from './jobs/payment-recovery-job.dto.js';
-import { PaymentRecoveryService } from '@axiapay/backend/modules/payments/services/payment-recovery.service';
+import { PaymentRecoveryService } from '@axiapay/payments-runtime/modules/payments/services/payment-recovery.service';
 
 /** Validate the CLI before creating clients, disable the background consumer for this one operation and always close the module graph. */
 async function retryPaymentRecovery(): Promise<void> {

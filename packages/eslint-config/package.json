@@ -7,7 +7,7 @@
     "./base": "./base.js",
     "./next-js": "./next.js",
     "./react-internal": "./react-internal.js",
-    "./backend": "./backend.js"
+    "./node-service": "./node-service.js"
   },
   "devDependencies": {
     "@babel/core": "8.0.1",

@@ -1,7 +1,7 @@
 /** Verify upgrading authentication preserves existing credentials/sessions/codes and enforces recovery bindings. */
 import { randomUUID } from 'node:crypto';
 import { expect, it } from 'vitest';
-import { startWalletTestDatabase } from '../../../../packages/backend/tests/support/wallet-test-database.js';
+import { startWalletTestDatabase } from '../../../../packages/payments-runtime/tests/support/wallet-test-database.js';
 import { PostgresAuthenticationRepository } from '../../src/modules/authentication/repositories/postgres-authentication.repository.js';
 
 it('preserves established authentication when upgrading to password recovery', async () => {

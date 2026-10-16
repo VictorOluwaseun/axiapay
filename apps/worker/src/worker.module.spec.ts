@@ -2,7 +2,7 @@
 import 'reflect-metadata';
 import { NestFactory, ModulesContainer } from '@nestjs/core';
 import { describe, expect, it } from 'vitest';
-import { PaymentRecoveryService } from '@axiapay/backend/modules/payments/services/payment-recovery.service';
+import { PaymentRecoveryService } from '@axiapay/payments-runtime/modules/payments/services/payment-recovery.service';
 import { WorkerModule } from './worker.module.js';
 import { PaymentRecoveryWorker } from './jobs/payment-recovery.worker.js';
 

@@ -2,7 +2,7 @@
 import { inspect } from 'node:util';
 import { AxiosError, AxiosHeaders, type AxiosAdapter } from 'axios';
 import { describe, expect, it, vi } from 'vitest';
-import { axiosTextResponse } from '../../../../../../packages/backend/tests/support/axios-response-fixture.js';
+import { axiosTextResponse } from '../../../../../../packages/payments-runtime/tests/support/axios-response-fixture.js';
 import { MailpitAuthenticationCodeDelivery } from './mailpit-authentication-code-delivery.js';
 
 /** Deliberately fake code that must never enter a delivery failure or its retained causes. */

@@ -1,13 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { ServiceCatalogService } from '@axiapay/backend/modules/service-catalog/services/service-catalog.service';
-import type { ProductPage } from '@axiapay/backend/modules/service-catalog/domain/service-product';
+import { ServiceCatalogService } from '@axiapay/payments-runtime/modules/service-catalog/services/service-catalog.service';
+import type { ProductPage } from '@axiapay/payments-runtime/modules/service-catalog/domain/service-product';
 import {
   PaymentError,
   type PaymentQuote,
   type ServicePayment,
-} from '@axiapay/backend/modules/payments/domain/payment';
-import { PaymentQuoteService } from '@axiapay/backend/modules/payments/services/payment-quote.service';
-import { WalletPaymentService } from '@axiapay/backend/modules/payments/services/wallet-payment.service';
+} from '@axiapay/payments-runtime/modules/payments/domain/payment';
+import { PaymentQuoteService } from '@axiapay/payments-runtime/modules/payments/services/payment-quote.service';
+import { WalletPaymentService } from '@axiapay/payments-runtime/modules/payments/services/wallet-payment.service';
 
 /** Own bank-transfer category authorization and review/submission/recovery coordination while reusing the single authoritative wallet/payment execution workflow. */
 @Injectable()

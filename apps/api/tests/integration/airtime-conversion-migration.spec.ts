@@ -2,15 +2,15 @@
 import { randomUUID } from 'node:crypto';
 import { sql } from 'kysely';
 import { expect, it } from 'vitest';
-import { startWalletTestDatabase } from '../../../../packages/backend/tests/support/wallet-test-database.js';
-import { WalletRepositoryImpl } from '@axiapay/backend/modules/wallets/repositories/wallet.repository.impl';
-import { WalletPostgresDataSource } from '@axiapay/backend/modules/wallets/data-sources/postgres/wallet.postgres.data-source';
-import { WalletService } from '@axiapay/backend/modules/wallets/services/wallet.service';
-import { WalletReservationService } from '@axiapay/backend/modules/wallets/services/wallet-reservation.service';
+import { startWalletTestDatabase } from '../../../../packages/payments-runtime/tests/support/wallet-test-database.js';
+import { WalletRepositoryImpl } from '@axiapay/payments-runtime/modules/wallets/repositories/wallet.repository.impl';
+import { WalletPostgresDataSource } from '@axiapay/payments-runtime/modules/wallets/data-sources/postgres/wallet.postgres.data-source';
+import { WalletService } from '@axiapay/payments-runtime/modules/wallets/services/wallet.service';
+import { WalletReservationService } from '@axiapay/payments-runtime/modules/wallets/services/wallet-reservation.service';
 import { PostgresFundingRepository } from '../../src/modules/wallet-funding/repositories/postgres-funding.repository.js';
-import { PostgresPaymentRepository } from '@axiapay/backend/modules/payments/repositories/postgres-payment.repository';
-import { paymentTermsFingerprint } from '@axiapay/backend/modules/payments/domain/payment';
-import { money } from '@axiapay/backend/modules/wallets/domain/money';
+import { PostgresPaymentRepository } from '@axiapay/payments-runtime/modules/payments/repositories/postgres-payment.repository';
+import { paymentTermsFingerprint } from '@axiapay/payments-runtime/modules/payments/domain/payment';
+import { money } from '@axiapay/payments-runtime/modules/wallets/domain/money';
 
 it('preserves old funding evidence, payment terms, journals, funds and reservations when adding conversion', async () => {
   const baseline = await startWalletTestDatabase('202610130008-bank-transfers');

@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { WalletService } from '@axiapay/backend/modules/wallets/services/wallet.service';
-import { WalletError } from '@axiapay/backend/modules/wallets/domain/wallet-error';
+import { WalletService } from '@axiapay/payments-runtime/modules/wallets/services/wallet.service';
+import { WalletError } from '@axiapay/payments-runtime/modules/wallets/domain/wallet-error';
 import { FundingService } from './funding.service.js';
 import {
   FundingError,

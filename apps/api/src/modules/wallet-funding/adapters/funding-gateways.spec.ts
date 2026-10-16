@@ -1,13 +1,13 @@
 import { inspect } from 'node:util';
 /** Verify partner protocols against published signing rules and exact-number JSON, independently of ledger fixtures. */
 import { AxiosError, type AxiosAdapter } from 'axios';
-import { axiosTextResponse } from '../../../../../../packages/backend/tests/support/axios-response-fixture.js';
+import { axiosTextResponse } from '../../../../../../packages/payments-runtime/tests/support/axios-response-fixture.js';
 import { createHmac } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { OpayFundingGateway } from './opay-funding.gateway.js';
 import { PaystackFundingGateway } from './paystack-funding.gateway.js';
 import { parsePartnerJson } from './partner-http.js';
-import { outboundBodyLimitBytes } from '@axiapay/backend/infrastructure/http/axios-client';
+import { outboundBodyLimitBytes } from '@axiapay/payments-runtime/infrastructure/http/axios-client';
 
 const secret = 'sk_test_fixturesecret';
 const accountId = '8f819840-74b1-4822-a55b-f4fbaf1f2c90';

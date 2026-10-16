@@ -1,6 +1,6 @@
 /** Validate process configuration at the application boundary without logging supplied secrets. */
 import { z } from 'zod';
-import { paymentProviderEnvironmentSchema } from '@axiapay/backend/infrastructure/config/payment-provider-environment';
+import { paymentProviderEnvironmentSchema } from '@axiapay/payments-runtime/infrastructure/config/payment-provider-environment';
 
 const environmentSchema = paymentProviderEnvironmentSchema
   .safeExtend({

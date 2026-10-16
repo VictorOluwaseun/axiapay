@@ -1,6 +1,6 @@
 /** Validate only the resources owned by the standalone background process. */
 import { z } from 'zod';
-import { paymentProviderEnvironmentSchema } from '@axiapay/backend/infrastructure/config/payment-provider-environment';
+import { paymentProviderEnvironmentSchema } from '@axiapay/payments-runtime/infrastructure/config/payment-provider-environment';
 
 const workerEnvironmentSchema = paymentProviderEnvironmentSchema.safeExtend({
   LOG_LEVEL: z

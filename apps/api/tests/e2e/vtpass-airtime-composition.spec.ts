@@ -2,23 +2,23 @@
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { describe, expect, it, vi } from 'vitest';
-import { DatabaseConnection } from '@axiapay/backend/infrastructure/database/database.module';
+import { DatabaseConnection } from '@axiapay/payments-runtime/infrastructure/database/database.module';
 import { validateEnvironment } from '../../src/infrastructure/config/environment.js';
-import { PaymentsCoreModule } from '@axiapay/backend/modules/payments/payments-core.module';
+import { PaymentsCoreModule } from '@axiapay/payments-runtime/modules/payments/payments-core.module';
 import {
   VtpassAirtimeModule,
   VTPASS_AIRTIME,
-} from '@axiapay/backend/modules/payments/adapters/vtpass-airtime.module';
-import { VtpassAirtimeAdapter } from '@axiapay/backend/modules/payments/adapters/vtpass-airtime.adapter';
-import { PAYMENTS } from '@axiapay/backend/modules/payments/payments.tokens';
-import type { PaymentProviders } from '@axiapay/backend/modules/payments/ports/service-payment-provider';
-import { AirtimeProcessor } from '@axiapay/backend/modules/payments/processors/airtime.processor';
+} from '@axiapay/payments-runtime/modules/payments/adapters/vtpass-airtime.module';
+import { VtpassAirtimeAdapter } from '@axiapay/payments-runtime/modules/payments/adapters/vtpass-airtime.adapter';
+import { PAYMENTS } from '@axiapay/payments-runtime/modules/payments/payments.tokens';
+import type { PaymentProviders } from '@axiapay/payments-runtime/modules/payments/ports/service-payment-provider';
+import { AirtimeProcessor } from '@axiapay/payments-runtime/modules/payments/processors/airtime.processor';
 import {
   vtpassDelivered,
   vtpassInstruction,
   vtpassProduct,
   vtpassTestAccountId,
-} from '../../../../packages/backend/tests/support/vtpass-airtime-fixture.js';
+} from '../../../../packages/payments-runtime/tests/support/vtpass-airtime-fixture.js';
 
 /** Compile the actual payment feature with validated isolated configuration and a nonconnecting pool placeholder. */
 async function configuredModule(partnerSettings: Record<string, unknown>) {

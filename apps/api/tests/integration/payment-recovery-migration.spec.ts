@@ -3,14 +3,14 @@ import { randomUUID } from 'node:crypto';
 import { expect, it } from 'vitest';
 import { sql } from 'kysely';
 import { Test, type TestingModule } from '@nestjs/testing';
-import { startWalletTestDatabase } from '../../../../packages/backend/tests/support/wallet-test-database.js';
-import { WalletRepositoryImpl } from '@axiapay/backend/modules/wallets/repositories/wallet.repository.impl';
-import { WalletPostgresDataSource } from '@axiapay/backend/modules/wallets/data-sources/postgres/wallet.postgres.data-source';
-import { WalletModule } from '@axiapay/backend/modules/wallets/wallet.module';
-import { WalletService } from '@axiapay/backend/modules/wallets/services/wallet.service';
-import { DatabaseConnection } from '@axiapay/backend/infrastructure/database/database.module';
-import { money } from '@axiapay/backend/modules/wallets/domain/money';
-import { PostgresPaymentRecoveryRepository } from '@axiapay/backend/modules/payments/repositories/postgres-payment-recovery.repository';
+import { startWalletTestDatabase } from '../../../../packages/payments-runtime/tests/support/wallet-test-database.js';
+import { WalletRepositoryImpl } from '@axiapay/payments-runtime/modules/wallets/repositories/wallet.repository.impl';
+import { WalletPostgresDataSource } from '@axiapay/payments-runtime/modules/wallets/data-sources/postgres/wallet.postgres.data-source';
+import { WalletModule } from '@axiapay/payments-runtime/modules/wallets/wallet.module';
+import { WalletService } from '@axiapay/payments-runtime/modules/wallets/services/wallet.service';
+import { DatabaseConnection } from '@axiapay/payments-runtime/infrastructure/database/database.module';
+import { money } from '@axiapay/payments-runtime/modules/wallets/domain/money';
+import { PostgresPaymentRecoveryRepository } from '@axiapay/payments-runtime/modules/payments/repositories/postgres-payment-recovery.repository';
 
 it('backfills a real unresolved hold without moving money or granting permission to delete recovery history', async () => {
   const database = await startWalletTestDatabase(

@@ -19,7 +19,7 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "auth:setup": "node scripts/configure-local-auth.mjs",
     "db:migrate": "node --env-file=.env dist/infrastructure/database/migrate.js",
-    "db:types": "kysely-codegen --dialect postgres --env-file .env --exclude-pattern \"public.kysely_*\" --type-mapping '{\"xid8\":\"string\"}' --out-file ../../packages/backend/src/infrastructure/database/database.generated.ts",
+    "db:types": "kysely-codegen --dialect postgres --env-file .env --exclude-pattern \"public.kysely_*\" --type-mapping '{\"xid8\":\"string\"}' --out-file ../../packages/payments-runtime/src/infrastructure/database/database.generated.ts",
     "db:types:test": "node tests/support/generate-database-types.mjs",
     "db:types:verify": "node tests/support/generate-database-types.mjs --verify"
   },
@@ -43,7 +43,7 @@
     "reflect-metadata": "0.2.2",
     "rxjs": "7.8.2",
     "zod": "4.6.7",
-    "@axiapay/backend": "workspace:*"
+    "@axiapay/payments-runtime": "workspace:*"
   },
   "devDependencies": {
     "@nestjs/cli": "12.0.8",

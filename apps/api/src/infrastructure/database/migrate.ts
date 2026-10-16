@@ -3,7 +3,7 @@ import { FileMigrationProvider, Migrator } from 'kysely/migration';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createDatabase } from '@axiapay/backend/infrastructure/database/create-database';
+import { createDatabase } from '@axiapay/payments-runtime/infrastructure/database/create-database';
 
 /** Run pending migrations and release the pool on success or failure; never undo changes implicitly. */
 async function migrate(): Promise<void> {

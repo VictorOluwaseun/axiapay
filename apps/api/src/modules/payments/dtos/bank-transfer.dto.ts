@@ -4,19 +4,19 @@ import { IsString, IsUUID, Length, Matches, ValidateIf } from 'class-validator';
 import type {
   Bank,
   BankPage,
-} from '@axiapay/backend/modules/service-catalog/domain/bank';
-import type { ServiceProduct } from '@axiapay/backend/modules/service-catalog/domain/service-product';
+} from '@axiapay/payments-runtime/modules/service-catalog/domain/bank';
+import type { ServiceProduct } from '@axiapay/payments-runtime/modules/service-catalog/domain/service-product';
 import type {
   BankBeneficiaryValidation,
   BankTransferFailureReason,
-} from '@axiapay/backend/modules/payments/domain/bank-beneficiary';
-import type { PaymentFulfilment } from '@axiapay/backend/modules/payments/domain/payment-fulfilment';
+} from '@axiapay/payments-runtime/modules/payments/domain/bank-beneficiary';
+import type { PaymentFulfilment } from '@axiapay/payments-runtime/modules/payments/domain/payment-fulfilment';
 import {
   paymentStatus,
   type PaymentQuote,
   type PaymentStatus,
   type ServicePayment,
-} from '@axiapay/backend/modules/payments/domain/payment';
+} from '@axiapay/payments-runtime/modules/payments/domain/payment';
 import { SubmitServicePaymentDto } from './payment-request.dto.js';
 
 /** Bounded first-party bank/transfer catalogue pagination; no implicit query conversion or arbitrary sorting is permitted. */

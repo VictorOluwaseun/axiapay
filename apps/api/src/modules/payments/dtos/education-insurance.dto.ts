@@ -15,15 +15,15 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
-import type { EducationRecipientValidation } from '@axiapay/backend/modules/payments/domain/education-recipient';
+import type { EducationRecipientValidation } from '@axiapay/payments-runtime/modules/payments/domain/education-recipient';
 import type {
   InsuredProfile,
   InsuranceApplication,
-} from '@axiapay/backend/modules/payments/domain/insurance-application';
+} from '@axiapay/payments-runtime/modules/payments/domain/insurance-application';
 import type {
   InsuredField,
   InsuranceProductTerms,
-} from '@axiapay/backend/modules/service-catalog/domain/insurance-product-terms';
+} from '@axiapay/payments-runtime/modules/service-catalog/domain/insurance-product-terms';
 
 /** Verify the exact institution/product beneficiary identifier without a payment or a caller-supplied verified name. */
 export class CreateEducationValidationDto {

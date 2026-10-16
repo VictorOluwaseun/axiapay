@@ -4,8 +4,8 @@ import { LoggerModule } from 'nestjs-pino';
 import {
   VTPASS_AIRTIME,
   VtpassAirtimeModule,
-} from '@axiapay/backend/modules/payments/adapters/vtpass-airtime.module';
-import { PaymentsRuntimeModule } from '@axiapay/backend/modules/payments/payments-runtime.module';
+} from '@axiapay/payments-runtime/modules/payments/adapters/vtpass-airtime.module';
+import { PaymentsRuntimeModule } from '@axiapay/payments-runtime/modules/payments/payments-runtime.module';
 import { validateWorkerEnvironment } from './config/environment.js';
 import { PaymentRecoveryWorker } from './jobs/payment-recovery.worker.js';
 

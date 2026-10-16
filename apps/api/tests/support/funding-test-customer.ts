@@ -3,7 +3,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { expect } from 'vitest';
 import { NodeAuthenticationSecrets } from '../../src/modules/authentication/security/node-authentication-secrets.js';
-import type { WalletTestDatabase } from '../../../../packages/backend/tests/support/wallet-test-database.js';
+import type { WalletTestDatabase } from '../../../../packages/payments-runtime/tests/support/wallet-test-database.js';
 
 /** A fixture identity still authenticates through the real opaque-session guard. */
 export interface FundingCustomer {

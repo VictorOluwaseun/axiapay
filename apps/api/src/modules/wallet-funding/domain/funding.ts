@@ -1,4 +1,4 @@
-import type { Money } from '@axiapay/backend/modules/wallets/domain/money';
+import type { Money } from '@axiapay/payments-runtime/modules/wallets/domain/money';
 
 /** Provider environment is persisted with every request and duplicate-payment key. */
 export type FundingEnvironment = 'test' | 'live';

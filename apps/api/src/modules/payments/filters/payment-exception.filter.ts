@@ -2,9 +2,9 @@ import { Catch } from '@nestjs/common';
 import { HttpExceptionFilter } from '../../../shared/http/http-exception.filter.js';
 import type { HttpFailure } from '../../../shared/http/http-failure.js';
 import { AuthenticationError } from '../../authentication/domain/authentication-error.js';
-import { WalletError } from '@axiapay/backend/modules/wallets/domain/wallet-error';
-import { PaymentError } from '@axiapay/backend/modules/payments/domain/payment';
-import { paymentErrorDescription } from '@axiapay/backend/modules/payments/domain/payment-error-reasons';
+import { WalletError } from '@axiapay/payments-runtime/modules/wallets/domain/wallet-error';
+import { PaymentError } from '@axiapay/payments-runtime/modules/payments/domain/payment';
+import { paymentErrorDescription } from '@axiapay/payments-runtime/modules/payments/domain/payment-error-reasons';
 
 /** Public error mapping hides storage/provider diagnostics and inaccessible wallet/quote/payment identities. */
 const paymentFailures: Record<

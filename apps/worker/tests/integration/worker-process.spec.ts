@@ -6,7 +6,7 @@ import { Queue, QueueEvents } from 'bullmq';
 import { Redis } from 'ioredis';
 import { GenericContainer } from 'testcontainers';
 import { describe, expect, it } from 'vitest';
-import { startWalletTestDatabase } from '../../../../packages/backend/tests/support/wallet-test-database.js';
+import { startWalletTestDatabase } from '../../../../packages/payments-runtime/tests/support/wallet-test-database.js';
 
 describe('standalone worker process', () => {
   it('runs a real recovery sweep using only worker configuration and drains on SIGTERM', async () => {

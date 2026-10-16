@@ -1,5 +1,5 @@
 import type { AxiosAdapter, AxiosInstance } from 'axios';
-import { createOutboundHttpClient } from '@axiapay/backend/infrastructure/http/axios-client';
+import { createOutboundHttpClient } from '@axiapay/payments-runtime/infrastructure/http/axios-client';
 import { createHmac } from 'node:crypto';
 import type {
   FundingAdapter,
@@ -11,7 +11,7 @@ import {
   type FundingEnvironment,
   type VerifiedFundingPayment,
 } from '../domain/funding.js';
-import { money } from '@axiapay/backend/modules/wallets/domain/money';
+import { money } from '@axiapay/payments-runtime/modules/wallets/domain/money';
 import {
   parsePartnerJson,
   partnerCheckoutUrl,

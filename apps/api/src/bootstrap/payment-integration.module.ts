@@ -3,7 +3,7 @@ import { PaymentsModule } from '../modules/payments/payments.module.js';
 import {
   VTPASS_AIRTIME,
   VtpassAirtimeModule,
-} from '@axiapay/backend/modules/payments/adapters/vtpass-airtime.module';
+} from '@axiapay/payments-runtime/modules/payments/adapters/vtpass-airtime.module';
 
 /** Connect optional provider composition to first-party payment APIs; absent configuration leaves submission disabled and introduces no demo data. */
 @Module({

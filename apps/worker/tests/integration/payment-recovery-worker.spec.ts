@@ -5,8 +5,8 @@ import { Redis } from 'ioredis';
 import { GenericContainer } from 'testcontainers';
 import { describe, expect, it, vi } from 'vitest';
 import { PaymentRecoveryWorker } from '../../src/jobs/payment-recovery.worker.js';
-import type { PaymentRecoveryService } from '@axiapay/backend/modules/payments/services/payment-recovery.service';
-import { asyncSignal } from '../../../../packages/backend/tests/support/async-signal.js';
+import type { PaymentRecoveryService } from '@axiapay/payments-runtime/modules/payments/services/payment-recovery.service';
+import { asyncSignal } from '../../../../packages/payments-runtime/tests/support/async-signal.js';
 import { createServer } from 'node:net';
 
 describe('payment recovery worker', () => {

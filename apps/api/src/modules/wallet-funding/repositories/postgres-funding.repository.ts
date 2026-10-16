@@ -1,8 +1,8 @@
 import { sql, type Kysely } from 'kysely';
-import type { DatabaseSchema } from '@axiapay/backend/infrastructure/database/create-database';
+import type { DatabaseSchema } from '@axiapay/payments-runtime/infrastructure/database/create-database';
 import type { FundingRepository } from './contracts/funding.repository.js';
 import { FundingError, type FundingRequest } from '../domain/funding.js';
-import { fundingFingerprint } from '@axiapay/backend/modules/wallets/domain/funding-identity';
+import { fundingFingerprint } from '@axiapay/payments-runtime/modules/wallets/domain/funding-identity';
 
 /** PostgreSQL funding storage; database uniqueness serializes claims and movement binding, with no financial cache. */
 export class PostgresFundingRepository implements FundingRepository {

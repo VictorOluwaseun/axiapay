@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsString, IsUUID, Length, Matches } from 'class-validator';
-import type { BillAccountValidation } from '@axiapay/backend/modules/payments/domain/bill-account';
+import type { BillAccountValidation } from '@axiapay/payments-runtime/modules/payments/domain/bill-account';
 
 /** Non-financial account verification request; product identifies the biller/package or prepaid/postpaid mode. */
 export class CreateBillAccountValidationDto {

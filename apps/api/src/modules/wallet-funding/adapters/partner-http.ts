@@ -2,7 +2,7 @@ import type { AxiosInstance, AxiosRequestConfig } from 'axios';
 import {
   isOutboundResponseTooLarge,
   OutboundHttpError,
-} from '@axiapay/backend/infrastructure/http/axios-client';
+} from '@axiapay/payments-runtime/infrastructure/http/axios-client';
 import { FundingError } from '../domain/funding.js';
 
 /** Parse JSON integer tokens as exact strings, including provider IDs beyond JavaScript's safe-integer range (Node 24). */

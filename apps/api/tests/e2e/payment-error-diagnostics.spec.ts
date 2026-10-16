@@ -22,8 +22,8 @@ import {
   vi,
 } from 'vitest';
 import { HttpErrorHandlingModule } from '../../src/bootstrap/http-error-handling.module.js';
-import { PaymentError } from '@axiapay/backend/modules/payments/domain/payment';
-import type { PaymentErrorReason } from '@axiapay/backend/modules/payments/domain/payment-error-reasons';
+import { PaymentError } from '@axiapay/payments-runtime/modules/payments/domain/payment';
+import type { PaymentErrorReason } from '@axiapay/payments-runtime/modules/payments/domain/payment-error-reasons';
 import { PaymentExceptionFilter } from '../../src/modules/payments/filters/payment-exception.filter.js';
 
 /** Supply a controlled failure while retaining the real feature/global filter composition. */

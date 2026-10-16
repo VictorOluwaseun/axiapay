@@ -29,6 +29,7 @@ These rules govern implementation and changes in this workspace.
 
 - Kysely is the selected SQL query builder; ioredis is the selected Redis client.
 - Use names that describe component responsibilities, such as `api`, `worker`, and `sms-gateway`. Avoid vague application names and catch-all helpers or services.
+- Do not use `backend` in folder names, package names or code identifiers. Use responsibility-specific names such as `payments-runtime` for shared payment execution and `node-service` for the Node service lint policy.
 - The technology and application structure draft linked below records the supporting stack, feature layout, Android layout, and naming proposals. Preserve its distinction between confirmed decisions and proposed choices; documentation alone does not authorize installation or application code changes.
 
 ## Stack usage and framework practices

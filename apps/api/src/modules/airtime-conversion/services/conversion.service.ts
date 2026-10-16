@@ -1,10 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { money } from '@axiapay/backend/modules/wallets/domain/money';
+import { money } from '@axiapay/payments-runtime/modules/wallets/domain/money';
 import type {
   ConfirmedFunding,
   FundingVerification,
-} from '@axiapay/backend/modules/wallets/ports/wallet-verification';
+} from '@axiapay/payments-runtime/modules/wallets/ports/wallet-verification';
 import { CONVERSION } from '../conversion.tokens.js';
 import {
   ConversionError,

@@ -1,6 +1,6 @@
-import { asyncSignal } from '../../../../packages/backend/tests/support/async-signal.js';
+import { asyncSignal } from '../../../../packages/payments-runtime/tests/support/async-signal.js';
 import { BadRequestException } from '@nestjs/common';
-import { withValidatedInput } from '@axiapay/backend/shared/validation/input-validation';
+import { withValidatedInput } from '@axiapay/payments-runtime/shared/validation/input-validation';
 import { DeviceIdentifierDto } from '../../src/modules/authentication/dtos/device-authentication.dto.js';
 /** Exercise Android-compatible signatures through the real Nest module, PostgreSQL transactions, and opaque sessions. */
 import { generateKeyPairSync, randomUUID, sign } from 'node:crypto';
@@ -25,8 +25,8 @@ import {
 import { sql, type Kysely } from 'kysely';
 import { Migrator } from 'kysely/migration';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import { createDatabase } from '@axiapay/backend/infrastructure/database/create-database';
-import { DatabaseConnection } from '@axiapay/backend/infrastructure/database/database.module';
+import { createDatabase } from '@axiapay/payments-runtime/infrastructure/database/create-database';
+import { DatabaseConnection } from '@axiapay/payments-runtime/infrastructure/database/database.module';
 import { RequestValidationModule } from '../../src/bootstrap/request-validation.module.js';
 import { AuthenticationModule } from '../../src/modules/authentication/authentication.module.js';
 import { AUTHENTICATION } from '../../src/modules/authentication/authentication.tokens.js';

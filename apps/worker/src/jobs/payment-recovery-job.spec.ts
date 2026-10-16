@@ -1,6 +1,6 @@
 /** Reject malformed queue/CLI commands before any recovery or client creation, using the shared input boundary. */
 import { describe, expect, it, vi } from 'vitest';
-import { withValidatedInput } from '@axiapay/backend/shared/validation/input-validation';
+import { withValidatedInput } from '@axiapay/payments-runtime/shared/validation/input-validation';
 import {
   PaymentRecoverySweepDto,
   RetryPaymentRecoveryDto,

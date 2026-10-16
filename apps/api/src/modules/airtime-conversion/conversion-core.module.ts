@@ -9,7 +9,7 @@ import {
 import {
   DatabaseConnection,
   DatabaseModule,
-} from '@axiapay/backend/infrastructure/database/database.module';
+} from '@axiapay/payments-runtime/infrastructure/database/database.module';
 import { CONVERSION } from './conversion.tokens.js';
 import type { ConversionRoute } from './ports/airtime-conversion-provider.js';
 import { PostgresConversionRepository } from './repositories/postgres-conversion.repository.js';

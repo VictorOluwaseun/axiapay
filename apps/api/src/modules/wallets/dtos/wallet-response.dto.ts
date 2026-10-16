@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { HttpErrorResponseDto } from '../../../shared/http/http-error-response.dto.js';
-import type { Wallet } from '@axiapay/backend/modules/wallets/domain/wallet';
+import type { Wallet } from '@axiapay/payments-runtime/modules/wallets/domain/wallet';
 
 /** Public wallet snapshot excludes ledger account IDs and serializes every monetary value exactly. */
 export class WalletBalanceResponseDto {

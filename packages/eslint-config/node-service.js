@@ -1,4 +1,4 @@
-/** Shared backend lint policy: enforce TypeScript correctness, flat control flow and architectural boundaries for API, worker and backend packages. */
+/** Shared Node service lint policy: enforce TypeScript correctness, flat control flow and architectural boundaries for API, worker and payments runtime packages. */
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";
 import prettier from "eslint-config-prettier";
@@ -37,8 +37,8 @@ const frameworkImports = [
   "zod",
 ];
 
-/** Apply the backend policy relative to the consuming package; modules retain composition access and workflows use repository contracts. */
-export const backendConfig = tseslint.config(
+/** Apply the Node service policy relative to the consuming package; modules retain composition access and workflows use repository contracts. */
+export const nodeServiceConfig = tseslint.config(
   {
     ignores: ["dist/**", "node_modules/**", "coverage/**", "**/*.generated.ts"],
   },

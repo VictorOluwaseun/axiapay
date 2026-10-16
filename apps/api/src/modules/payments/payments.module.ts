@@ -1,6 +1,6 @@
 import { Module, type DynamicModule } from '@nestjs/common';
-import type { PaymentsModuleOptions } from '@axiapay/backend/modules/payments/payments-core.module';
-import { PaymentsRuntimeModule } from '@axiapay/backend/modules/payments/payments-runtime.module';
+import type { PaymentsModuleOptions } from '@axiapay/payments-runtime/modules/payments/payments-core.module';
+import { PaymentsRuntimeModule } from '@axiapay/payments-runtime/modules/payments/payments-runtime.module';
 import { AuthenticationModule } from '../authentication/authentication.module.js';
 import { PaymentsController } from './controllers/payments.controller.js';
 import { ServiceCatalogController } from './controllers/service-catalog.controller.js';

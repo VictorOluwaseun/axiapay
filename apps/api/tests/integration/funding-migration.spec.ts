@@ -3,10 +3,10 @@ import { randomUUID } from 'node:crypto';
 import { Test } from '@nestjs/testing';
 import { sql } from 'kysely';
 import { expect, it } from 'vitest';
-import { startWalletTestDatabase } from '../../../../packages/backend/tests/support/wallet-test-database.js';
-import { DatabaseConnection } from '@axiapay/backend/infrastructure/database/database.module';
-import { WalletModule } from '@axiapay/backend/modules/wallets/wallet.module';
-import { WalletService } from '@axiapay/backend/modules/wallets/services/wallet.service';
+import { startWalletTestDatabase } from '../../../../packages/payments-runtime/tests/support/wallet-test-database.js';
+import { DatabaseConnection } from '@axiapay/payments-runtime/infrastructure/database/database.module';
+import { WalletModule } from '@axiapay/payments-runtime/modules/wallets/wallet.module';
+import { WalletService } from '@axiapay/payments-runtime/modules/wallets/services/wallet.service';
 import { FundingService } from '../../src/modules/wallet-funding/services/funding.service.js';
 import { PostgresFundingRepository } from '../../src/modules/wallet-funding/repositories/postgres-funding.repository.js';
 

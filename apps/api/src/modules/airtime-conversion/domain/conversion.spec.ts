@@ -1,6 +1,6 @@
 /** Verify exact pricing invariants and explicit pending/exception states independently of HTTP, storage and providers. */
 import { describe, expect, it } from 'vitest';
-import { maximumMinorUnits } from '@axiapay/backend/modules/wallets/domain/money';
+import { maximumMinorUnits } from '@axiapay/payments-runtime/modules/wallets/domain/money';
 import {
   assertConversionOffer,
   calculateConversionAmounts,

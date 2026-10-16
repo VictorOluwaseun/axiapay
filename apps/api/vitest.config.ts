@@ -7,9 +7,9 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: /^@axiapay\/backend\/(.*)$/,
+        find: /^@axiapay\/payments-runtime\/(.*)$/,
         replacement: fileURLToPath(
-          new URL('../../packages/backend/src/$1.ts', import.meta.url),
+          new URL('../../packages/payments-runtime/src/$1.ts', import.meta.url),
         ),
       },
     ],

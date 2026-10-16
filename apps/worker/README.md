@@ -1,6 +1,6 @@
 # AxiaPay worker
 
-A separately runnable Nest application for durable background work. It creates an application context with no HTTP listener or API controllers. `PaymentRecoveryWorker` owns BullMQ scheduling and Redis connections; jobs validate their payloads before invoking shared payment services from `@axiapay/backend`.
+A separately runnable Nest application for durable background work. It creates an application context with no HTTP listener or API controllers. `PaymentRecoveryWorker` owns BullMQ scheduling and Redis connections; jobs validate their payloads before invoking shared payment services from `@axiapay/payments-runtime`.
 
 ## Run locally
 
@@ -20,12 +20,12 @@ pnpm run build:worker
 pnpm --filter @axiapay/worker start
 ```
 
-The API and worker can start, stop and scale separately. `SIGINT` and `SIGTERM` drain active jobs before queue connections and the database pool close. Shared backend changes rebuild through Turbo and restart the affected development processes.
+The API and worker can start, stop and scale separately. `SIGINT` and `SIGTERM` drain active jobs before queue connections and the database pool close. Payments runtime changes rebuild through Turbo and restart the affected development processes.
 
 ## Checks and operations
 
 ```sh
-pnpm exec turbo run check-types lint test --filter=@axiapay/worker --filter=@axiapay/backend
+pnpm exec turbo run check-types lint test --filter=@axiapay/worker --filter=@axiapay/payments-runtime
 pnpm exec turbo run test:integration --filter=@axiapay/worker
 pnpm --filter @axiapay/worker payments:retry-recovery <payment-uuid>
 ```

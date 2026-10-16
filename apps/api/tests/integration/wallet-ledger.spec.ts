@@ -5,17 +5,17 @@ import { sql } from 'kysely';
 import {
   startWalletTestDatabase,
   type WalletTestDatabase,
-} from '../../../../packages/backend/tests/support/wallet-test-database.js';
+} from '../../../../packages/payments-runtime/tests/support/wallet-test-database.js';
 import { Test, type TestingModule } from '@nestjs/testing';
-import { WalletModule } from '@axiapay/backend/modules/wallets/wallet.module';
-import { WalletService } from '@axiapay/backend/modules/wallets/services/wallet.service';
-import { DatabaseConnection } from '@axiapay/backend/infrastructure/database/database.module';
-import { money } from '@axiapay/backend/modules/wallets/domain/money';
-import type { Wallet } from '@axiapay/backend/modules/wallets/domain/wallet';
+import { WalletModule } from '@axiapay/payments-runtime/modules/wallets/wallet.module';
+import { WalletService } from '@axiapay/payments-runtime/modules/wallets/services/wallet.service';
+import { DatabaseConnection } from '@axiapay/payments-runtime/infrastructure/database/database.module';
+import { money } from '@axiapay/payments-runtime/modules/wallets/domain/money';
+import type { Wallet } from '@axiapay/payments-runtime/modules/wallets/domain/wallet';
 import type {
   ConfirmedFunding,
   VerifiedPaymentOutcome,
-} from '@axiapay/backend/modules/wallets/ports/wallet-verification';
+} from '@axiapay/payments-runtime/modules/wallets/ports/wallet-verification';
 
 let testDatabase: WalletTestDatabase;
 const modules: TestingModule[] = [];

@@ -21,10 +21,10 @@ import {
 import { AuthenticatedAccount } from '../../authentication/decorators/authenticated-account.decorator.js';
 import type { AccountIdentity } from '../../authentication/domain/authentication-models.js';
 import { AuthenticationGuard } from '../../authentication/guards/authentication.guard.js';
-import { ServiceCatalogService } from '@axiapay/backend/modules/service-catalog/services/service-catalog.service';
+import { ServiceCatalogService } from '@axiapay/payments-runtime/modules/service-catalog/services/service-catalog.service';
 import { BankTransferService } from '../services/bank-transfer.service.js';
-import { BankBeneficiaryService } from '@axiapay/backend/modules/payments/services/bank-beneficiary.service';
-import { PaymentQuoteService } from '@axiapay/backend/modules/payments/services/payment-quote.service';
+import { BankBeneficiaryService } from '@axiapay/payments-runtime/modules/payments/services/bank-beneficiary.service';
+import { PaymentQuoteService } from '@axiapay/payments-runtime/modules/payments/services/payment-quote.service';
 import { PaymentExceptionFilter } from '../filters/payment-exception.filter.js';
 import { PaymentErrorResponseDto } from '../dtos/payment-response.dto.js';
 import {

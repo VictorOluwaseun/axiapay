@@ -11,7 +11,7 @@ import {
 import { BadRequestException } from '@nestjs/common';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { createApplication } from '../../src/bootstrap/create-application.js';
-import { withValidatedInput } from '@axiapay/backend/shared/validation/input-validation';
+import { withValidatedInput } from '@axiapay/payments-runtime/shared/validation/input-validation';
 import {
   SignupDto,
   PasswordLoginDto,

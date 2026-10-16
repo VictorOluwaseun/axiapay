@@ -1,2 +1,2 @@
-/** Apply the shared backend lint policy to this package. */
-export { backendConfig as default } from '@repo/eslint-config/backend';
+/** Apply the Node service lint policy to this package. */
+export { nodeServiceConfig as default } from '@repo/eslint-config/node-service';

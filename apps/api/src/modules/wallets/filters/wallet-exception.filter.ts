@@ -2,7 +2,7 @@ import { Catch } from '@nestjs/common';
 import { HttpExceptionFilter } from '../../../shared/http/http-exception.filter.js';
 import type { HttpFailure } from '../../../shared/http/http-failure.js';
 import { AuthenticationError } from '../../authentication/domain/authentication-error.js';
-import { WalletError } from '@axiapay/backend/modules/wallets/domain/wallet-error';
+import { WalletError } from '@axiapay/payments-runtime/modules/wallets/domain/wallet-error';
 
 /** Public failures are deliberately narrower than internal ledger and integration failures. */
 const walletFailures: Partial<
