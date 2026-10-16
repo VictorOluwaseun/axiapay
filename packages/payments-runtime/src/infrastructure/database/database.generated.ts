@@ -147,6 +147,17 @@ export interface AuthRateLimits {
   window_ends_at: Timestamp;
 }
 
+export interface AuthSessionCacheInvalidations {
+  created_at: Generated<Timestamp>;
+  token_digest: string;
+  version: Generated<string>;
+}
+
+export interface AuthSessionCacheState {
+  namespace: Generated<string>;
+  singleton: Generated<boolean>;
+}
+
 export interface AuthSessions {
   account_id: string;
   created_at: Timestamp;
@@ -420,6 +431,17 @@ export interface Wallets {
   wallet_status: Generated<string>;
 }
 
+export interface WalletSummaryCacheInvalidations {
+  cache_key: string;
+  created_at: Generated<Timestamp>;
+  version: Generated<string>;
+}
+
+export interface WalletSummaryCacheState {
+  namespace: Generated<string>;
+  singleton: Generated<boolean>;
+}
+
 export interface DB {
   airtime_conversion_instructions: AirtimeConversionInstructions;
   airtime_conversion_outcomes: AirtimeConversionOutcomes;
@@ -430,6 +452,8 @@ export interface DB {
   auth_device_challenges: AuthDeviceChallenges;
   auth_device_credentials: AuthDeviceCredentials;
   auth_rate_limits: AuthRateLimits;
+  auth_session_cache_invalidations: AuthSessionCacheInvalidations;
+  auth_session_cache_state: AuthSessionCacheState;
   auth_sessions: AuthSessions;
   bank_transfer_banks: BankTransferBanks;
   bank_transfer_beneficiary_validations: BankTransferBeneficiaryValidations;
@@ -452,5 +476,7 @@ export interface DB {
   wallet_operations: WalletOperations;
   wallet_outbox_events: WalletOutboxEvents;
   wallet_reservations: WalletReservations;
+  wallet_summary_cache_invalidations: WalletSummaryCacheInvalidations;
+  wallet_summary_cache_state: WalletSummaryCacheState;
   wallets: Wallets;
 }

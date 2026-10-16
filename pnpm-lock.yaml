@@ -53,6 +53,9 @@ importers:
       class-validator:
         specifier: 0.15.1
         version: 0.15.1
+      ioredis:
+        specifier: 6.0.0
+        version: 6.0.0(supports-color@7.2.0)
       jose:
         specifier: 6.2.12
         version: 6.2.12
@@ -108,9 +111,6 @@ importers:
       eslint:
         specifier: 10.12.0
         version: 10.12.0(supports-color@7.2.0)
-      ioredis:
-        specifier: 6.0.0
-        version: 6.0.0(supports-color@7.2.0)
       kysely-codegen:
         specifier: 0.20.0
         version: 0.20.0(kysely@0.29.6)(pg@8.23.1)(typescript@6.0.3)
@@ -301,6 +301,49 @@ importers:
         specifier: 5.0.4
         version: 5.0.4(@types/node@24.19.2)(vite@8.3.4(@types/node@24.19.2)(yaml@2.9.1))
 
+  packages/eslint-config:
+    dependencies:
+      '@eslint/js':
+        specifier: 10.0.1
+        version: 10.0.1(eslint@10.9.1(supports-color@7.2.0))
+      eslint-config-prettier:
+        specifier: 10.1.8
+        version: 10.1.8(eslint@10.9.1(supports-color@7.2.0))
+      globals:
+        specifier: 17.12.0
+        version: 17.12.0
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      typescript-eslint:
+        specifier: 8.71.2
+        version: 8.71.2(eslint@10.9.1(supports-color@7.2.0))(supports-color@7.2.0)(typescript@6.0.3)
+    devDependencies:
+      '@babel/core':
+        specifier: 8.0.1
+        version: 8.0.1
+      '@babel/eslint-parser':
+        specifier: 8.0.1
+        version: 8.0.1(@babel/core@8.0.1)(eslint@10.9.1(supports-color@7.2.0))
+      '@babel/preset-typescript':
+        specifier: 8.0.1
+        version: 8.0.1(@babel/core@8.0.1)
+      '@next/eslint-plugin-next':
+        specifier: 16.3.4
+        version: 16.3.4(eslint@10.9.1(supports-color@7.2.0))
+      eslint:
+        specifier: 10.9.1
+        version: 10.9.1(supports-color@7.2.0)
+      eslint-plugin-only-warn:
+        specifier: 1.2.1
+        version: 1.2.1
+      eslint-plugin-react-hooks:
+        specifier: 7.1.1
+        version: 7.1.1(eslint@10.9.1(supports-color@7.2.0))(supports-color@7.2.0)
+      eslint-plugin-turbo:
+        specifier: 2.10.12
+        version: 2.10.12(eslint@10.9.1(supports-color@7.2.0))(turbo@2.11.7)
+
   packages/payments-runtime:
     dependencies:
       '@nestjs/common':
@@ -376,49 +419,6 @@ importers:
       vitest:
         specifier: 5.0.4
         version: 5.0.4(@types/node@24.19.2)(vite@8.3.4(@types/node@24.19.2)(yaml@2.9.1))
-
-  packages/eslint-config:
-    dependencies:
-      '@eslint/js':
-        specifier: 10.0.1
-        version: 10.0.1(eslint@10.9.1(supports-color@7.2.0))
-      eslint-config-prettier:
-        specifier: 10.1.8
-        version: 10.1.8(eslint@10.9.1(supports-color@7.2.0))
-      globals:
-        specifier: 17.12.0
-        version: 17.12.0
-      typescript:
-        specifier: 6.0.3
-        version: 6.0.3
-      typescript-eslint:
-        specifier: 8.71.2
-        version: 8.71.2(eslint@10.9.1(supports-color@7.2.0))(supports-color@7.2.0)(typescript@6.0.3)
-    devDependencies:
-      '@babel/core':
-        specifier: 8.0.1
-        version: 8.0.1
-      '@babel/eslint-parser':
-        specifier: 8.0.1
-        version: 8.0.1(@babel/core@8.0.1)(eslint@10.9.1(supports-color@7.2.0))
-      '@babel/preset-typescript':
-        specifier: 8.0.1
-        version: 8.0.1(@babel/core@8.0.1)
-      '@next/eslint-plugin-next':
-        specifier: 16.3.4
-        version: 16.3.4(eslint@10.9.1(supports-color@7.2.0))
-      eslint:
-        specifier: 10.9.1
-        version: 10.9.1(supports-color@7.2.0)
-      eslint-plugin-only-warn:
-        specifier: 1.2.1
-        version: 1.2.1
-      eslint-plugin-react-hooks:
-        specifier: 7.1.1
-        version: 7.1.1(eslint@10.9.1(supports-color@7.2.0))(supports-color@7.2.0)
-      eslint-plugin-turbo:
-        specifier: 2.10.12
-        version: 2.10.12(eslint@10.9.1(supports-color@7.2.0))(turbo@2.11.7)
 
   packages/typescript-config: {}
 
