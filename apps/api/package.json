@@ -18,6 +18,7 @@
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "auth:setup": "node scripts/configure-local-auth.mjs",
+    "auth:backfill-wallets": "node --env-file-if-exists=.env dist/infrastructure/database/backfill-verified-wallets.js",
     "db:migrate": "node --env-file=.env dist/infrastructure/database/migrate.js",
     "db:types": "kysely-codegen --dialect postgres --env-file .env --exclude-pattern \"public.kysely_*\" --type-mapping '{\"xid8\":\"string\"}' --out-file ../../packages/payments-runtime/src/infrastructure/database/database.generated.ts",
     "db:types:test": "node tests/support/generate-database-types.mjs",
