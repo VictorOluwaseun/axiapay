@@ -11,9 +11,9 @@ import type {
   WalletTransaction,
 } from './contracts/wallet.repository.js';
 import {
-  WalletPostgresDataSource,
+  WalletDataSource,
   type WalletRecord,
-} from '../data-sources/postgres/wallet.postgres.data-source.js';
+} from '../data-sources/wallet.data-source.js';
 
 /** Convert exact PostgreSQL strings to domain bigints, keeping SQL row names inside infrastructure. */
 function walletFromRecord(record: WalletRecord | undefined): Wallet {
@@ -37,7 +37,7 @@ function walletFromRecord(record: WalletRecord | undefined): Wallet {
 /** Transaction-bound implementation of wallet ports; all methods share the caller's PostgreSQL transaction. */
 class WalletTransactionRepository implements WalletTransaction {
   /** Bind to a transaction data source; never create an unrelated connection. */
-  constructor(private readonly source: WalletPostgresDataSource) {}
+  constructor(private readonly source: WalletDataSource) {}
 
   /** @inheritdoc WalletTransaction.lockWallets */
   async lockWallets(walletIds: readonly string[]): Promise<readonly Wallet[]> {
@@ -134,7 +134,7 @@ class WalletTransactionRepository implements WalletTransaction {
  */
 export class WalletRepositoryImpl implements WalletRepository {
   /** Inject the root data source; its connection lifecycle belongs to the composition owner. */
-  constructor(private readonly source: WalletPostgresDataSource) {}
+  constructor(private readonly source: WalletDataSource) {}
 
   /** @inheritdoc WalletRepository.createWallet */
   async createWallet(ownerId: string, currency: string): Promise<Wallet> {

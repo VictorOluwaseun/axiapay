@@ -7,7 +7,7 @@ import {
   type WalletTestDatabase,
 } from '../../../../packages/payments-runtime/tests/support/wallet-test-database.js';
 import { WalletRepositoryImpl } from '@axiapay/payments-runtime/modules/wallets/repositories/wallet.repository.impl';
-import { WalletPostgresDataSource } from '@axiapay/payments-runtime/modules/wallets/data-sources/postgres/wallet.postgres.data-source';
+import { WalletDataSource } from '@axiapay/payments-runtime/modules/wallets/data-sources/wallet.data-source';
 import { PostgresPaymentRepository } from '@axiapay/payments-runtime/modules/payments/repositories/postgres-payment.repository';
 import {
   paymentTermsFingerprint,
@@ -26,7 +26,7 @@ afterAll(async () => {
 
 it('preserves accepted mobile history and its original adapter correlation after upgrading', async () => {
   const wallets = new WalletRepositoryImpl(
-    new WalletPostgresDataSource(database.database),
+    new WalletDataSource(database.database),
   );
   const ownerId = randomUUID();
   const wallet = await wallets.createWallet(ownerId, 'NGN');
@@ -145,7 +145,7 @@ it('preserves existing TV recipient evidence, receipt and correlation when addin
   const baseline = await startWalletTestDatabase('202610130006-tv-electricity');
   try {
     const wallets = new WalletRepositoryImpl(
-      new WalletPostgresDataSource(baseline.database),
+      new WalletDataSource(baseline.database),
     );
     const ownerId = randomUUID();
     const wallet = await wallets.createWallet(ownerId, 'NGN');
@@ -301,7 +301,7 @@ it('preserves existing insurance consent, policy/document evidence and fingerpri
   );
   try {
     const wallets = new WalletRepositoryImpl(
-      new WalletPostgresDataSource(baseline.database),
+      new WalletDataSource(baseline.database),
     );
     const ownerId = randomUUID();
     const wallet = await wallets.createWallet(ownerId, 'NGN');

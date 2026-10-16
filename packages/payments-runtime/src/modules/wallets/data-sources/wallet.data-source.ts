@@ -1,17 +1,17 @@
 import { randomUUID } from 'node:crypto';
 import { setTimeout as waitForRetry } from 'node:timers/promises';
 import type { Insertable, Kysely } from 'kysely';
-import type { DatabaseSchema } from '../../../../infrastructure/database/create-database.js';
+import type { DatabaseSchema } from '../../../infrastructure/database/create-database.js';
 import type {
   LedgerEntries,
   LedgerJournals,
   WalletReservations,
-} from '../../../../infrastructure/database/database.generated.js';
+} from '../../../infrastructure/database/database.generated.js';
 import type {
   WalletReceipt,
   WalletRequestIdentity,
-} from '../../repositories/contracts/wallet.repository.js';
-import { WalletError } from '../../domain/wallet-error.js';
+} from '../repositories/contracts/wallet.repository.js';
+import { WalletError } from '../domain/wallet-error.js';
 
 /** Read a PostgreSQL SQLSTATE without discarding the original diagnostic cause. */
 function sqlState(error: unknown): unknown {
@@ -22,12 +22,27 @@ function sqlState(error: unknown): unknown {
 }
 
 /** PostgreSQL storage for wallet rows, transaction claims, append-only journals and their outbox. */
-export class WalletPostgresDataSource {
-  /** The injected connection is either a root pool or the current transaction; only roots call executeOnce/createWallet. */
+export class WalletDataSource {
+  /** Borrow a pool or transaction; createWallet joins an outer transaction, while executeOnce requires a root. */
   constructor(private readonly database: Kysely<DatabaseSchema>) {}
 
   /** Read both liability accounts in one statement so a concurrent reservation cannot tear the balance. */
   readWallet(walletId: string) {
+    return this.walletSnapshot()
+      .where('wallet.id', '=', walletId)
+      .executeTakeFirst();
+  }
+
+  /** Discover an existing wallet through the unique owner/currency scope without provisioning it. */
+  readWalletByOwner(ownerId: string, currency: string) {
+    return this.walletSnapshot()
+      .where('wallet.owner_id', '=', ownerId)
+      .where('wallet.currency', '=', currency)
+      .executeTakeFirst();
+  }
+
+  /** Share the single-statement liability snapshot between authoritative ID reads and owner discovery. */
+  private walletSnapshot() {
     return this.database
       .selectFrom('wallets as wallet')
       .innerJoin('ledger_accounts as available', (join) =>
@@ -61,51 +76,59 @@ export class WalletPostgresDataSource {
         'available_balance.credits_minor_units as available_credits',
         'reserved_balance.debits_minor_units as reserved_debits',
         'reserved_balance.credits_minor_units as reserved_credits',
-      ])
-      .where('wallet.id', '=', walletId)
-      .executeTakeFirst();
+      ]);
   }
 
-  /** Serialize first-time creation by owner/currency; losing concurrent callers observe the committed accounts. */
+  /** Create atomically or join the caller's transaction, leaving its commit/rollback ownership intact. */
   async createWallet(ownerId: string, currency: string) {
-    return this.database.transaction().execute(async (transaction) => {
-      const inserted = await transaction
-        .insertInto('wallets')
-        .values({ id: randomUUID(), owner_id: ownerId, currency })
-        .onConflict((conflict) =>
-          conflict.columns(['owner_id', 'currency']).doNothing(),
-        )
-        .returning('id')
-        .executeTakeFirst();
-      if (inserted) {
-        await transaction
-          .insertInto('ledger_accounts')
-          .values([
-            {
-              id: randomUUID(),
-              account_code: `wallet:${inserted.id}:available`,
-              account_kind: 'wallet_available',
-              wallet_id: inserted.id,
-              currency,
-            },
-            {
-              id: randomUUID(),
-              account_code: `wallet:${inserted.id}:reserved`,
-              account_kind: 'wallet_reserved',
-              wallet_id: inserted.id,
-              currency,
-            },
-          ])
-          .execute();
-      }
-      const wallet = await transaction
-        .selectFrom('wallets')
-        .select('id')
-        .where('owner_id', '=', ownerId)
-        .where('currency', '=', currency)
-        .executeTakeFirstOrThrow();
-      return new WalletPostgresDataSource(transaction).readWallet(wallet.id);
-    });
+    if (this.database.isTransaction) {
+      return this.provisionWallet(ownerId, currency);
+    }
+    return this.database
+      .transaction()
+      .execute((transaction) =>
+        new WalletDataSource(transaction).provisionWallet(ownerId, currency),
+      );
+  }
+
+  /** Serialize first creation by owner/currency within the current transaction; conflicts retain the existing accounts. */
+  private async provisionWallet(ownerId: string, currency: string) {
+    const inserted = await this.database
+      .insertInto('wallets')
+      .values({ id: randomUUID(), owner_id: ownerId, currency })
+      .onConflict((conflict) =>
+        conflict.columns(['owner_id', 'currency']).doNothing(),
+      )
+      .returning('id')
+      .executeTakeFirst();
+    if (inserted) {
+      await this.database
+        .insertInto('ledger_accounts')
+        .values([
+          {
+            id: randomUUID(),
+            account_code: `wallet:${inserted.id}:available`,
+            account_kind: 'wallet_available',
+            wallet_id: inserted.id,
+            currency,
+          },
+          {
+            id: randomUUID(),
+            account_code: `wallet:${inserted.id}:reserved`,
+            account_kind: 'wallet_reserved',
+            wallet_id: inserted.id,
+            currency,
+          },
+        ])
+        .execute();
+    }
+    const wallet = await this.database
+      .selectFrom('wallets')
+      .select('id')
+      .where('owner_id', '=', ownerId)
+      .where('currency', '=', currency)
+      .executeTakeFirstOrThrow();
+    return this.readWallet(wallet.id);
   }
 
   /** Lock wallets first, then their accounts in global UUID order; every financial caller follows this order. */
@@ -222,7 +245,7 @@ export class WalletPostgresDataSource {
   async executeOnce(
     identity: WalletRequestIdentity,
     action: (
-      source: WalletPostgresDataSource,
+      source: WalletDataSource,
       operationId: string,
     ) => Promise<WalletReceipt>,
   ): Promise<WalletReceipt> {
@@ -250,7 +273,7 @@ export class WalletPostgresDataSource {
   private claimAndExecute(
     identity: WalletRequestIdentity,
     action: (
-      source: WalletPostgresDataSource,
+      source: WalletDataSource,
       operationId: string,
     ) => Promise<WalletReceipt>,
   ): Promise<WalletReceipt> {
@@ -272,10 +295,7 @@ export class WalletPostgresDataSource {
           .returning('id')
           .executeTakeFirst();
         if (operation) {
-          return action(
-            new WalletPostgresDataSource(transaction),
-            operation.id,
-          );
+          return action(new WalletDataSource(transaction), operation.id);
         }
         const existing = await transaction
           .selectFrom('wallet_operations')
@@ -301,5 +321,5 @@ export class WalletPostgresDataSource {
 
 /** Persistence snapshot inferred from the concrete SQL selection; it does not cross application ports. */
 export type WalletRecord = NonNullable<
-  Awaited<ReturnType<WalletPostgresDataSource['readWallet']>>
+  Awaited<ReturnType<WalletDataSource['readWallet']>>
 >;

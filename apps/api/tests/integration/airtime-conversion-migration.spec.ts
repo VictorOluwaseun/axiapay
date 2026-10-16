@@ -4,7 +4,8 @@ import { sql } from 'kysely';
 import { expect, it } from 'vitest';
 import { startWalletTestDatabase } from '../../../../packages/payments-runtime/tests/support/wallet-test-database.js';
 import { WalletRepositoryImpl } from '@axiapay/payments-runtime/modules/wallets/repositories/wallet.repository.impl';
-import { WalletPostgresDataSource } from '@axiapay/payments-runtime/modules/wallets/data-sources/postgres/wallet.postgres.data-source';
+import { WalletSummaryRepositoryImpl } from '@axiapay/payments-runtime/modules/wallets/repositories/wallet-summary.repository.impl';
+import { WalletDataSource } from '@axiapay/payments-runtime/modules/wallets/data-sources/wallet.data-source';
 import { WalletService } from '@axiapay/payments-runtime/modules/wallets/services/wallet.service';
 import { WalletReservationService } from '@axiapay/payments-runtime/modules/wallets/services/wallet-reservation.service';
 import { PostgresFundingRepository } from '../../src/modules/wallet-funding/repositories/postgres-funding.repository.js';
@@ -19,7 +20,7 @@ it('preserves old funding evidence, payment terms, journals, funds and reservati
       baseline.administrator,
     );
     const wallets = new WalletRepositoryImpl(
-      new WalletPostgresDataSource(baseline.database),
+      new WalletDataSource(baseline.database),
     );
     const ownerId = randomUUID();
     const wallet = await wallets.createWallet(ownerId, 'NGN');
@@ -72,6 +73,7 @@ it('preserves old funding evidence, payment terms, journals, funds and reservati
         },
       },
       new WalletReservationService(wallets, undefined),
+      new WalletSummaryRepositoryImpl(new WalletDataSource(baseline.database)),
     );
     await service.confirmWalletFunding('original-proof');
     const productId = randomUUID();

@@ -42,7 +42,7 @@ export interface WalletTransaction {
 
 /** Wallet persistence boundary. All reads bypass cache for immediate consistency; no cache keys exist. */
 export interface WalletRepository {
-  /** Create an empty wallet and both accounts atomically; repeated owner/currency calls return it. */
+  /** Create an empty wallet and both accounts atomically, joining any caller transaction; repeated owner/currency calls return it. */
   createWallet(ownerId: string, currency: string): Promise<Wallet>;
   /** Read one consistent database snapshot; authorization belongs to the caller's service operation. */
   getWallet(walletId: string): Promise<Wallet>;

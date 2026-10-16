@@ -12,8 +12,10 @@ import type {
   FundingVerification,
   PaymentOutcomeVerification,
 } from './ports/wallet-verification.js';
-import { WalletPostgresDataSource } from './data-sources/postgres/wallet.postgres.data-source.js';
+import { WalletDataSource } from './data-sources/wallet.data-source.js';
 import { WalletRepositoryImpl } from './repositories/wallet.repository.impl.js';
+import { WalletSummaryRepositoryImpl } from './repositories/wallet-summary.repository.impl.js';
+import type { WalletSummaryCache } from './repositories/contracts/wallet-summary-cache.js';
 import { WALLET } from './wallet.tokens.js';
 import { WalletReservationService } from './services/wallet-reservation.service.js';
 import { WalletService } from './services/wallet.service.js';
@@ -23,16 +25,25 @@ import { WalletService } from './services/wallet.service.js';
   imports: [DatabaseModule],
   providers: [
     {
-      provide: WalletPostgresDataSource,
+      provide: WalletDataSource,
       inject: [DatabaseConnection],
       useFactory: (connection: DatabaseConnection) =>
-        new WalletPostgresDataSource(connection.database),
+        new WalletDataSource(connection.database),
     },
     {
       provide: WALLET.repository,
-      inject: [WalletPostgresDataSource],
-      useFactory: (source: WalletPostgresDataSource) =>
+      inject: [WalletDataSource],
+      useFactory: (source: WalletDataSource) =>
         new WalletRepositoryImpl(source),
+    },
+    {
+      provide: WALLET.summaries,
+      inject: [
+        WalletDataSource,
+        { token: WALLET.summaryCache, optional: true },
+      ],
+      useFactory: (source: WalletDataSource, cache?: WalletSummaryCache) =>
+        new WalletSummaryRepositoryImpl(source, cache),
     },
     WalletReservationService,
     WalletService,
@@ -40,6 +51,19 @@ import { WalletService } from './services/wallet.service.js';
   exports: [WalletService],
 })
 export class WalletModule {
+  /** Bind a display cache exported by infrastructure; default and worker compositions retain PostgreSQL-only discovery. */
+  static withSummaryCache(options: {
+    imports: NonNullable<ModuleMetadata['imports']>;
+    cacheToken: symbol;
+  }): DynamicModule {
+    return {
+      module: WalletModule,
+      imports: options.imports,
+      providers: [
+        { provide: WALLET.summaryCache, useExisting: options.cacheToken },
+      ],
+    };
+  }
   /** Bind a trusted payment-outcome service exported by a separate core module, keeping wallet persistence private and avoiding feature cycles. */
   static withPaymentOutcomeVerification(options: {
     imports: NonNullable<ModuleMetadata['imports']>;

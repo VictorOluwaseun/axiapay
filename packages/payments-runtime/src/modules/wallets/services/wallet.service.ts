@@ -8,6 +8,8 @@ import {
   type Wallet,
 } from '../domain/wallet.js';
 import { WalletError } from '../domain/wallet-error.js';
+import type { WalletSummary } from '../domain/wallet-summary.js';
+import type { WalletSummaryRepository } from '../repositories/contracts/wallet-summary.repository.js';
 import type {
   WalletRepository,
   WalletReceipt,
@@ -27,7 +29,7 @@ export interface WalletTransferInput {
   readonly value: Money;
 }
 
-/** Own wallet provisioning, balance access, transfers, and verified funding; delegate held-money transitions to the reservation service. */
+/** Own wallet provisioning, owner-scoped discovery, authoritative balance access, transfers and funding; delegate held-money transitions to the reservation service. */
 @Injectable()
 export class WalletService {
   /** Keep workflows behind repository contracts; absent funding verification disables funding, never bypasses it. */
@@ -38,6 +40,8 @@ export class WalletService {
     private readonly funding: FundingVerification | undefined,
     @Inject(WalletReservationService)
     private readonly reservations: WalletReservationService,
+    @Inject(WALLET.summaries)
+    private readonly summaries: WalletSummaryRepository,
   ) {}
   /** Create both liability accounts atomically, or return the existing owner/currency wallet. */
   createWallet(input: {
@@ -45,6 +49,18 @@ export class WalletService {
     readonly currency: string;
   }): Promise<Wallet> {
     return this.wallets.createWallet(input.actorId, input.currency);
+  }
+
+  /** Find an existing display summary for an authenticated owner and validated currency; never provision or authorize spending. */
+  async getWalletByOwner(
+    ownerId: string,
+    currency: string,
+  ): Promise<WalletSummary> {
+    const wallet = await this.summaries.findByOwner(ownerId, currency);
+    if (!wallet) {
+      throw new WalletError('WALLET_NOT_FOUND');
+    }
+    return wallet;
   }
   /** Return a consistent balance snapshot after checking ownership. */
   async getWalletBalance(input: {

@@ -5,7 +5,7 @@ import { sql } from 'kysely';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { startWalletTestDatabase } from '../../../../packages/payments-runtime/tests/support/wallet-test-database.js';
 import { WalletRepositoryImpl } from '@axiapay/payments-runtime/modules/wallets/repositories/wallet.repository.impl';
-import { WalletPostgresDataSource } from '@axiapay/payments-runtime/modules/wallets/data-sources/postgres/wallet.postgres.data-source';
+import { WalletDataSource } from '@axiapay/payments-runtime/modules/wallets/data-sources/wallet.data-source';
 import { WalletModule } from '@axiapay/payments-runtime/modules/wallets/wallet.module';
 import { WalletService } from '@axiapay/payments-runtime/modules/wallets/services/wallet.service';
 import { DatabaseConnection } from '@axiapay/payments-runtime/infrastructure/database/database.module';
@@ -19,7 +19,7 @@ it('backfills a real unresolved hold without moving money or granting permission
   let module: TestingModule | undefined;
   try {
     const wallets = new WalletRepositoryImpl(
-      new WalletPostgresDataSource(database.database),
+      new WalletDataSource(database.database),
     );
     const ownerId = randomUUID();
     const wallet = await wallets.createWallet(ownerId, 'NGN');
