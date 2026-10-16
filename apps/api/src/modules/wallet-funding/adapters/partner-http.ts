@@ -1,5 +1,8 @@
 import type { AxiosInstance, AxiosRequestConfig } from 'axios';
-import { isOutboundResponseTooLarge } from '@axiapay/backend/infrastructure/http/axios-client';
+import {
+  isOutboundResponseTooLarge,
+  OutboundHttpError,
+} from '@axiapay/backend/infrastructure/http/axios-client';
 import { FundingError } from '../domain/funding.js';
 
 /** Parse JSON integer tokens as exact strings, including provider IDs beyond JavaScript's safe-integer range (Node 24). */
@@ -98,11 +101,7 @@ export async function requestPartnerJson(
     const response = await client.request<string>({
       url,
       ...options,
-      signal: AbortSignal.timeout(8000),
     });
-    if (response.status < 200 || response.status >= 300) {
-      throw new FundingError('FUNDING_UNAVAILABLE');
-    }
     return partnerObject(parsePartnerJson(response.data));
   } catch (cause) {
     if (cause instanceof FundingError) {
@@ -111,9 +110,12 @@ export async function requestPartnerJson(
     if (isOutboundResponseTooLarge(cause)) {
       throw new FundingError('INVALID_FUNDING');
     }
-    // Axios errors retain signed bodies and credentials in config; never keep them as causes.
+    // Only the interceptor's controlled classification is safe to retain; other exceptions may contain signed bodies or credentials.
     throw new FundingError('FUNDING_UNAVAILABLE', {
-      cause: new Error('Funding provider HTTP request failed or timed out.'),
+      cause:
+        cause instanceof OutboundHttpError
+          ? cause
+          : new Error('Funding provider HTTP request failed or timed out.'),
     });
   }
 }

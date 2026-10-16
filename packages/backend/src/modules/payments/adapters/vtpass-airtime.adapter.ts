@@ -3,6 +3,7 @@ import {
   createOutboundHttpClient,
   isOutboundResponseTooLarge,
   isOutboundTimeout,
+  OutboundHttpError,
 } from '../../../infrastructure/http/axios-client.js';
 import {
   PaymentError,
@@ -35,7 +36,7 @@ export interface VtpassAirtimeSettings {
   readonly secretKey: string;
 }
 
-/** Explicit provider service identities from the documented domestic airtime APIs; no phone-prefix or fuzzy-name routing. */
+/** Explicit provider service identities from the documented domestic airtime APIs; retain historical product evidence metadata when withdrawing purchase support. No phone-prefix or fuzzy-name routing. */
 const services: Readonly<
   Record<
     string,
@@ -219,7 +220,7 @@ export class VtpassAirtimeAdapter implements AirtimeProcessorAdapter<
     };
   }
 
-  /** Enquire about a validated instruction using the same saved identity even on another day; never call the purchase endpoint. */
+  /** Enquire about accepted terms using the same saved identity even on another day; current purchase eligibility is irrelevant, while authenticated product/recipient/amount evidence remains required. */
   async lookup(payment: ServicePayment): Promise<ProviderPaymentResult> {
     const response = await this.call(
       '/api/requery',
@@ -331,14 +332,7 @@ export class VtpassAirtimeAdapter implements AirtimeProcessorAdapter<
           Accept: 'application/json',
         },
         data: body,
-        signal: AbortSignal.timeout(8000),
       });
-      if (response.status < 200 || response.status >= 300) {
-        throw new PaymentError('PAYMENT_UNAVAILABLE', {
-          reason: vtpassHttpFailureReason(response.status),
-          cause: new Error(`VTpass HTTP status ${response.status}`),
-        });
-      }
       if (response.data.length === 0) {
         throw new PaymentError('INVALID_PROVIDER_EVIDENCE', {
           reason: 'PROVIDER_RESPONSE_EMPTY',
@@ -349,9 +343,19 @@ export class VtpassAirtimeAdapter implements AirtimeProcessorAdapter<
       if (error instanceof PaymentError) {
         throw error;
       }
+      if (
+        error instanceof OutboundHttpError &&
+        error.httpStatus !== undefined
+      ) {
+        throw new PaymentError('PAYMENT_UNAVAILABLE', {
+          reason: vtpassHttpFailureReason(error.httpStatus),
+          cause: error,
+        });
+      }
       if (isOutboundResponseTooLarge(error)) {
         throw new PaymentError('INVALID_PROVIDER_EVIDENCE', {
           reason: 'PROVIDER_RESPONSE_TOO_LARGE',
+          cause: error,
         });
       }
       const reason = isOutboundTimeout(error)
@@ -359,6 +363,7 @@ export class VtpassAirtimeAdapter implements AirtimeProcessorAdapter<
         : 'PROVIDER_CONNECTION_FAILED';
       throw new PaymentError('PAYMENT_UNAVAILABLE', {
         reason,
+        cause: error instanceof OutboundHttpError ? error : undefined,
       });
     }
   }

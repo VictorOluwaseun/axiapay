@@ -7,12 +7,34 @@ import { describe, expect, it, vi } from 'vitest';
 import { OpayFundingGateway } from './opay-funding.gateway.js';
 import { PaystackFundingGateway } from './paystack-funding.gateway.js';
 import { parsePartnerJson } from './partner-http.js';
+import { outboundBodyLimitBytes } from '@axiapay/backend/infrastructure/http/axios-client';
 
 const secret = 'sk_test_fixturesecret';
 const accountId = '8f819840-74b1-4822-a55b-f4fbaf1f2c90';
 const reference = 'ec892cc9-03d9-4df3-9001-ff90d8c47e9b';
 
 describe('funding partner authentication', () => {
+  it('rejects oversized partner evidence without confirming funding or retaining credentials', async () => {
+    const transport = vi
+      .fn<AxiosAdapter>()
+      .mockResolvedValue(
+        axiosTextResponse('x'.repeat(outboundBodyLimitBytes + 1)),
+      );
+    const gateway = new PaystackFundingGateway(
+      'test',
+      accountId,
+      secret,
+      'https://axiapay.example/return',
+      transport,
+    );
+    const failure = await gateway
+      .verify(reference)
+      .catch((error: unknown) => error);
+    expect(failure).toMatchObject({ code: 'INVALID_FUNDING' });
+    expect(inspect(failure, { depth: 5 })).not.toContain(secret);
+    expect(transport).toHaveBeenCalledTimes(1);
+  });
+
   it('preserves raw unsigned-64-bit payment IDs and amounts before JSON number rounding', () => {
     expect(
       parsePartnerJson(

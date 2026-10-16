@@ -1,5 +1,8 @@
 import type { AxiosAdapter, AxiosInstance } from 'axios';
-import { createOutboundHttpClient } from '@axiapay/backend/infrastructure/http/axios-client';
+import {
+  createOutboundHttpClient,
+  OutboundHttpError,
+} from '@axiapay/backend/infrastructure/http/axios-client';
 import type { AuthenticationCodeDelivery } from '../ports/authentication.ports.js';
 
 /** Capture both email and simulated SMS locally; this adapter never connects to a real SMS provider. */
@@ -32,12 +35,11 @@ export class MailpitAuthenticationCodeDelivery implements AuthenticationCodeDeli
       message.contact.kind === 'email'
         ? message.contact.value
         : `sms+${message.contact.value.slice(1)}@sms.axiapay.test`;
-    const response = await this.client
+    await this.client
       .request<string>({
         url: new URL('/api/v1/send', this.baseUrl).toString(),
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        signal: AbortSignal.timeout(10_000),
         data: JSON.stringify({
           From: {
             Email: 'authentication@axiapay.test',
@@ -49,13 +51,16 @@ export class MailpitAuthenticationCodeDelivery implements AuthenticationCodeDeli
           Tags: ['axiapay-auth', message.contact.kind],
         }),
       })
-      .catch(() => {
+      .catch((error: unknown) => {
+        if (
+          error instanceof OutboundHttpError &&
+          error.httpStatus !== undefined
+        ) {
+          throw new Error(
+            `Local code delivery rejected with HTTP ${error.httpStatus}.`,
+          );
+        }
         throw new Error('Local code delivery failed or timed out.');
       });
-    if (response.status < 200 || response.status >= 300) {
-      throw new Error(
-        `Local code delivery rejected with HTTP ${response.status}.`,
-      );
-    }
   }
 }

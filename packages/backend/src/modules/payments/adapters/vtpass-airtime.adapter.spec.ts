@@ -215,7 +215,8 @@ describe('VTpass airtime protocol', () => {
           method: 'post',
           maxRedirects: 0,
           timeout: 8000,
-          maxContentLength: outboundBodyLimitBytes,
+          responseType: 'stream',
+          maxContentLength: -1,
           transformRequest: [],
           transformResponse: [],
           signal: expect.any(AbortSignal),
@@ -431,7 +432,7 @@ describe('VTpass airtime protocol', () => {
     expect(transport).toHaveBeenCalledTimes(1);
   });
 
-  it('rejects malformed JSON and reports Axios response-size rejection', async () => {
+  it('rejects malformed JSON and reports the shared response-size failure', async () => {
     const { processor, payment, transport } = adapterFixture();
     transport.mockResolvedValueOnce(axiosTextResponse('private invalid JSON'));
     await expect(processor.submit(payment)).rejects.toMatchObject({
@@ -439,11 +440,8 @@ describe('VTpass airtime protocol', () => {
       reason: 'PROVIDER_RESPONSE_INVALID_JSON',
       message: 'The payment provider returned invalid JSON.',
     });
-    transport.mockRejectedValueOnce(
-      new AxiosError(
-        `maxContentLength size of ${outboundBodyLimitBytes} exceeded`,
-        AxiosError.ERR_BAD_RESPONSE,
-      ),
+    transport.mockResolvedValueOnce(
+      axiosTextResponse('x'.repeat(outboundBodyLimitBytes + 1)),
     );
     await expect(processor.submit(payment)).rejects.toMatchObject({
       code: 'INVALID_PROVIDER_EVIDENCE',
