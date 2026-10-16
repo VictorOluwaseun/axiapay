@@ -4,15 +4,14 @@ const paymentErrorDescriptions = Object.freeze({
     'The selected provider does not support this payment service.',
   PROVIDER_ROUTE_MISMATCH:
     'The selected provider account does not match the payment route.',
-  NGN_CURRENCY_REQUIRED: 'This airtime provider requires amounts in NGN.',
+  NGN_CURRENCY_REQUIRED: 'This provider requires amounts in NGN.',
   PRODUCT_NOT_SUPPORTED:
-    'The selected airtime product is not supported by this provider.',
+    'The selected product is not supported by this provider.',
   NETWORK_PRODUCT_MISMATCH:
-    'The selected mobile network does not match the airtime product.',
-  RECIPIENT_REQUIRED:
-    'A recipient phone number is required for this airtime payment.',
+    'The selected mobile network does not match the selected product.',
+  RECIPIENT_REQUIRED: 'A recipient phone number is required for this payment.',
   NIGERIAN_RECIPIENT_REQUIRED:
-    'Use a Nigerian recipient phone number in +234 format for this airtime payment.',
+    'Use a Nigerian recipient phone number in +234 format for this payment.',
   EXECUTION_CLAIM_MISSING:
     'The payment has no saved execution claim, so a provider request reference cannot be created.',
   PAYMENT_ID_MISMATCH: 'The provider result refers to a different payment.',
@@ -23,19 +22,17 @@ const paymentErrorDescriptions = Object.freeze({
   PROVIDER_RECIPIENT_MISMATCH:
     'The recipient confirmed by the provider does not match this payment.',
   PROVIDER_AMOUNT_MISMATCH:
-    'The amount confirmed by the provider does not match the quoted airtime amount.',
+    'The amount confirmed by the provider does not match the quoted amount.',
   PROVIDER_UNIT_PRICE_MISMATCH:
-    'The provider unit price does not match the quoted airtime amount.',
+    'The provider unit price does not match the quoted amount.',
   PROVIDER_PURCHASE_AMOUNT_MISMATCH:
-    'The reported provider purchase amount does not match the quoted airtime amount.',
+    'The reported provider purchase amount does not match the quoted amount.',
   PROVIDER_PRODUCT_MISMATCH:
-    'The product confirmed by the provider does not match the selected airtime product.',
-  PROVIDER_CURRENCY_MISMATCH:
-    'The currency confirmed by the provider does not match the payment currency.',
+    'The product confirmed by the provider does not match the selected product.',
   PROVIDER_QUANTITY_MISMATCH:
-    'The provider response does not confirm exactly one airtime purchase.',
+    'The provider response does not confirm exactly one purchase.',
   PROVIDER_SERVICE_MISMATCH:
-    'The provider response does not describe an airtime recharge.',
+    'The provider response does not describe the selected payment service.',
   PROVIDER_AMOUNT_INVALID:
     'The provider amount is not an exact decimal with supported precision.',
   PROVIDER_AMOUNT_OUT_OF_RANGE:

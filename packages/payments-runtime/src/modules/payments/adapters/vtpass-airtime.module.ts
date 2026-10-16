@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { AirtimeProcessor } from '../processors/airtime.processor.js';
+import { ServicePaymentProcessor } from '../processors/service-payment.processor.js';
 import type { PaymentProviders } from '../ports/service-payment-provider.js';
 import { VtpassAirtimeAdapter } from './vtpass-airtime.adapter.js';
 
@@ -42,7 +42,7 @@ function configuredRegistrations(
   }
   return Object.freeze({
     [adapter.providerKey]: Object.freeze({
-      adapter: new AirtimeProcessor(adapter),
+      adapter: new ServicePaymentProcessor('airtime', adapter),
       partnerAccountId: configuration.getOrThrow<string>(
         'VTPASS_PARTNER_ACCOUNT_ID',
       ),

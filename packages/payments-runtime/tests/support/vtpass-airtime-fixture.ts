@@ -40,7 +40,7 @@ export function vtpassProduct(payment = vtpassInstruction()): ServiceProduct {
   };
 }
 
-/** Model the documented authenticated response subset. Merchant phone intentionally differs from the true recipient in unique_element. */
+/** Redacted production-shaped ₦100 response: commission lowers net cost to ₦97, never the customer's principal. References and contacts are test-only; the merchant phone intentionally differs from unique_element. */
 export function vtpassDelivered(
   payment: ServicePayment,
 ): Record<string, unknown> {
@@ -54,12 +54,30 @@ export function vtpassDelivered(
         product_name: 'MTN Airtime VTU',
         unique_element: '08011111111',
         phone: '123450987623',
-        unit_price: '100.00',
-        quantity: '1',
-        amount: '100.00',
+        unit_price: '100',
+        quantity: 1,
+        service_verification: null,
+        channel: 'api',
+        commission: 3,
+        total_amount: 97,
+        discount: null,
+        email: 'test-customer@example.com',
+        name: null,
+        convinience_fee: 0,
+        amount: '100',
+        platform: 'api',
+        method: 'api',
         type: 'Airtime Recharge',
         transactionId: '17415980564672211596777904',
+        commission_details: {
+          amount: 3,
+          rate: '3.00',
+          rate_type: 'percent',
+          computation_type: 'default',
+        },
       },
     },
+    response_description: 'TRANSACTION SUCCESSFUL',
+    transaction_date: '2030-01-01T00:00:00.000Z',
   };
 }

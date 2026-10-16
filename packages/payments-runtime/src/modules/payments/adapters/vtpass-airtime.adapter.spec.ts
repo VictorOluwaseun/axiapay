@@ -5,12 +5,13 @@ import { outboundBodyLimitBytes } from '../../../infrastructure/http/axios-clien
 import { inspect } from 'node:util';
 import { describe, expect, it, vi } from 'vitest';
 import { VtpassAirtimeAdapter } from './vtpass-airtime.adapter.js';
-import { AirtimeProcessor } from '../processors/airtime.processor.js';
+import { ServicePaymentProcessor } from '../processors/service-payment.processor.js';
 import { money } from '../../wallets/domain/money.js';
 import {
   parseVtpassJson,
   vtpassMinorUnits,
   vtpassRequestId,
+  vtpassMovementId,
 } from './vtpass-airtime.protocol.js';
 import {
   vtpassDelivered,
@@ -39,7 +40,7 @@ function adapterFixture(environment: 'sandbox' | 'live' = 'sandbox') {
     payment,
     transport,
     adapter,
-    processor: new AirtimeProcessor(adapter),
+    processor: new ServicePaymentProcessor('airtime', adapter),
   };
 }
 
@@ -58,27 +59,27 @@ describe('VTpass airtime protocol', () => {
     [
       'currency',
       'NGN_CURRENCY_REQUIRED',
-      'This airtime provider requires amounts in NGN.',
+      'This provider requires amounts in NGN.',
     ],
     [
       'product',
       'PRODUCT_NOT_SUPPORTED',
-      'The selected airtime product is not supported by this provider.',
+      'The selected product is not supported by this provider.',
     ],
     [
       'network',
       'NETWORK_PRODUCT_MISMATCH',
-      'The selected mobile network does not match the airtime product.',
+      'The selected mobile network does not match the selected product.',
     ],
     [
       'recipient',
       'RECIPIENT_REQUIRED',
-      'A recipient phone number is required for this airtime payment.',
+      'A recipient phone number is required for this payment.',
     ],
   ])(
     'explains the specific unsupported %s before processing',
     (field, reason, message) => {
-      const { adapter, payment } = adapterFixture();
+      const { processor, payment } = adapterFixture();
       const invalid = {
         service: { ...payment.quote, serviceType: 'data' as const },
         route: { ...payment.quote, providerKey: 'other-account' },
@@ -88,7 +89,7 @@ describe('VTpass airtime protocol', () => {
         recipient: { ...payment.quote, recipientPhoneNumber: null },
       };
       const terms = invalid[field as keyof typeof invalid];
-      expect(() => adapter.validate({ scope: 'quote', terms })).toThrow(
+      expect(() => processor.validate({ scope: 'quote', terms })).toThrow(
         expect.objectContaining({ reason, message }),
       );
     },
@@ -191,11 +192,50 @@ describe('VTpass airtime protocol', () => {
     expect(vtpassMinorUnits('90071992547409.93')).toBe(9007199254740993n);
   });
 
-  it.each(['1.001', '1e2', ' 100', '100\n', '-1', '0', '92233720368547758.08'])(
-    'rejects ambiguous, nonpositive or overflowing amount %j',
-    (amount) => {
-      expect(() => vtpassMinorUnits(amount)).toThrow(
-        expect.objectContaining({ code: 'INVALID_PROVIDER_EVIDENCE' }),
+  it.each([
+    '',
+    '.',
+    '1.',
+    '.1',
+    '01',
+    '001.00',
+    '1.2.3',
+    '+100',
+    '0x64',
+    '１００',
+    '100\u0000',
+    '1.001',
+    '1e2',
+    ' 100',
+    '100\n',
+    '-1',
+    '0',
+    '92233720368547758.08',
+  ])('rejects ambiguous, nonpositive or overflowing amount %j', (amount) => {
+    expect(() => vtpassMinorUnits(amount)).toThrow(
+      expect.objectContaining({ code: 'INVALID_PROVIDER_EVIDENCE' }),
+    );
+  });
+
+  it.each([
+    ['100', 10000n],
+    ['100.0', 10000n],
+    ['100.00', 10000n],
+    ['0.01', 1n],
+  ] as const)(
+    'reads exact provider amount %s without floating-point arithmetic',
+    (amount, expected) => {
+      expect(vtpassMinorUnits(amount)).toBe(expected);
+    },
+  );
+
+  it.each(['', '0', '01', '-1', '1e24', '123\n', '１', '1'.repeat(65)])(
+    'rejects ambiguous provider movement reference %j without numeric coercion',
+    (reference) => {
+      expect(() => vtpassMovementId(reference)).toThrow(
+        expect.objectContaining({
+          reason: 'PROVIDER_TRANSACTION_REFERENCE_INVALID',
+        }),
       );
     },
   );
@@ -244,6 +284,31 @@ describe('VTpass airtime protocol', () => {
     });
   });
 
+  it.each([1, '1'])(
+    'accepts the redacted production response with quantity %j, keeping gross and commission separate',
+    async (quantity) => {
+      const { payment, adapter, processor, transport } = adapterFixture('live');
+      const response = vtpassDelivered(payment);
+      const transaction = (
+        response.content as { transactions: Record<string, unknown> }
+      ).transactions;
+      transaction.quantity = quantity;
+      expect(adapter.toSubmission(response, payment)).toMatchObject({
+        outcome: 'succeeded',
+        providerTransactionReference: '17415980564672211596777904',
+      });
+      transport.mockResolvedValueOnce(
+        axiosTextResponse(JSON.stringify(response)),
+      );
+      expect((await processor.submit(payment)).outcome).toBe('succeeded');
+      expect(payment.quote.principal.amountMinorUnits).toBe(10000n);
+      transaction.amount = '97';
+      expect(() => adapter.toSubmission(response, payment)).toThrow(
+        expect.objectContaining({ reason: 'PROVIDER_AMOUNT_MISMATCH' }),
+      );
+    },
+  );
+
   it.each(['099', '014', '015', '019', '044', '083', '087', 'new-code'])(
     'keeps %s unresolved without inventing final failure or delivery',
     (code) => {
@@ -269,8 +334,6 @@ describe('VTpass airtime protocol', () => {
     ['amount', '99'],
     ['unit_price', '99'],
     ['product_name', 'GLO Airtime VTU'],
-    ['serviceID', 'glo'],
-    ['currency', 'USD'],
     ['quantity', '2'],
     ['type', 'Data Services'],
     ['transactionId', undefined],
@@ -301,22 +364,49 @@ describe('VTpass airtime protocol', () => {
     }
   });
 
-  it('maps authenticated matched outright failures and proven reversals to safe release, keeping net reversal amounts separate', () => {
+  it('maps authenticated matched outright failures to safe release', () => {
     const { adapter, payment } = adapterFixture();
-    for (const code of ['016', '091', '040']) {
+    for (const code of ['016', '091']) {
       const response = vtpassDelivered(payment);
       response.code = code;
-      response.amount = '96.50';
       const transaction = (
         response.content as { transactions: Record<string, unknown> }
       ).transactions;
-      transaction.status = code === '040' ? 'reversed' : 'failed';
-      transaction.wallet_credit_id = '17415980564672211596777999';
+      transaction.status = 'failed';
       expect(adapter.toSubmission(response, payment)).toMatchObject({
         outcome: 'failed',
         fundsSafeToRelease: true,
       });
     }
+  });
+
+  it('accepts documented reversal evidence without success-only fields and keeps net refunds separate', () => {
+    const { adapter, payment } = adapterFixture();
+    const response = {
+      code: '040',
+      requestId: vtpassRequestId(payment),
+      response_description: 'TRANSACTION REVERSAL TO WALLET',
+      amount: '96.50',
+      content: {
+        transactions: {
+          status: 'reversed',
+          unique_element: '08011111111',
+          unit_price: '100',
+          commission: 3.5,
+          total_amount: 96.5,
+          discount: null,
+          amount: '100',
+          transactionId: '17415980564672211596777904',
+          wallet_credit_id: '17415980564672211596777999',
+        },
+      },
+    };
+    expect(adapter.toSubmission(response, payment)).toMatchObject({
+      outcome: 'failed',
+      fundsSafeToRelease: true,
+      evidenceReference:
+        'vtpass:sandbox:17415980564672211596777904:refund:17415980564672211596777999',
+    });
   });
 
   it('refuses a reversal without a wallet credit identity', () => {
@@ -384,10 +474,10 @@ describe('VTpass airtime protocol', () => {
   });
 
   it('rejects unsupported products through the same validation contract used for quotes', () => {
-    const { adapter, payment } = adapterFixture();
+    const { processor, payment } = adapterFixture();
     const product = vtpassProduct(payment);
     expect(() =>
-      adapter.validate({ scope: 'product', terms: product }),
+      processor.validate({ scope: 'product', terms: product }),
     ).not.toThrow();
     for (const overrides of [
       { serviceType: 'data' as const },
@@ -397,14 +487,14 @@ describe('VTpass airtime protocol', () => {
       { providerKey: 'other-account' },
     ]) {
       expect(() =>
-        adapter.validate({
+        processor.validate({
           scope: 'product',
           terms: { ...product, ...overrides },
         }),
       ).toThrow();
     }
     expect(() =>
-      adapter.validate({
+      processor.validate({
         scope: 'quote',
         terms: {
           ...payment.quote,

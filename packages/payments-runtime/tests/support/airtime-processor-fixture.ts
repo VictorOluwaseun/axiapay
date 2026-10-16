@@ -4,7 +4,7 @@ import {
   paymentTermsFingerprint,
   type ServicePayment,
 } from '../../src/modules/payments/domain/payment.js';
-import type { AirtimeProcessorAdapter } from '../../src/modules/payments/ports/airtime-processor-adapter.js';
+import type { ServiceProcessorAdapter } from '../../src/modules/payments/ports/service-processor-adapter.js';
 import type { ProviderPaymentResult } from '../../src/modules/payments/ports/service-payment-provider.js';
 import { money } from '../../src/modules/wallets/domain/money.js';
 
@@ -124,5 +124,5 @@ export function testAirtimeAdapter(providerKey = 'test-airtime:merchant-a') {
     lookup: vi.fn(async (payment: ServicePayment) =>
       pendingAirtimeSubmission(payment),
     ),
-  } satisfies AirtimeProcessorAdapter<TestAirtimeRequest, TestAirtimeResponse>;
+  } satisfies ServiceProcessorAdapter<TestAirtimeRequest, TestAirtimeResponse>;
 }

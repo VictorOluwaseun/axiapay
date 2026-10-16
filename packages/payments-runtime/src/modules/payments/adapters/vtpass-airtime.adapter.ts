@@ -1,40 +1,29 @@
-import type { AxiosAdapter, AxiosInstance } from 'axios';
-import {
-  createOutboundHttpClient,
-  isOutboundResponseTooLarge,
-  isOutboundTimeout,
-  OutboundHttpError,
-} from '../../../infrastructure/http/axios-client.js';
+import type { AxiosAdapter } from 'axios';
+import { VtpassClient, type VtpassSettings } from './vtpass-client.js';
 import {
   PaymentError,
   paymentTermsFingerprint,
   type ServicePayment,
 } from '../domain/payment.js';
-import type { PaymentErrorReason } from '../domain/payment-error-reasons.js';
-import type { AirtimeProcessorAdapter } from '../ports/airtime-processor-adapter.js';
+import type { ServiceProcessorAdapter } from '../ports/service-processor-adapter.js';
 import type {
   PaymentTermsInput,
   ProviderPaymentResult,
 } from '../ports/service-payment-provider.js';
 import {
-  parseVtpassJson,
   serializeVtpassAirtime,
   vtpassMinorUnits,
   vtpassMovementId,
   formatVtpassNaira,
-  vtpassObject,
+  isVtpassObject,
+  supportsVtpassPhoneNumber,
   formatVtpassPhoneNumber,
   vtpassRequestId,
   type VtpassAirtimeRequest,
 } from './vtpass-airtime.protocol.js';
 
 /** Provisioned outbound settings; credentials never appear in first-party commands, catalogue rows or diagnostics. */
-export interface VtpassAirtimeSettings {
-  readonly environment: 'sandbox' | 'live';
-  readonly providerKey: string;
-  readonly apiKey: string;
-  readonly secretKey: string;
-}
+export type VtpassAirtimeSettings = VtpassSettings;
 
 /** Explicit provider service identities from the documented domestic airtime APIs; retain historical product evidence metadata when withdrawing purchase support. No phone-prefix or fuzzy-name routing. */
 const services: Readonly<
@@ -56,52 +45,26 @@ const services: Readonly<
   },
 });
 
-/** Classify HTTP failures without exposing upstream bodies, headers or transport exception messages. */
-function vtpassHttpFailureReason(status: number): PaymentErrorReason {
-  if (status === 401 || status === 403) {
-    return 'PROVIDER_AUTHENTICATION_FAILED';
-  }
-  if (status === 429) {
-    return 'PROVIDER_RATE_LIMITED';
-  }
-  return 'PROVIDER_HTTP_ERROR';
-}
-
 /** VTpass domestic airtime translation, authenticated fixed-origin HTTP and correlated evidence. AxiaPay's processor owns sequencing; payment/wallet services own claims and financial rules. */
-export class VtpassAirtimeAdapter implements AirtimeProcessorAdapter<
+export class VtpassAirtimeAdapter implements ServiceProcessorAdapter<
   VtpassAirtimeRequest,
   Record<string, unknown>
 > {
   readonly providerKey: string;
-  private readonly origin: string;
-  private readonly client: AxiosInstance;
+  private readonly client: VtpassClient;
 
   /** Inject immutable configuration and an optional deterministic transport for tests; production endpoints cannot be supplied by customers. */
   constructor(
     private readonly settings: VtpassAirtimeSettings,
     httpAdapter?: AxiosAdapter,
   ) {
-    this.client = createOutboundHttpClient(8000, httpAdapter);
+    this.client = new VtpassClient(settings, httpAdapter);
     this.providerKey = settings.providerKey;
-    this.origin =
-      settings.environment === 'live'
-        ? 'https://vtpass.com'
-        : 'https://sandbox.vtpass.com';
   }
 
-  /** Assert provider compatibility before processing. Products and quotes share routing/product/currency checks; full quotes additionally require a representable recipient. This method performs no I/O or formatting. */
+  /** Check product, currency and recipient compatibility after the processor has checked service/account routing. No I/O or formatting occurs here. */
   validate(target: PaymentTermsInput): void {
     const { terms } = target;
-    if (terms.serviceType !== 'airtime') {
-      throw new PaymentError('PAYMENT_UNAVAILABLE', {
-        reason: 'SERVICE_NOT_SUPPORTED',
-      });
-    }
-    if (terms.providerKey !== this.providerKey) {
-      throw new PaymentError('PAYMENT_UNAVAILABLE', {
-        reason: 'PROVIDER_ROUTE_MISMATCH',
-      });
-    }
     const currency =
       target.scope === 'quote'
         ? target.terms.principal.currency
@@ -132,9 +95,7 @@ export class VtpassAirtimeAdapter implements AirtimeProcessorAdapter<
         reason: 'RECIPIENT_REQUIRED',
       });
     }
-    if (
-      !/^\+234[1-9][0-9]{9}(?![\s\S])/.test(target.terms.recipientPhoneNumber)
-    ) {
+    if (!supportsVtpassPhoneNumber(target.terms.recipientPhoneNumber)) {
       throw new PaymentError('INVALID_PAYMENT', {
         reason: 'NIGERIAN_RECIPIENT_REQUIRED',
       });
@@ -153,7 +114,7 @@ export class VtpassAirtimeAdapter implements AirtimeProcessorAdapter<
 
   /** Send one purchase with credentials scoped to the fixed environment; no internal retries or status-to-purchase fallback. */
   execute(request: VtpassAirtimeRequest): Promise<Record<string, unknown>> {
-    return this.call('/api/pay', serializeVtpassAirtime(request));
+    return this.client.post('/api/pay', serializeVtpassAirtime(request));
   }
 
   /** Given the original validated instruction, only complete, correlated transaction evidence can resolve funds. Unknown/duplicate/not-found codes stay pending; API envelope success alone never confirms delivery. */
@@ -172,22 +133,10 @@ export class VtpassAirtimeAdapter implements AirtimeProcessorAdapter<
       });
     }
     const content = response.content;
-    if (
-      typeof content !== 'object' ||
-      content === null ||
-      Array.isArray(content)
-    ) {
+    if (!isVtpassObject(content) || !isVtpassObject(content.transactions)) {
       return { ...identity, outcome: 'pending' };
     }
-    const transactions = (content as Record<string, unknown>).transactions;
-    if (
-      typeof transactions !== 'object' ||
-      transactions === null ||
-      Array.isArray(transactions)
-    ) {
-      return { ...identity, outcome: 'pending' };
-    }
-    const transaction = vtpassObject(transactions);
+    const transaction = content.transactions;
     const delivered =
       response.code === '000' && transaction.status === 'delivered';
     const failed =
@@ -197,6 +146,12 @@ export class VtpassAirtimeAdapter implements AirtimeProcessorAdapter<
       response.code === '040' && transaction.status === 'reversed';
     if (!delivered && !failed && !reversed) {
       return { ...identity, outcome: 'pending' };
+    }
+    // Any supplied reference matched above; final evidence additionally requires its presence.
+    if (response.requestId === undefined) {
+      throw new PaymentError('INVALID_PROVIDER_EVIDENCE', {
+        reason: 'PROVIDER_REQUEST_MISMATCH',
+      });
     }
     this.assertEvidence(payment, response, transaction, delivered);
     const movementId = vtpassMovementId(transaction.transactionId);
@@ -222,7 +177,7 @@ export class VtpassAirtimeAdapter implements AirtimeProcessorAdapter<
 
   /** Enquire about accepted terms using the same saved identity even on another day; current purchase eligibility is irrelevant, while authenticated product/recipient/amount evidence remains required. */
   async lookup(payment: ServicePayment): Promise<ProviderPaymentResult> {
-    const response = await this.call(
+    const response = await this.client.post(
       '/api/requery',
       JSON.stringify({
         request_id: vtpassRequestId(payment),
@@ -239,17 +194,12 @@ export class VtpassAirtimeAdapter implements AirtimeProcessorAdapter<
     delivered: boolean,
   ): void {
     const quote = payment.quote;
-    const recipient = transaction.unique_element;
+    const { unique_element: recipient } = transaction;
     const allowedRecipients = [
       formatVtpassPhoneNumber(quote.recipientPhoneNumber!),
       quote.recipientPhoneNumber,
       quote.recipientPhoneNumber!.slice(1),
     ];
-    if (response.requestId !== vtpassRequestId(payment)) {
-      throw new PaymentError('INVALID_PROVIDER_EVIDENCE', {
-        reason: 'PROVIDER_REQUEST_MISMATCH',
-      });
-    }
     if (
       typeof recipient !== 'string' ||
       !allowedRecipients.includes(recipient)
@@ -267,34 +217,25 @@ export class VtpassAirtimeAdapter implements AirtimeProcessorAdapter<
     }
     const expectedProduct = services[quote.providerProductCode]!.productName;
     if (
-      (transaction.product_name !== undefined &&
-        transaction.product_name !== expectedProduct) ||
-      (transaction.serviceID !== undefined &&
-        transaction.serviceID !== quote.providerProductCode)
+      (delivered || transaction.product_name !== undefined) &&
+      transaction.product_name !== expectedProduct
     ) {
       throw new PaymentError('INVALID_PROVIDER_EVIDENCE', {
         reason: 'PROVIDER_PRODUCT_MISMATCH',
       });
     }
-    if (transaction.currency !== undefined && transaction.currency !== 'NGN') {
-      throw new PaymentError('INVALID_PROVIDER_EVIDENCE', {
-        reason: 'PROVIDER_CURRENCY_MISMATCH',
-      });
-    }
     if (!delivered) {
       return;
     }
-    if (transaction.product_name !== expectedProduct) {
-      throw new PaymentError('INVALID_PROVIDER_EVIDENCE', {
-        reason: 'PROVIDER_PRODUCT_MISMATCH',
-      });
-    }
-    if (transaction.type !== 'Airtime Recharge') {
+    if (
+      typeof transaction.type !== 'string' ||
+      (transaction.type as string).toLowerCase() !== 'airtime recharge'
+    ) {
       throw new PaymentError('INVALID_PROVIDER_EVIDENCE', {
         reason: 'PROVIDER_SERVICE_MISMATCH',
       });
     }
-    if (transaction.quantity !== '1') {
+    if (transaction.quantity !== 1 && transaction.quantity !== '1') {
       throw new PaymentError('INVALID_PROVIDER_EVIDENCE', {
         reason: 'PROVIDER_QUANTITY_MISMATCH',
       });
@@ -312,58 +253,6 @@ export class VtpassAirtimeAdapter implements AirtimeProcessorAdapter<
     ) {
       throw new PaymentError('INVALID_PROVIDER_EVIDENCE', {
         reason: 'PROVIDER_PURCHASE_AMOUNT_MISMATCH',
-      });
-    }
-  }
-
-  /** POST once with an eight-second deadline, rejected redirects, decoded response size cap and safe diagnostics; response bodies and credentials never enter errors. */
-  private async call(
-    path: '/api/pay' | '/api/requery',
-    body: string,
-  ): Promise<Record<string, unknown>> {
-    try {
-      const response = await this.client.request<string>({
-        url: `${this.origin}${path}`,
-        method: 'POST',
-        headers: {
-          'api-key': this.settings.apiKey,
-          'secret-key': this.settings.secretKey,
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        data: body,
-      });
-      if (response.data.length === 0) {
-        throw new PaymentError('INVALID_PROVIDER_EVIDENCE', {
-          reason: 'PROVIDER_RESPONSE_EMPTY',
-        });
-      }
-      return parseVtpassJson(response.data);
-    } catch (error) {
-      if (error instanceof PaymentError) {
-        throw error;
-      }
-      if (
-        error instanceof OutboundHttpError &&
-        error.httpStatus !== undefined
-      ) {
-        throw new PaymentError('PAYMENT_UNAVAILABLE', {
-          reason: vtpassHttpFailureReason(error.httpStatus),
-          cause: error,
-        });
-      }
-      if (isOutboundResponseTooLarge(error)) {
-        throw new PaymentError('INVALID_PROVIDER_EVIDENCE', {
-          reason: 'PROVIDER_RESPONSE_TOO_LARGE',
-          cause: error,
-        });
-      }
-      const reason = isOutboundTimeout(error)
-        ? 'PROVIDER_TIMEOUT'
-        : 'PROVIDER_CONNECTION_FAILED';
-      throw new PaymentError('PAYMENT_UNAVAILABLE', {
-        reason,
-        cause: error instanceof OutboundHttpError ? error : undefined,
       });
     }
   }

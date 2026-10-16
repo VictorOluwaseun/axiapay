@@ -1,5 +1,9 @@
 import { PaymentError, type ServicePayment } from '../domain/payment.js';
 import { maximumMinorUnits } from '../../wallets/domain/money.js';
+import {
+  isAsciiDigits,
+  isUnsignedDecimalText,
+} from '../../../shared/domain/numeric-text.js';
 
 /** VTpass's domestic airtime purchase fields. Amount is exact decimal text, encoded as a JSON number token at the HTTP boundary. */
 export interface VtpassAirtimeRequest {
@@ -32,6 +36,15 @@ export function vtpassRequestId(payment: ServicePayment): string {
   return `${values.year}${values.month}${values.day}${values.hour}${values.minute}${payment.id.replaceAll('-', '')}`;
 }
 
+/** Check VTpass's country and national-number length for an already normalized, boundary-validated E.164 phone. Generic phone syntax is not revalidated here. */
+export function supportsVtpassPhoneNumber(phoneNumber: string): boolean {
+  return (
+    phoneNumber.startsWith('+234') &&
+    phoneNumber.length === 14 &&
+    phoneNumber[4] !== '0'
+  );
+}
+
 /** Format an already validated Nigerian E.164 recipient as domestic digits. Validation belongs to validate; this function only transforms its input. */
 export function formatVtpassPhoneNumber(phoneNumber: string): string {
   return `0${phoneNumber.slice(4)}`;
@@ -44,21 +57,13 @@ export function formatVtpassNaira(amountMinorUnits: bigint): string {
 
 /** Read exact positive naira amounts from parsed number tokens or strings; reject exponent notation, extra precision and overflow. */
 export function vtpassMinorUnits(value: unknown): bigint {
-  if (typeof value !== 'string') {
+  if (typeof value !== 'string' || !isUnsignedDecimalText(value, 17, 2)) {
     throw new PaymentError('INVALID_PROVIDER_EVIDENCE', {
       reason: 'PROVIDER_AMOUNT_INVALID',
     });
   }
-  const match = /^(0|[1-9][0-9]{0,16})(?:\.([0-9]{1,2}))?(?![\s\S])/.exec(
-    value,
-  );
-  if (!match) {
-    throw new PaymentError('INVALID_PROVIDER_EVIDENCE', {
-      reason: 'PROVIDER_AMOUNT_INVALID',
-    });
-  }
-  const amount =
-    BigInt(match[1]!) * 100n + BigInt((match[2] ?? '').padEnd(2, '0'));
+  const [whole, fraction = ''] = value.split('.');
+  const amount = BigInt(whole!) * 100n + BigInt(fraction.padEnd(2, '0'));
   if (amount <= 0n || amount > maximumMinorUnits) {
     throw new PaymentError('INVALID_PROVIDER_EVIDENCE', {
       reason: 'PROVIDER_AMOUNT_OUT_OF_RANGE',
@@ -67,9 +72,16 @@ export function vtpassMinorUnits(value: unknown): bigint {
   return amount;
 }
 
-/** Guard object-shaped upstream records without coercing null, arrays or primitives. */
+/** Narrow an upstream object once, allowing callers to retain pending outcomes when a transaction record is absent. */
+export function isVtpassObject(
+  value: unknown,
+): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/** Require an upstream object where the provider protocol promises one; absent transaction records can use isVtpassObject instead. */
 export function vtpassObject(value: unknown): Record<string, unknown> {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+  if (!isVtpassObject(value)) {
     throw new PaymentError('INVALID_PROVIDER_EVIDENCE', {
       reason: 'PROVIDER_RESPONSE_INVALID_OBJECT',
     });
@@ -98,11 +110,9 @@ export function parseVtpassJson(text: string): Record<string, unknown> {
   return vtpassObject(parsed);
 }
 
-/** Parse and canonicalize the exact decimal into the provider's numeric amount; only JSON-escaped strings and a checked numeric token enter the body. */
+/** Encode the trusted toRequest output, preserving its formatted amount as an exact JSON number token. */
 export function serializeVtpassAirtime(request: VtpassAirtimeRequest): string {
-  const amountMinorUnits = vtpassMinorUnits(request.amount);
-  const amount = formatVtpassNaira(amountMinorUnits);
-  return `{"request_id":${JSON.stringify(request.request_id)},"serviceID":${JSON.stringify(request.serviceID)},"amount":${amount},"phone":${JSON.stringify(request.phone)}}`;
+  return `{"request_id":${JSON.stringify(request.request_id)},"serviceID":${JSON.stringify(request.serviceID)},"amount":${request.amount},"phone":${JSON.stringify(request.phone)}}`;
 }
 
 /** Accept only exact provider movement identifiers; numeric JSON IDs have already been preserved as strings. */
@@ -112,7 +122,12 @@ export function vtpassMovementId(
     | 'PROVIDER_TRANSACTION_REFERENCE_INVALID'
     | 'PROVIDER_REFUND_REFERENCE_INVALID' = 'PROVIDER_TRANSACTION_REFERENCE_INVALID',
 ): string {
-  if (typeof value !== 'string' || !/^[1-9][0-9]{0,63}(?![\s\S])/.test(value)) {
+  if (
+    typeof value !== 'string' ||
+    value.length > 64 ||
+    value.startsWith('0') ||
+    !isAsciiDigits(value)
+  ) {
     throw new PaymentError('INVALID_PROVIDER_EVIDENCE', { reason });
   }
   return value;

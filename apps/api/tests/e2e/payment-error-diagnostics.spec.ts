@@ -69,10 +69,10 @@ afterEach(() => vi.restoreAllMocks());
 
 describe('payment failure explanations', () => {
   it.each([
-    ['NGN_CURRENCY_REQUIRED', 'This airtime provider requires amounts in NGN.'],
+    ['NGN_CURRENCY_REQUIRED', 'This provider requires amounts in NGN.'],
     [
       'NETWORK_PRODUCT_MISMATCH',
-      'The selected mobile network does not match the airtime product.',
+      'The selected mobile network does not match the selected product.',
     ],
     [
       'PROVIDER_TIMEOUT',
@@ -118,7 +118,7 @@ describe('payment failure explanations', () => {
     expect(response.json()).toMatchObject({
       code: 'INVALID_PAYMENT',
       message:
-        'Use a Nigerian recipient phone number in +234 format for this airtime payment.',
+        'Use a Nigerian recipient phone number in +234 format for this payment.',
     });
   });
 

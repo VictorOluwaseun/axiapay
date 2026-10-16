@@ -6,7 +6,7 @@ import axios, {
   type AxiosResponse,
 } from 'axios';
 
-/** Bound decoded provider responses and serialized request bodies to 256 KiB. */
+/** Default decoded-response and serialized-request limit; trusted binary document clients may choose a larger response bound. */
 export const outboundBodyLimitBytes = 262144;
 
 /** Controlled transport descriptions never accept upstream bodies, headers, request configuration or arbitrary exception messages. */
@@ -30,10 +30,14 @@ export class OutboundHttpError extends Error {
   }
 }
 
-/** Construct an isolated Node HTTP client with bounded I/O and per-instance request/response interceptors. Shared deadlines and safe HTTP errors stay here; callers own URLs, credentials, exact serialization/parsing and business error mapping. A test adapter replaces transport only. */
+/** Construct an isolated Node HTTP client with bounded I/O and per-instance interceptors. Responses default to 256 KiB of UTF-8 text; trusted document adapters may select bounded binary reads. Callers own URLs, credentials, exact serialization/parsing and business error mapping. A test adapter replaces transport only. */
 export function createOutboundHttpClient(
   timeoutMs: number,
   adapter: AxiosAdapter | undefined,
+  options: {
+    readonly responseFormat?: 'text' | 'bytes';
+    readonly maximumResponseBytes?: number;
+  } = {},
 ): AxiosInstance {
   const transport = axios.getAdapter(adapter ?? 'http');
   const client = axios.create({
@@ -58,16 +62,26 @@ export function createOutboundHttpClient(
             ? Buffer.from(chunk, 'utf8')
             : Buffer.from(chunk);
         receivedBytes += bytes.length;
-        if (receivedBytes > outboundBodyLimitBytes) {
+        if (
+          receivedBytes >
+          (options.maximumResponseBytes ?? outboundBodyLimitBytes)
+        ) {
           throw new OutboundHttpError('RESPONSE_TOO_LARGE');
         }
         chunks.push(bytes);
       }
-      const text = Buffer.concat(chunks, receivedBytes).toString('utf8');
+      const bytes = Buffer.concat(chunks, receivedBytes);
+      const text =
+        options.responseFormat === 'bytes' ? '' : bytes.toString('utf8');
       return {
         ...response,
         // Preserve the Axios UTF-8 text contract, including stripping a leading byte-order mark.
-        data: text.charCodeAt(0) === 0xfeff ? text.slice(1) : text,
+        data:
+          options.responseFormat === 'bytes'
+            ? bytes
+            : text.charCodeAt(0) === 0xfeff
+              ? text.slice(1)
+              : text,
       };
     },
     timeout: timeoutMs,

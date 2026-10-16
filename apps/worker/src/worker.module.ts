@@ -2,9 +2,9 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { LoggerModule } from 'nestjs-pino';
 import {
-  VTPASS_AIRTIME,
-  VtpassAirtimeModule,
-} from '@axiapay/payments-runtime/modules/payments/adapters/vtpass-airtime.module';
+  VTPASS_PAYMENTS,
+  VtpassPaymentsModule,
+} from '@axiapay/payments-runtime/modules/payments/adapters/vtpass-payments.module';
 import { PaymentsRuntimeModule } from '@axiapay/payments-runtime/modules/payments/payments-runtime.module';
 import { validateWorkerEnvironment } from './config/environment.js';
 import { PaymentRecoveryWorker } from './jobs/payment-recovery.worker.js';
@@ -28,8 +28,8 @@ import { PaymentRecoveryWorker } from './jobs/payment-recovery.worker.js';
       }),
     }),
     PaymentsRuntimeModule.register({
-      imports: [VtpassAirtimeModule],
-      fulfilment: { useExisting: VTPASS_AIRTIME.registrations },
+      imports: [VtpassPaymentsModule.register()],
+      fulfilment: { useExisting: VTPASS_PAYMENTS.registrations },
     }),
   ],
   providers: [PaymentRecoveryWorker],

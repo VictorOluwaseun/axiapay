@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { DatabaseConnection } from '@axiapay/payments-runtime/infrastructure/database/database.module';
 import { PaymentsCoreModule } from '@axiapay/payments-runtime/modules/payments/payments-core.module';
 import { PAYMENTS } from '@axiapay/payments-runtime/modules/payments/payments.tokens';
-import { AirtimeProcessor } from '@axiapay/payments-runtime/modules/payments/processors/airtime.processor';
+import { ServicePaymentProcessor } from '@axiapay/payments-runtime/modules/payments/processors/service-payment.processor';
 import type { PaymentProviders } from '@axiapay/payments-runtime/modules/payments/ports/service-payment-provider';
 import type { ServicePayment } from '@axiapay/payments-runtime/modules/payments/domain/payment';
 import { PaymentExecutionService } from '@axiapay/payments-runtime/modules/payments/services/payment-execution.service';
@@ -72,12 +72,12 @@ describe('airtime processor composition', () => {
               secondAdapter: ReturnType<typeof testAirtimeAdapter>,
             ): PaymentProviders => ({
               [firstAdapter.providerKey]: {
-                adapter: new AirtimeProcessor(firstAdapter),
+                adapter: new ServicePaymentProcessor('airtime', firstAdapter),
                 partnerAccountId: first.partnerAccountId,
                 feeAccountId: first.feeAccountId,
               },
               [secondAdapter.providerKey]: {
-                adapter: new AirtimeProcessor(secondAdapter),
+                adapter: new ServicePaymentProcessor('airtime', secondAdapter),
                 partnerAccountId: second.partnerAccountId,
                 feeAccountId: second.feeAccountId,
               },

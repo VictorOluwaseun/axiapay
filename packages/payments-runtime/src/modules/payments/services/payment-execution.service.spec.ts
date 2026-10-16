@@ -7,9 +7,85 @@ import {
 } from '../../../../tests/support/airtime-processor-fixture.js';
 import type { ServiceCatalogService } from '../../service-catalog/services/service-catalog.service.js';
 import type { ServicePayment } from '../domain/payment.js';
-import { AirtimeProcessor } from '../processors/airtime.processor.js';
+import { ServicePaymentProcessor } from '../processors/service-payment.processor.js';
 import type { PaymentRepository } from '../repositories/contracts/payment.repository.js';
 import { PaymentExecutionService } from './payment-execution.service.js';
+import { ServiceProcessorRouter } from '../processors/service-processor-router.js';
+import { vtpassProduct } from '../../../../tests/support/vtpass-airtime-fixture.js';
+
+describe('fresh purchase validation', () => {
+  it.each([
+    'processor',
+    'router',
+    'separate_hooks',
+    'routed_separate_hooks',
+  ] as const)(
+    'checks compatibility and live terms once through %s, and skips existing holds',
+    async (composition) => {
+      const payment: ServicePayment = {
+        ...airtimeInstruction(),
+        submissionStartedAt: null,
+        reservationId: null,
+        reservationStatus: null,
+      };
+      const validate = vi.fn();
+      const verifyPurchaseTerms = vi.fn(async () => {});
+      const protocol = {
+        ...testAirtimeAdapter(),
+        validate,
+        verifyPurchaseTerms,
+      };
+      const legacy = {
+        validate,
+        verifyPurchaseTerms,
+        submit: vi.fn(async () => pendingAirtimeSubmission(payment)),
+        lookup: protocol.lookup,
+      };
+      const processor = new ServicePaymentProcessor('airtime', protocol);
+      const provider = {
+        processor,
+        router: new ServiceProcessorRouter({ airtime: processor }),
+        separate_hooks: legacy,
+        routed_separate_hooks: new ServiceProcessorRouter({ airtime: legacy }),
+      }[composition];
+      const catalogue = {
+        getProduct: vi.fn(async () => vtpassProduct(payment)),
+      };
+      const execution = new PaymentExecutionService(
+        {} as PaymentRepository,
+        catalogue as unknown as ServiceCatalogService,
+        {
+          [payment.quote.providerKey]: {
+            adapter: provider,
+            partnerAccountId: payment.partnerAccountId,
+            feeAccountId: payment.feeAccountId,
+          },
+        },
+        { now: () => new Date('2030-01-01T00:00:01Z') },
+      );
+      await execution.prepareReservation(payment);
+      expect(validate).toHaveBeenCalledExactlyOnceWith({
+        scope: 'quote',
+        terms: payment.quote,
+      });
+      expect(verifyPurchaseTerms).toHaveBeenCalledExactlyOnceWith(
+        payment.quote,
+      );
+      expect(validate.mock.invocationCallOrder[0]).toBeLessThan(
+        verifyPurchaseTerms.mock.invocationCallOrder[0]!,
+      );
+      await execution.prepareReservation({
+        ...payment,
+        reservationId: payment.id,
+        reservationStatus: 'reserved',
+      });
+      expect(validate).toHaveBeenCalledTimes(1);
+      expect(verifyPurchaseTerms).toHaveBeenCalledTimes(1);
+      expect(catalogue.getProduct).toHaveBeenCalledTimes(1);
+      expect(protocol.execute).not.toHaveBeenCalled();
+    },
+  );
+});
 
 /** Exercise the actual processor and execution service; replace only durable storage and the external protocol with controlled test contracts. */
 function executionFixture() {
@@ -45,7 +121,7 @@ function executionFixture() {
     {} as ServiceCatalogService,
     {
       [adapter.providerKey]: {
-        adapter: new AirtimeProcessor(adapter),
+        adapter: new ServicePaymentProcessor('airtime', adapter),
         partnerAccountId: saved.partnerAccountId,
         feeAccountId: saved.feeAccountId,
       },

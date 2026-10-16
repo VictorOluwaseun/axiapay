@@ -1,3 +1,16 @@
+import { VtpassDataAdapter } from '@axiapay/payments-runtime/modules/payments/adapters/vtpass-data.adapter';
+import { VtpassTvSubscriptionAdapter } from '@axiapay/payments-runtime/modules/payments/adapters/vtpass-tv-subscription.adapter';
+import { VtpassElectricityAdapter } from '@axiapay/payments-runtime/modules/payments/adapters/vtpass-electricity.adapter';
+import { VtpassEducationAdapter } from '@axiapay/payments-runtime/modules/payments/adapters/vtpass-education.adapter';
+import { VtpassInsuranceAdapter } from '@axiapay/payments-runtime/modules/payments/adapters/vtpass-insurance.adapter';
+import { VtpassMerchantPaymentAdapter } from '@axiapay/payments-runtime/modules/payments/adapters/vtpass-merchant-payment.adapter';
+import { ServicePaymentProcessor } from '@axiapay/payments-runtime/modules/payments/processors/service-payment.processor';
+import {
+  serviceInstruction,
+  serviceProduct,
+  vtpassServiceDelivered,
+  serviceProcessorCases,
+} from '../../../../packages/payments-runtime/tests/support/service-processor-fixture.js';
 import { PaymentRecoveryService } from '@axiapay/payments-runtime/modules/payments/services/payment-recovery.service';
 import { PostgresPaymentRecoveryRepository } from '@axiapay/payments-runtime/modules/payments/repositories/postgres-payment-recovery.repository';
 /** Verify the first-party airtime/data contract, real PostgreSQL invariants and recovery using test-only fulfilment adapters. */
@@ -26,7 +39,6 @@ import {
 } from '@axiapay/payments-runtime/modules/payments/domain/payment';
 import { PostgresPaymentRepository } from '@axiapay/payments-runtime/modules/payments/repositories/postgres-payment.repository';
 import { PaymentExecutionService } from '@axiapay/payments-runtime/modules/payments/services/payment-execution.service';
-import { AirtimeProcessor } from '@axiapay/payments-runtime/modules/payments/processors/airtime.processor';
 import { VtpassAirtimeAdapter } from '@axiapay/payments-runtime/modules/payments/adapters/vtpass-airtime.adapter';
 import { parseVtpassJson } from '@axiapay/payments-runtime/modules/payments/adapters/vtpass-airtime.protocol';
 import type {
@@ -173,6 +185,9 @@ async function fixture(
     providerKey: string;
     networkCode: string;
     productCode: string;
+    billerCode?: string;
+    educationRecipientVerificationRequired?: boolean;
+    insuranceTerms?: InsuranceProductTerms;
   },
 ) {
   currentTime = new Date(currentTime.getTime() + 3_600_000);
@@ -237,7 +252,9 @@ async function fixture(
     (serviceType === 'education' && educationPaymentType === 'voucher');
   const isMobile = ['airtime', 'data'].includes(serviceType);
   const billerCode =
-    isMobile || serviceType === 'bank_transfer' ? null : `test-${randomUUID()}`;
+    isMobile || serviceType === 'bank_transfer'
+      ? null
+      : (providerProtocol?.billerCode ?? `test-${randomUUID()}`);
   const bankId = serviceType === 'bank_transfer' ? randomUUID() : null;
   const bankCode = `test-${randomUUID()}`;
   if (bankId) {
@@ -255,21 +272,24 @@ async function fixture(
       })
       .execute();
   }
-  const insuranceTerms: InsuranceProductTerms = {
-    version: 'terms-1',
-    coverageSummary: 'Test individual cover',
-    exclusions: ['Test exclusion'],
-    coverageDurationDays: 365,
-    cancellationRefundTerms: 'Test cancellation and refund terms',
-    requiredInsuredFields: ['fullName', 'identityNumber'],
-    optionalInsuredFields: ['dateOfBirth', 'email'],
-  };
+  const insuranceTerms: InsuranceProductTerms =
+    providerProtocol?.insuranceTerms ?? {
+      version: 'terms-1',
+      coverageSummary: 'Test individual cover',
+      exclusions: ['Test exclusion'],
+      coverageDurationDays: 365,
+      cancellationRefundTerms: 'Test cancellation and refund terms',
+      requiredInsuredFields: ['fullName', 'identityNumber'],
+      optionalInsuredFields: ['dateOfBirth', 'email'],
+    };
   await database.administrator
     .insertInto('service_catalog_products')
     .values({
       id: productId,
       service_type: serviceType,
       network_code: isMobile ? networkCode : null,
+      education_recipient_verification_required:
+        providerProtocol?.educationRecipientVerificationRequired ?? true,
       education_payment_type:
         serviceType === 'education' ? educationPaymentType : null,
       education_purpose:
@@ -378,7 +398,7 @@ async function fixture(
   registrations[providerKey] = {
     adapter:
       serviceType === 'airtime'
-        ? new AirtimeProcessor({
+        ? new ServicePaymentProcessor('airtime', {
             providerKey,
             /** Keep integration fixtures on the test protocol while exercising our real submission pipeline. */
             toRequest: (payment: ServicePayment) => payment,
@@ -646,6 +666,419 @@ function failed(
     fundsSafeToRelease,
   };
 }
+
+/** Exercise actual VTpass service processors through HTTP, persisted preparation, wallet holds and journals. Only upstream transport is simulated. */
+async function vtpassServiceFixture(
+  serviceType: (typeof serviceProcessorCases)[number],
+  meterType: ElectricityMeterType = 'prepaid',
+  educationService: 'jamb' | 'waec' | 'waec-registration' = 'jamb',
+) {
+  let template = serviceInstruction(serviceType);
+  if (serviceType === 'education' && educationService !== 'jamb') {
+    template = {
+      ...template,
+      quote: {
+        ...template.quote,
+        providerProductCode:
+          educationService === 'waec'
+            ? 'waec:waecdirect'
+            : 'waec-registration:waec-reg-test',
+        billerCode: 'waec',
+        educationValidation: null,
+        recipientPhoneNumber: '+2348012345678',
+      },
+    };
+  }
+  const context = await fixture(
+    serviceType,
+    100_000n,
+    90_000n,
+    meterType,
+    'voucher',
+    {
+      providerKey: `vtpass:sandbox:${randomUUID()}`,
+      networkCode: 'mtn',
+      productCode: template.quote.providerProductCode,
+      billerCode: template.quote.billerCode ?? undefined,
+      educationRecipientVerificationRequired:
+        serviceProduct(template).educationRecipientVerificationRequired,
+      insuranceTerms: template.quote.insuranceTerms ?? undefined,
+    },
+  );
+  let price = ['electricity', 'merchant'].includes(serviceType)
+    ? '100.00'
+    : '125.00';
+  let purchasePrice: string | undefined;
+  let purchase: Record<string, unknown> | undefined;
+  let outcome: 'delivered' | 'timeout' = 'delivered';
+  const transport = vi.fn<AxiosAdapter>(async (config) => {
+    if (config.method === 'get') {
+      const [serviceID, variation_code] =
+        template.quote.providerProductCode.split(':');
+      return axiosTextResponse(
+        JSON.stringify({
+          response_description: '000',
+          content: {
+            serviceID,
+            variations: [
+              { variation_code, variation_amount: price, fixedPrice: 'Yes' },
+            ],
+          },
+        }),
+        200,
+        config,
+      );
+    }
+    const request = parseVtpassJson(config.data as string);
+    if (config.url!.endsWith('/merchant-verify')) {
+      return axiosTextResponse(
+        JSON.stringify({
+          code: '000',
+          content: {
+            Customer_Name: 'Verified test recipient',
+            ...(serviceType === 'electricity'
+              ? {
+                  Meter_Number: request.billersCode,
+                  Meter_Type: meterType.toUpperCase(),
+                }
+              : {}),
+          },
+        }),
+        200,
+        config,
+      );
+    }
+    if (config.url!.endsWith('/pay')) {
+      purchase = request;
+      purchasePrice = price;
+    }
+    if (config.url!.endsWith('/pay') && outcome === 'timeout') {
+      throw new AxiosError('Test lost acknowledgement', AxiosError.ETIMEDOUT);
+    }
+    if (!purchase) {
+      throw new Error('No existing purchase to enquire about.');
+    }
+    const delivered = vtpassServiceDelivered(template);
+    const content = delivered.content as {
+      transactions: Record<string, unknown>;
+    };
+    content.transactions.unique_element =
+      purchase.billersCode ?? purchase.phone;
+    content.transactions.amount = purchasePrice;
+    content.transactions.unit_price = purchasePrice;
+    return axiosTextResponse(
+      JSON.stringify({
+        ...delivered,
+        amount: purchasePrice,
+        requestId: request.request_id,
+      }),
+      200,
+      config,
+    );
+  });
+  const settings = {
+    providerKey: context.providerKey,
+    environment: 'sandbox' as const,
+    apiKey: 'test-api-key',
+    secretKey: 'test-secret-key',
+    publicKey: 'test-public-key',
+  };
+  const constructors = {
+    data: VtpassDataAdapter,
+    tv: VtpassTvSubscriptionAdapter,
+    electricity: VtpassElectricityAdapter,
+    education: VtpassEducationAdapter,
+    insurance: VtpassInsuranceAdapter,
+  };
+  const adapter =
+    serviceType === 'merchant'
+      ? new VtpassMerchantPaymentAdapter(
+          settings,
+          {
+            'reviewed-merchant': {
+              productNames: ['Reviewed merchant fixture'],
+              transactionType: 'Other Services',
+              requiresVariation: false,
+              billerCodes: ['reviewed-merchant'],
+            },
+          },
+          transport,
+        )
+      : new constructors[serviceType](settings, transport);
+  const original = registrations[context.providerKey]!;
+  registrations[context.providerKey] = {
+    ...original,
+    adapter: new ServicePaymentProcessor(serviceType, adapter),
+    ...(serviceType === 'tv' || serviceType === 'electricity'
+      ? {
+          accountVerification: adapter as
+            VtpassTvSubscriptionAdapter | VtpassElectricityAdapter,
+        }
+      : {}),
+    ...(serviceType === 'education'
+      ? { educationVerification: adapter as VtpassEducationAdapter }
+      : {}),
+    ...(serviceType === 'insurance'
+      ? {
+          insuranceEligibility: adapter as VtpassInsuranceAdapter,
+          documentRetrieval: adapter as VtpassInsuranceAdapter,
+        }
+      : {}),
+  };
+  return {
+    ...context,
+    adapter,
+    transport,
+    /** Change only simulated upstream purchase acknowledgement; accepted request IDs and settlement rules remain real. */
+    setOutcome(value: typeof outcome) {
+      outcome = value;
+    },
+    /** Simulate an external fixed-plan price change without modifying an immutable first-party catalogue revision. */
+    setPrice(value: string) {
+      price = value;
+    },
+    /** Prepare the service-specific recipient through its real first-party API, then review immutable contact and purchase terms. */
+    async review() {
+      const contactPhoneNumber = '+2348099999999';
+      if (serviceType === 'tv' || serviceType === 'electricity') {
+        const validation = await context.verifyAccount();
+        expect(validation.statusCode).toBe(201);
+        return context.quote({
+          accountValidationId: validation.json().id,
+          contactPhoneNumber,
+        });
+      }
+      if (serviceType === 'education' && educationService === 'jamb') {
+        const validation = await context.educationValidation({
+          beneficiaryIdentifier: '0123456789',
+        });
+        expect(validation.statusCode).toBe(201);
+        return context.quote({
+          educationValidationId: validation.json().id,
+          contactPhoneNumber,
+        });
+      }
+      if (serviceType === 'education') {
+        return context.quote({
+          recipientPhoneNumber: contactPhoneNumber,
+          contactPhoneNumber,
+        });
+      }
+      if (serviceType === 'insurance') {
+        const prepared = await context.insuranceApplication({
+          insuredProfile: template.quote.insuranceApplication!.insuredProfile,
+          termsVersion: template.quote.insuranceTerms!.version,
+        });
+        expect(prepared.statusCode).toBe(201);
+        expect(prepared.json()).toMatchObject({
+          eligibilityStatus: 'submission_ready',
+          eligibilityMode: 'submission_requirements',
+          coverageStartMode: 'provider_assigned',
+        });
+        const recovered = await application.inject({
+          method: 'GET',
+          url: `/v1/payments/insurance-applications/${prepared.json().id}`,
+          headers: context.headers,
+        });
+        expect(recovered.json()).toMatchObject({
+          eligibilityStatus: 'submission_ready',
+          eligibilityMode: 'submission_requirements',
+          coverageStartMode: 'provider_assigned',
+        });
+        return context.quote({
+          insuranceApplicationId: prepared.json().id,
+          contactPhoneNumber,
+        });
+      }
+      if (serviceType === 'merchant') {
+        return context.quote({
+          merchantRecipientIdentifier: '001-invoice-reference',
+          contactPhoneNumber,
+        });
+      }
+      return context.quote({ contactPhoneNumber });
+    },
+  };
+}
+
+describe('VTpass category processors with real wallet settlement', () => {
+  it('discovers only requested insured facts through the authenticated first-party contract without spending', async () => {
+    const template = serviceInstruction('insurance');
+    const terms = {
+      ...template.quote.insuranceTerms!,
+      optionalInsuredFields: ['vehicleMake'] as const,
+    };
+    const context = await fixture(
+      'insurance',
+      100_000n,
+      90_000n,
+      'prepaid',
+      'voucher',
+      {
+        providerKey: `test:${randomUUID()}`,
+        networkCode: 'unused',
+        productCode: 'test-insurance',
+        insuranceTerms: terms,
+      },
+    );
+    const list = vi.fn(async () => [
+      { value: 'Test make', label: 'Test make', providerCode: 'PRIVATE-CODE' },
+    ]);
+    registrations[context.providerKey] = {
+      ...registrations[context.providerKey]!,
+      insuranceInputOptions: { list },
+    };
+    const url = `/v1/payments/insurance-products/${context.productId}/options`;
+    expect(
+      (
+        await application.inject({
+          method: 'GET',
+          url: `${url}?field=vehicleMake`,
+        })
+      ).statusCode,
+    ).toBe(401);
+    expect(list).not.toHaveBeenCalled();
+    const response = await application.inject({
+      method: 'GET',
+      url: `${url}?field=vehicleMake`,
+      headers: context.headers,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(response.json()).toEqual({
+      field: 'vehicleMake',
+      options: [{ value: 'Test make', label: 'Test make' }],
+    });
+    expect(list).toHaveBeenCalledTimes(1);
+    expect(
+      (
+        await application.inject({
+          method: 'GET',
+          url: `${url}?field=vehicleColour`,
+          headers: context.headers,
+        })
+      ).statusCode,
+    ).toBe(400);
+    expect(list).toHaveBeenCalledTimes(1);
+    expect(context.submit).not.toHaveBeenCalled();
+    expect((await context.balance()).availableMinorUnits).toBe(100_000n);
+  });
+
+  it.each([
+    ...serviceProcessorCases.map(
+      (serviceType) => [serviceType, 'prepaid', 'jamb'] as const,
+    ),
+    ['electricity', 'postpaid', 'jamb'] as const,
+    ['education', 'prepaid', 'waec'] as const,
+    ['education', 'prepaid', 'waec-registration'] as const,
+  ])(
+    'purchases %s/%s/%s once under concurrent consent, preserving contact and receipts',
+    async (serviceType, meterType, educationService) => {
+      const context = await vtpassServiceFixture(
+        serviceType,
+        meterType,
+        educationService,
+      );
+      const reviewed = await context.review();
+      expect(reviewed.statusCode).toBe(201);
+      const quote = reviewed.json<PaymentQuoteResponseDto>();
+      expect(quote.contactPhoneNumber).toBe('+2348099999999');
+      expect((await context.balance()).availableMinorUnits).toBe(100_000n);
+      const requestKey = randomUUID();
+      const [first, replay] = await Promise.all([
+        context.pay(quote.id, requestKey),
+        context.pay(quote.id, requestKey),
+      ]);
+      expect(first.statusCode).toBe(200);
+      expect(replay.statusCode).toBe(200);
+      expect(first.json().id).toBe(replay.json().id);
+      expect(
+        (await context.reconcile(first.json().id)).json().paymentStatus,
+      ).toBe('succeeded');
+      expect((await context.balance()).availableMinorUnits).toBe(
+        100_000n - BigInt(quote.totalDebitMinorUnits),
+      );
+      expect((await context.balance()).reservedMinorUnits).toBe(0n);
+      expect(
+        context.transport.mock.calls.filter(([config]) =>
+          config.url!.endsWith('/api/pay'),
+        ),
+      ).toHaveLength(1);
+      const stored = (await new PostgresPaymentRepository(
+        database.database,
+      ).getPayment(first.json().id))!;
+      expect(stored.quote.contactPhoneNumber).toBe('+2348099999999');
+      if (serviceType === 'electricity') {
+        expect(stored.fulfilment?.fulfilmentType).toBe(
+          `electricity_${meterType}`,
+        );
+      }
+      if (serviceType === 'education') {
+        expect(stored.fulfilment).toMatchObject({
+          fulfilmentType: 'education_voucher',
+          voucherCode: '0012345678901234',
+        });
+      }
+      if (serviceType === 'insurance') {
+        expect(stored.fulfilment).toBeNull();
+      }
+      if (serviceType === 'merchant') {
+        expect(stored.quote.merchantRecipientIdentifier).toBe(
+          '001-invoice-reference',
+        );
+      }
+    },
+  );
+  it('refuses changed fixed-plan prices before a hold, preserving all customer funds', async () => {
+    const context = await vtpassServiceFixture('data');
+    const quote = (await context.review()).json<PaymentQuoteResponseDto>();
+    context.setPrice('126.00');
+    expect((await context.pay(quote.id)).statusCode).toBe(503);
+    expect((await context.balance()).availableMinorUnits).toBe(100_000n);
+    expect((await context.balance()).reservedMinorUnits).toBe(0n);
+    expect(
+      context.transport.mock.calls.filter(([config]) =>
+        config.url!.endsWith('/api/pay'),
+      ),
+    ).toHaveLength(0);
+  });
+  it('recovers an uncertain purchase after its current eligibility and price change, using only the original reference', async () => {
+    const context = await vtpassServiceFixture('data');
+    const quote = (await context.review()).json<PaymentQuoteResponseDto>();
+    context.setOutcome('timeout');
+    const key = randomUUID();
+    expect((await context.pay(quote.id, key)).statusCode).toBe(503);
+    const payment = (await new PostgresPaymentRepository(
+      database.database,
+    ).findByRequestKey(context.session.account.id, key))!;
+    const checks = context.transport.mock.calls.filter(
+      ([config]) => config.method === 'get',
+    ).length;
+    context.setPrice('999.00');
+    context.setOutcome('delivered');
+    const validation = vi
+      .spyOn(context.adapter, 'validate')
+      .mockImplementation(() => {
+        throw new PaymentError('PAYMENT_UNAVAILABLE');
+      });
+    try {
+      expect((await context.reconcile(payment.id)).statusCode).toBe(200);
+      expect((await context.balance()).reservedMinorUnits).toBe(0n);
+      expect(
+        context.transport.mock.calls.filter(
+          ([config]) => config.method === 'get',
+        ),
+      ).toHaveLength(checks);
+      expect(
+        context.transport.mock.calls.filter(([config]) =>
+          config.url!.endsWith('/api/pay'),
+        ),
+      ).toHaveLength(1);
+    } finally {
+      validation.mockRestore();
+    }
+  });
+});
 
 describe('first-party service payments', () => {
   it.each([
@@ -3411,6 +3844,14 @@ async function vtpassPaymentFixture(networkCode = 'mtn') {
             unit_price: purchase.amount,
             amount: purchase.amount,
             quantity: 1,
+            commission: 3,
+            total_amount: 97,
+            commission_details: {
+              amount: 3,
+              rate: '3.00',
+              rate_type: 'percent',
+              computation_type: 'default',
+            },
             transactionId: '17415980564672211596777904',
           },
         },
@@ -3429,7 +3870,7 @@ async function vtpassPaymentFixture(networkCode = 'mtn') {
   registrations[providerKey] = {
     partnerAccountId: context.partnerAccountId,
     feeAccountId: context.feeAccountId,
-    adapter: new AirtimeProcessor(adapter),
+    adapter: new ServicePaymentProcessor('airtime', adapter),
   };
   return {
     ...context,
@@ -3443,7 +3884,7 @@ async function vtpassPaymentFixture(networkCode = 'mtn') {
 }
 
 describe('VTpass airtime with authoritative wallet settlement', () => {
-  it('captures exactly one reservation from correlated delivered evidence and preserves request replay', async () => {
+  it('captures the ₦100 principal, independently of a ₦97 provider net cost, and preserves request replay', async () => {
     const context = await vtpassPaymentFixture();
     const quote = (await context.quote()).json<PaymentQuoteResponseDto>();
     expect(quote.isSubmissionAvailable).toBe(true);

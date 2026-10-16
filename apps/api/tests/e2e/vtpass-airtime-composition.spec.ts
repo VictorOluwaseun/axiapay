@@ -12,7 +12,7 @@ import {
 import { VtpassAirtimeAdapter } from '@axiapay/payments-runtime/modules/payments/adapters/vtpass-airtime.adapter';
 import { PAYMENTS } from '@axiapay/payments-runtime/modules/payments/payments.tokens';
 import type { PaymentProviders } from '@axiapay/payments-runtime/modules/payments/ports/service-payment-provider';
-import { AirtimeProcessor } from '@axiapay/payments-runtime/modules/payments/processors/airtime.processor';
+import { ServicePaymentProcessor } from '@axiapay/payments-runtime/modules/payments/processors/service-payment.processor';
 import {
   vtpassDelivered,
   vtpassInstruction,
@@ -73,7 +73,7 @@ describe('VTpass airtime dependency injection', () => {
         const providers = module.get<PaymentProviders>(PAYMENTS.providers);
         expect(Object.keys(providers)).toEqual([providerKey]);
         const registration = providers[providerKey]!;
-        expect(registration.adapter).toBeInstanceOf(AirtimeProcessor);
+        expect(registration.adapter).toBeInstanceOf(ServicePaymentProcessor);
         expect(registration.partnerAccountId).toBe(vtpassTestAccountId);
         expect(registration.feeAccountId).toBeNull();
         expect(() =>
