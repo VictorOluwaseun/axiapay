@@ -1,3 +1,4 @@
+import { IsUnpaddedText } from '../../../shared/validation/input-constraints.js';
 import { Transform } from 'class-transformer';
 import {
   ContactValueConstraint,
@@ -8,7 +9,6 @@ import {
   Validate,
   IsString,
   IsUUID,
-  Length,
   Matches,
   MaxLength,
   NotContains,
@@ -63,7 +63,7 @@ export class CreateFundingRequestDto {
   @IsString()
   @MaxLength(200)
   @NotContains('\u0000')
-  @Matches(/^\S(?:[\s\S]*\S)?(?![\s\S])/)
+  @IsUnpaddedText()
   readonly requestKey!: string;
 }
 
@@ -71,7 +71,6 @@ export class CreateFundingRequestDto {
 export class FundingIdParamsDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
-  @Length(36, 36)
   readonly fundingId!: string;
 }
 

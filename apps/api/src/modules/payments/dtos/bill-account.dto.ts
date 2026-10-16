@@ -1,12 +1,12 @@
+import { IsUnpaddedText } from '../../../shared/validation/input-constraints.js';
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsUUID, Length, Matches } from 'class-validator';
+import { IsString, IsUUID, Matches } from 'class-validator';
 import type { BillAccountValidation } from '@axiapay/payments-runtime/modules/payments/domain/bill-account';
 
 /** Non-financial account verification request; product identifies the biller/package or prepaid/postpaid mode. */
 export class CreateBillAccountValidationDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
-  @Length(36, 36)
   readonly productId!: string;
 
   @ApiProperty({
@@ -18,7 +18,7 @@ export class CreateBillAccountValidationDto {
   })
   @IsString()
   @Matches(/^[\x20-\x7e]{1,100}(?![\s\S])/)
-  @Matches(/^\S(?:[\s\S]*\S)?(?![\s\S])/)
+  @IsUnpaddedText()
   readonly accountNumber!: string;
 }
 
@@ -26,7 +26,6 @@ export class CreateBillAccountValidationDto {
 export class BillAccountValidationIdParamsDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
-  @Length(36, 36)
   readonly validationId!: string;
 }
 

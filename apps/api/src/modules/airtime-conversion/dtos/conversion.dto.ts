@@ -1,8 +1,8 @@
+import { IsUnpaddedText } from '../../../shared/validation/input-constraints.js';
 import { ApiProperty } from '@nestjs/swagger';
 import {
   IsString,
   IsUUID,
-  Length,
   Matches,
   MaxLength,
   NotContains,
@@ -18,7 +18,6 @@ import {
 export class CreateConversionQuoteDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
-  @Length(36, 36)
   readonly walletId!: string;
   @ApiProperty({ example: 'eligible-network-airtime' })
   @IsString()
@@ -45,7 +44,7 @@ export class ConversionRequestKeyDto {
   @IsString()
   @MaxLength(200)
   @NotContains('\u0000')
-  @Matches(/^\S(?:[\s\S]*\S)?(?![\s\S])/)
+  @IsUnpaddedText()
   readonly requestKey!: string;
 }
 
@@ -53,7 +52,6 @@ export class ConversionRequestKeyDto {
 export class AcceptConversionDto extends ConversionRequestKeyDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
-  @Length(36, 36)
   readonly quoteId!: string;
 }
 
@@ -61,7 +59,6 @@ export class AcceptConversionDto extends ConversionRequestKeyDto {
 export class ConversionQuoteIdDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
-  @Length(36, 36)
   readonly quoteId!: string;
 }
 
@@ -69,7 +66,6 @@ export class ConversionQuoteIdDto {
 export class ConversionIdDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
-  @Length(36, 36)
   readonly conversionId!: string;
 }
 

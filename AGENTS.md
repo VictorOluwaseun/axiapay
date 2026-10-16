@@ -160,6 +160,8 @@ These rules govern implementation and changes in this workspace.
 
 ## Maintainability and DRY
 
+- Prefer direct string operations, equality, range checks and date parsing for simple predicates. Use regular expressions only when they make a structured format clearer.
+
 - No spaghetti code: keep functions, classes, ViewModels, handlers, and modules focused on a clear responsibility.
 - Use meaningful names and explicit contracts. Avoid oversized coordinators, cross-layer shortcuts, and unrelated shared utility collections.
 - Apply DRY to business rules and established shared behaviour. Extract abstractions when a real common responsibility exists; avoid premature generalization of superficially similar code.

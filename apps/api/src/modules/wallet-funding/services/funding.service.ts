@@ -15,7 +15,6 @@ import {
 } from '../domain/funding.js';
 import {
   assertReference,
-  money,
   type Money,
 } from '@axiapay/payments-runtime/modules/wallets/domain/money';
 import type {
@@ -50,7 +49,7 @@ export class FundingService implements FundingVerification {
       .map((route) => ({ ...route.option }));
   }
 
-  /** After wallet authorization by WalletFundingService, persist the chosen binding before checkout; retries retain the original route. */
+  /** Accept boundary-validated input and constructed Money after wallet authorization; persist the binding before checkout and retain the original route on replay. */
   async initialize(input: {
     actorId: string;
     walletId: string;
@@ -59,15 +58,13 @@ export class FundingService implements FundingVerification {
     payerEmail: string;
     requestKey: string;
   }): Promise<FundingRequest> {
-    const value = money(input.value.amountMinorUnits, input.value.currency);
-
-    const { payerEmail } = input;
+    const { value, payerEmail } = input;
     const existing = await this.repository.findByRequestKey(
       input.actorId,
       input.requestKey,
     );
     if (existing) {
-      this.assertReplay(existing, { ...input, value, payerEmail });
+      this.assertReplay(existing, input);
       return this.initializeRequest(existing);
     }
     const route = this.routes.find(

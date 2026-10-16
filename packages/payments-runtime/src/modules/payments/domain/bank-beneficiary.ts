@@ -18,14 +18,12 @@ export interface BankBeneficiaryValidation {
   readonly expiresAt: Date;
 }
 
-/** Preserve numeric account identifiers and leading zeros; accepted lengths come from the selected bank profile, never a guessed bank prefix. */
+/** Apply the selected bank's length limits to a boundary-validated digit identifier, preserving leading zeros without repeating generic request-format checks. */
 export function assertBankAccountNumber(
   accountNumber: string,
   bank: Bank,
 ): void {
   if (
-    typeof accountNumber !== 'string' ||
-    !/^[0-9]{1,34}(?![\s\S])/.test(accountNumber) ||
     accountNumber.length < bank.minimumAccountNumberLength ||
     accountNumber.length > bank.maximumAccountNumberLength
   ) {

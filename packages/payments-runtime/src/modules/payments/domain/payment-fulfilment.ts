@@ -4,6 +4,7 @@ import {
   type ServicePayment,
 } from './payment.js';
 import { assertBillDisplayText } from './bill-account.js';
+import { isUnsignedDecimalText } from '../../../shared/domain/numeric-text.js';
 
 /** An ordered printable token returned by authenticated evidence; labels support recharge and meter key-change sequences. */
 export interface ElectricityToken {
@@ -197,9 +198,7 @@ function validatedTvFulfilment(
   }
   if (
     typeof fulfilment.renewalAt !== 'string' ||
-    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z(?![\s\S])/.test(
-      fulfilment.renewalAt,
-    )
+    fulfilment.renewalAt.length !== 24
   ) {
     throw new PaymentError('INVALID_PROVIDER_EVIDENCE');
   }
@@ -239,9 +238,7 @@ function validatedPrepaidFulfilment(
   if (
     fulfilment.unitsKilowattHours !== null &&
     (typeof fulfilment.unitsKilowattHours !== 'string' ||
-      !/^(?:0|[1-9][0-9]{0,17})(?:\.[0-9]{1,9})?(?![\s\S])/.test(
-        fulfilment.unitsKilowattHours,
-      ))
+      !isUnsignedDecimalText(fulfilment.unitsKilowattHours, 18, 9))
   ) {
     throw new PaymentError('INVALID_PROVIDER_EVIDENCE');
   }
@@ -284,9 +281,7 @@ export function validatedBankTransferFulfilment(
   assertBillDisplayText(fulfilment.transferReference, 200);
   if (
     typeof fulfilment.creditedAt !== 'string' ||
-    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z(?![\s\S])/.test(
-      fulfilment.creditedAt,
-    )
+    fulfilment.creditedAt.length !== 24
   ) {
     throw new PaymentError('INVALID_PROVIDER_EVIDENCE');
   }

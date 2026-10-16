@@ -173,7 +173,10 @@ export function assertConversionOffer(offer: ConversionOffer): void {
   }
   calculateConversionAmounts(offer, offer.minimumAirtimeMinorUnits);
   // Check the upper bound independently of the step, so every valid amount fits SQL bigint.
-  calculateAmounts(offer, offer.maximumAirtimeMinorUnits);
+  calculateAmounts(
+    offer,
+    money(offer.maximumAirtimeMinorUnits, offer.currency),
+  );
 }
 
 /** Enforce supported face-value limits and increments before calculating a quote. */
@@ -181,7 +184,7 @@ export function calculateConversionAmounts(
   offer: ConversionOffer,
   airtimeMinorUnits: bigint,
 ): ConversionAmounts {
-  money(airtimeMinorUnits, offer.currency);
+  const airtimeValue = money(airtimeMinorUnits, offer.currency);
   if (
     airtimeMinorUnits < offer.minimumAirtimeMinorUnits ||
     airtimeMinorUnits > offer.maximumAirtimeMinorUnits ||
@@ -191,17 +194,17 @@ export function calculateConversionAmounts(
   ) {
     throw new ConversionError('AIRTIME_INELIGIBLE');
   }
-  return calculateAmounts(offer, airtimeMinorUnits);
+  return calculateAmounts(offer, airtimeValue);
 }
 
 /** Use bigint throughout; fees cannot consume all proceeds or create a zero/negative wallet credit. */
 function calculateAmounts(
   offer: ConversionOffer,
-  airtimeMinorUnits: bigint,
+  airtimeValue: Money,
 ): ConversionAmounts {
-  const airtimeValue = money(airtimeMinorUnits, offer.currency);
   const grossCreditValue = money(
-    (airtimeMinorUnits * offer.rateNumerator) / offer.rateDenominator,
+    (airtimeValue.amountMinorUnits * offer.rateNumerator) /
+      offer.rateDenominator,
     offer.currency,
   );
   const feeMinorUnits =

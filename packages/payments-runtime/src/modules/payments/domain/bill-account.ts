@@ -17,17 +17,6 @@ export interface BillAccountValidation {
   readonly expiresAt: Date;
 }
 
-/** Preserve identifiers and leading zeros exactly; provider-specific formats belong to the verification adapter. */
-export function assertBillAccountNumber(accountNumber: string): void {
-  if (
-    typeof accountNumber !== 'string' ||
-    !/^[\x20-\x7e]{1,100}(?![\s\S])/.test(accountNumber) ||
-    accountNumber.trim() !== accountNumber
-  ) {
-    throw new PaymentError('INVALID_PAYMENT');
-  }
-}
-
 /** Require bounded readable verified details; control characters and empty names are not valid customer-facing evidence. */
 export function assertBillDisplayText(
   value: string,

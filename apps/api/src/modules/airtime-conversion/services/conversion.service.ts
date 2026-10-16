@@ -430,7 +430,7 @@ export class ConversionService implements FundingVerification {
   }
 }
 
-/** Build the same exact capability input for preparation and all subsequent inspections. */
+/** Copy accepted capability terms for preparation and inspections; preserve isolation without reconstructing already validated Money. */
 function transferInput(request: ConversionRequest): ConversionTransferInput {
   return {
     conversionId: request.id,
@@ -438,14 +438,8 @@ function transferInput(request: ConversionRequest): ConversionTransferInput {
     providerProductCode: request.quote.providerProductCode,
     sourcePhoneNumber: request.quote.sourcePhoneNumber,
     networkCode: request.quote.offer.networkCode,
-    airtimeValue: money(
-      request.quote.airtimeValue.amountMinorUnits,
-      request.quote.airtimeValue.currency,
-    ),
-    netCreditValue: money(
-      request.quote.netCreditValue.amountMinorUnits,
-      request.quote.netCreditValue.currency,
-    ),
+    airtimeValue: Object.freeze({ ...request.quote.airtimeValue }),
+    netCreditValue: Object.freeze({ ...request.quote.netCreditValue }),
     eligibilityReference: request.quote.eligibilityReference,
     acceptedAt: new Date(request.acceptedAt.getTime()),
     receiveBy: new Date(request.receiveBy.getTime()),

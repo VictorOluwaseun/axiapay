@@ -29,7 +29,6 @@ export class BankTransferPageQueryDto {
   @ApiPropertyOptional({ format: 'uuid' })
   @ValidateIf((_object, value) => value !== undefined)
   @IsUUID()
-  @Length(36, 36)
   readonly afterId?: string;
   @ApiPropertyOptional({ type: String, default: '50' })
   @ValidateIf((_object, value) => value !== undefined)
@@ -52,7 +51,6 @@ export class BankTransferProductQueryDto extends BankTransferPageQueryDto {
   @ApiPropertyOptional({ format: 'uuid' })
   @ValidateIf((_object, value) => value !== undefined)
   @IsUUID()
-  @Length(36, 36)
   readonly bankId?: string;
 }
 
@@ -60,7 +58,6 @@ export class BankTransferProductQueryDto extends BankTransferPageQueryDto {
 export class BankIdParamsDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
-  @Length(36, 36)
   readonly bankId!: string;
 }
 
@@ -68,7 +65,6 @@ export class BankIdParamsDto {
 export class CreateBankBeneficiaryValidationDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
-  @Length(36, 36)
   readonly productId!: string;
   @ApiProperty({
     type: String,
@@ -85,7 +81,6 @@ export class CreateBankBeneficiaryValidationDto {
 export class BankBeneficiaryIdParamsDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
-  @Length(36, 36)
   readonly validationId!: string;
 }
 
@@ -93,15 +88,12 @@ export class BankBeneficiaryIdParamsDto {
 export class CreateBankTransferQuoteDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
-  @Length(36, 36)
   readonly walletId!: string;
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
-  @Length(36, 36)
   readonly productId!: string;
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
-  @Length(36, 36)
   readonly bankBeneficiaryValidationId!: string;
   @ApiProperty({
     type: String,
@@ -127,7 +119,6 @@ export class SubmitBankTransferDto extends SubmitServicePaymentDto {}
 export class BankTransferIdParamsDto {
   @ApiProperty({ format: 'uuid' })
   @IsUUID()
-  @Length(36, 36)
   readonly transferId!: string;
 }
 

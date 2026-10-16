@@ -50,9 +50,6 @@ export class BillAccountService {
       accountNumber: input.accountNumber,
     });
     this.assertVerifiedResult(product, input.accountNumber, result);
-    if (result.verificationStatus !== 'verified') {
-      throw new PaymentError('ACCOUNT_UNCONFIRMED');
-    }
     const verifiedAt = this.clock.now();
     return this.payments.createAccountValidation({
       id: randomUUID(),
@@ -106,7 +103,10 @@ export class BillAccountService {
     product: ServiceProduct,
     accountNumber: string,
     result: BillAccountVerificationResult,
-  ): void {
+  ): asserts result is Extract<
+    BillAccountVerificationResult,
+    { verificationStatus: 'verified' }
+  > {
     if (
       result.productId !== product.id ||
       result.accountNumber !== accountNumber ||
