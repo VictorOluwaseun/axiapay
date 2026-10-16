@@ -1,5 +1,5 @@
 import type { AxiosAdapter, AxiosHeaders, AxiosResponse } from 'axios';
-import { axiosTextResponse } from '../support/axios-response-fixture.js';
+import { axiosTextResponse } from '../../../../packages/backend/tests/support/axios-response-fixture.js';
 /** Exercise real partner adapters, signed HTTP callbacks, session guards, and restricted PostgreSQL posting without live payments. */
 import { createHmac, randomUUID } from 'node:crypto';
 import { Test } from '@nestjs/testing';
@@ -18,7 +18,7 @@ import {
   vi,
 } from 'vitest';
 import { ApiModule } from '../../src/bootstrap/api.module.js';
-import { DatabaseConnection } from '../../src/infrastructure/database/database.module.js';
+import { DatabaseConnection } from '@axiapay/backend/infrastructure/database/database.module';
 import {
   createFundingCustomer,
   type FundingCustomer,
@@ -27,16 +27,16 @@ import { PROVIDER_FUNDING } from '../../src/modules/wallet-funding/adapters/prov
 import { PaystackFundingGateway } from '../../src/modules/wallet-funding/adapters/paystack-funding.gateway.js';
 import { OpayFundingGateway } from '../../src/modules/wallet-funding/adapters/opay-funding.gateway.js';
 import { WalletFundingService } from '../../src/modules/wallet-funding/services/wallet-funding.service.js';
-import { WalletModule } from '../../src/modules/wallets/wallet.module.js';
-import { WalletService } from '../../src/modules/wallets/services/wallet.service.js';
-import { money } from '../../src/modules/wallets/domain/money.js';
+import { WalletModule } from '@axiapay/backend/modules/wallets/wallet.module';
+import { WalletService } from '@axiapay/backend/modules/wallets/services/wallet.service';
+import { money } from '@axiapay/backend/modules/wallets/domain/money';
 /** Provider fixture names are local to adapter conformance tests, never part of the core contract. */
 type FundingPartner = 'opay' | 'paystack';
 import type { FundingResponseDto } from '../../src/modules/wallet-funding/dtos/funding.dto.js';
 import {
   startWalletTestDatabase,
   type WalletTestDatabase,
-} from '../support/wallet-test-database.js';
+} from '../../../../packages/backend/tests/support/wallet-test-database.js';
 
 const paystackSecret = 'sk_test_localfixture';
 const opaySecret = 'OPAYPRV-local-fixture-secret';

@@ -9,7 +9,7 @@ import {
 import {
   DatabaseConnection,
   DatabaseModule,
-} from '../../infrastructure/database/database.module.js';
+} from '@axiapay/backend/infrastructure/database/database.module';
 import { FUNDING } from './funding.tokens.js';
 import type { FundingRoute } from './ports/funding-adapter.js';
 import { PostgresFundingRepository } from './repositories/postgres-funding.repository.js';

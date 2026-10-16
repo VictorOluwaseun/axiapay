@@ -22,7 +22,7 @@ export async function startWalletTestDatabase(migrationTarget?: string) {
         fs,
         path,
         migrationFolder: fileURLToPath(
-          new URL('../../migrations/', import.meta.url),
+          new URL('../../../../apps/api/migrations/', import.meta.url),
         ),
       }),
     });
@@ -41,6 +41,7 @@ export async function startWalletTestDatabase(migrationTarget?: string) {
     runtimeUrl.password = 'wallet-test-only';
     const database = createDatabase(runtimeUrl.toString());
     return {
+      connectionString: runtimeUrl.toString(),
       migrator,
       administrator,
       database,

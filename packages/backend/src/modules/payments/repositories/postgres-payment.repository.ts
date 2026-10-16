@@ -20,7 +20,7 @@ import {
 import {
   bankFromRecord,
   productFromRecord,
-} from '../../service-catalog/repositories/postgres-service-catalog.repository.js';
+} from '../../../infrastructure/database/mappers/service-catalog-record.mapper.js';
 
 import type { BankBeneficiaryValidation } from '../domain/bank-beneficiary.js';
 

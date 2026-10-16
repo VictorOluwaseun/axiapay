@@ -2,7 +2,7 @@ import {
   maximumMinorUnits,
   money,
   type Money,
-} from '../../wallets/domain/money.js';
+} from '@axiapay/backend/modules/wallets/domain/money';
 
 /** Stable conversion failures; uncertain external outcomes never become confirmed rejection. */
 export class ConversionError extends Error {

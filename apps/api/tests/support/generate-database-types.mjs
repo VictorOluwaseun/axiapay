@@ -41,7 +41,7 @@ try {
       '--type-mapping',
       '{"xid8":"string"}',
       '--out-file',
-      'src/infrastructure/database/database.generated.ts',
+      '../../packages/backend/src/infrastructure/database/database.generated.ts',
       ...process.argv.slice(2),
     ],
     {

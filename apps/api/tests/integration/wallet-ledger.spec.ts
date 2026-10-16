@@ -5,17 +5,17 @@ import { sql } from 'kysely';
 import {
   startWalletTestDatabase,
   type WalletTestDatabase,
-} from '../support/wallet-test-database.js';
+} from '../../../../packages/backend/tests/support/wallet-test-database.js';
 import { Test, type TestingModule } from '@nestjs/testing';
-import { WalletModule } from '../../src/modules/wallets/wallet.module.js';
-import { WalletService } from '../../src/modules/wallets/services/wallet.service.js';
-import { DatabaseConnection } from '../../src/infrastructure/database/database.module.js';
-import { money } from '../../src/modules/wallets/domain/money.js';
-import type { Wallet } from '../../src/modules/wallets/domain/wallet.js';
+import { WalletModule } from '@axiapay/backend/modules/wallets/wallet.module';
+import { WalletService } from '@axiapay/backend/modules/wallets/services/wallet.service';
+import { DatabaseConnection } from '@axiapay/backend/infrastructure/database/database.module';
+import { money } from '@axiapay/backend/modules/wallets/domain/money';
+import type { Wallet } from '@axiapay/backend/modules/wallets/domain/wallet';
 import type {
   ConfirmedFunding,
   VerifiedPaymentOutcome,
-} from '../../src/modules/wallets/ports/wallet-verification.js';
+} from '@axiapay/backend/modules/wallets/ports/wallet-verification';
 
 let testDatabase: WalletTestDatabase;
 const modules: TestingModule[] = [];

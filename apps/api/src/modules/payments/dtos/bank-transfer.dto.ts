@@ -1,19 +1,22 @@
 import { IsReadableText } from '../../../shared/validation/input-constraints.js';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsString, IsUUID, Length, Matches, ValidateIf } from 'class-validator';
-import type { Bank, BankPage } from '../../service-catalog/domain/bank.js';
-import type { ServiceProduct } from '../../service-catalog/domain/service-product.js';
+import type {
+  Bank,
+  BankPage,
+} from '@axiapay/backend/modules/service-catalog/domain/bank';
+import type { ServiceProduct } from '@axiapay/backend/modules/service-catalog/domain/service-product';
 import type {
   BankBeneficiaryValidation,
   BankTransferFailureReason,
-} from '../domain/bank-beneficiary.js';
-import type { PaymentFulfilment } from '../domain/payment-fulfilment.js';
+} from '@axiapay/backend/modules/payments/domain/bank-beneficiary';
+import type { PaymentFulfilment } from '@axiapay/backend/modules/payments/domain/payment-fulfilment';
 import {
   paymentStatus,
   type PaymentQuote,
   type PaymentStatus,
   type ServicePayment,
-} from '../domain/payment.js';
+} from '@axiapay/backend/modules/payments/domain/payment';
 import { SubmitServicePaymentDto } from './payment-request.dto.js';
 
 /** Bounded first-party bank/transfer catalogue pagination; no implicit query conversion or arbitrary sorting is permitted. */

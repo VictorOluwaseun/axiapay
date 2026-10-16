@@ -10,7 +10,7 @@ import { sql } from 'kysely';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { RequestValidationModule } from '../../src/bootstrap/request-validation.module.js';
 import { validateEnvironment } from '../../src/infrastructure/config/environment.js';
-import { DatabaseConnection } from '../../src/infrastructure/database/database.module.js';
+import { DatabaseConnection } from '@axiapay/backend/infrastructure/database/database.module';
 import { WalletHttpModule } from '../../src/modules/wallets/wallet-http.module.js';
 import { WalletFundingModule } from '../../src/modules/wallet-funding/wallet-funding.module.js';
 import { WalletFundingService } from '../../src/modules/wallet-funding/services/wallet-funding.service.js';
@@ -27,7 +27,7 @@ import type {
 import {
   startWalletTestDatabase,
   type WalletTestDatabase,
-} from '../support/wallet-test-database.js';
+} from '../../../../packages/backend/tests/support/wallet-test-database.js';
 import {
   createFundingCustomer,
   type FundingCustomer,

@@ -2,17 +2,17 @@
 import { Module } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { describe, expect, it, vi } from 'vitest';
-import { DatabaseConnection } from '../../src/infrastructure/database/database.module.js';
-import { PaymentsCoreModule } from '../../src/modules/payments/payments-core.module.js';
-import { PAYMENTS } from '../../src/modules/payments/payments.tokens.js';
-import { AirtimeProcessor } from '../../src/modules/payments/processors/airtime.processor.js';
-import type { PaymentProviders } from '../../src/modules/payments/ports/service-payment-provider.js';
-import type { ServicePayment } from '../../src/modules/payments/domain/payment.js';
-import { PaymentExecutionService } from '../../src/modules/payments/services/payment-execution.service.js';
+import { DatabaseConnection } from '@axiapay/backend/infrastructure/database/database.module';
+import { PaymentsCoreModule } from '@axiapay/backend/modules/payments/payments-core.module';
+import { PAYMENTS } from '@axiapay/backend/modules/payments/payments.tokens';
+import { AirtimeProcessor } from '@axiapay/backend/modules/payments/processors/airtime.processor';
+import type { PaymentProviders } from '@axiapay/backend/modules/payments/ports/service-payment-provider';
+import type { ServicePayment } from '@axiapay/backend/modules/payments/domain/payment';
+import { PaymentExecutionService } from '@axiapay/backend/modules/payments/services/payment-execution.service';
 import {
   airtimeInstruction,
   testAirtimeAdapter,
-} from '../support/airtime-processor-fixture.js';
+} from '../../../../packages/backend/tests/support/airtime-processor-fixture.js';
 
 const FIRST_ADAPTER = Symbol('FirstTestAirtimeAdapter');
 const SECOND_ADAPTER = Symbol('SecondTestAirtimeAdapter');

@@ -2,15 +2,15 @@
 import { randomUUID } from 'node:crypto';
 import { sql } from 'kysely';
 import { expect, it } from 'vitest';
-import { startWalletTestDatabase } from '../support/wallet-test-database.js';
-import { WalletRepositoryImpl } from '../../src/modules/wallets/repositories/wallet.repository.impl.js';
-import { WalletPostgresDataSource } from '../../src/modules/wallets/data-sources/postgres/wallet.postgres.data-source.js';
-import { WalletService } from '../../src/modules/wallets/services/wallet.service.js';
-import { WalletReservationService } from '../../src/modules/wallets/services/wallet-reservation.service.js';
+import { startWalletTestDatabase } from '../../../../packages/backend/tests/support/wallet-test-database.js';
+import { WalletRepositoryImpl } from '@axiapay/backend/modules/wallets/repositories/wallet.repository.impl';
+import { WalletPostgresDataSource } from '@axiapay/backend/modules/wallets/data-sources/postgres/wallet.postgres.data-source';
+import { WalletService } from '@axiapay/backend/modules/wallets/services/wallet.service';
+import { WalletReservationService } from '@axiapay/backend/modules/wallets/services/wallet-reservation.service';
 import { PostgresFundingRepository } from '../../src/modules/wallet-funding/repositories/postgres-funding.repository.js';
-import { PostgresPaymentRepository } from '../../src/modules/payments/repositories/postgres-payment.repository.js';
-import { paymentTermsFingerprint } from '../../src/modules/payments/domain/payment.js';
-import { money } from '../../src/modules/wallets/domain/money.js';
+import { PostgresPaymentRepository } from '@axiapay/backend/modules/payments/repositories/postgres-payment.repository';
+import { paymentTermsFingerprint } from '@axiapay/backend/modules/payments/domain/payment';
+import { money } from '@axiapay/backend/modules/wallets/domain/money';
 
 it('preserves old funding evidence, payment terms, journals, funds and reservations when adding conversion', async () => {
   const baseline = await startWalletTestDatabase('202610130008-bank-transfers');

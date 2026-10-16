@@ -1,6 +1,6 @@
 import { FundingError } from '../domain/funding.js';
 import type { FundingRoute } from '../ports/funding-adapter.js';
-import { money } from '../../wallets/domain/money.js';
+import { money } from '@axiapay/backend/modules/wallets/domain/money';
 
 /** Validate explicit routing configuration before serving requests; ambiguous options or reused clearing identities fail startup. */
 export function validateFundingRoutes(routes: readonly FundingRoute[]): void {

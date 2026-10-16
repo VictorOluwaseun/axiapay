@@ -1,8 +1,19 @@
 /** Run configuration and HTTP boot checks with Nest-compatible decorator metadata. */
 import { defineConfig } from 'vitest/config';
+import { fileURLToPath } from 'node:url';
 import swc from 'unplugin-swc';
 
 export default defineConfig({
+  resolve: {
+    alias: [
+      {
+        find: /^@axiapay\/backend\/(.*)$/,
+        replacement: fileURLToPath(
+          new URL('../../packages/backend/src/$1.ts', import.meta.url),
+        ),
+      },
+    ],
+  },
   plugins: [
     swc.vite({
       jsc: {

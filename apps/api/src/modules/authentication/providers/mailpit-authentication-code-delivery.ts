@@ -1,5 +1,5 @@
 import type { AxiosAdapter, AxiosInstance } from 'axios';
-import { createOutboundHttpClient } from '../../../infrastructure/http/axios-client.js';
+import { createOutboundHttpClient } from '@axiapay/backend/infrastructure/http/axios-client';
 import type { AuthenticationCodeDelivery } from '../ports/authentication.ports.js';
 
 /** Capture both email and simulated SMS locally; this adapter never connects to a real SMS provider. */

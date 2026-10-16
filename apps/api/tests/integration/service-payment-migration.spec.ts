@@ -5,14 +5,14 @@ import { sql } from 'kysely';
 import {
   startWalletTestDatabase,
   type WalletTestDatabase,
-} from '../support/wallet-test-database.js';
-import { WalletRepositoryImpl } from '../../src/modules/wallets/repositories/wallet.repository.impl.js';
-import { WalletPostgresDataSource } from '../../src/modules/wallets/data-sources/postgres/wallet.postgres.data-source.js';
-import { PostgresPaymentRepository } from '../../src/modules/payments/repositories/postgres-payment.repository.js';
+} from '../../../../packages/backend/tests/support/wallet-test-database.js';
+import { WalletRepositoryImpl } from '@axiapay/backend/modules/wallets/repositories/wallet.repository.impl';
+import { WalletPostgresDataSource } from '@axiapay/backend/modules/wallets/data-sources/postgres/wallet.postgres.data-source';
+import { PostgresPaymentRepository } from '@axiapay/backend/modules/payments/repositories/postgres-payment.repository';
 import {
   paymentTermsFingerprint,
   paymentStatus,
-} from '../../src/modules/payments/domain/payment.js';
+} from '@axiapay/backend/modules/payments/domain/payment';
 
 let database: WalletTestDatabase;
 beforeAll(async () => {

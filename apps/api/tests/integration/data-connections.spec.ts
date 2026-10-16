@@ -4,7 +4,7 @@ import { PostgreSqlContainer } from '@testcontainers/postgresql';
 import { GenericContainer } from 'testcontainers';
 import { Redis } from 'ioredis';
 import { sql } from 'kysely';
-import { createDatabase } from '../../src/infrastructure/database/create-database.js';
+import { createDatabase } from '@axiapay/backend/infrastructure/database/create-database';
 
 describe('data client compatibility', () => {
   it('rolls back PostgreSQL writes when an operation fails', async () => {

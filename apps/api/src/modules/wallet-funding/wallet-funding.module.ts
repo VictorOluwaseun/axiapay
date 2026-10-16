@@ -1,6 +1,6 @@
 import { Module, type DynamicModule } from '@nestjs/common';
 import { AuthenticationModule } from '../authentication/authentication.module.js';
-import { WalletModule } from '../wallets/wallet.module.js';
+import { WalletModule } from '@axiapay/backend/modules/wallets/wallet.module';
 import {
   FundingCoreModule,
   type FundingModuleOptions,

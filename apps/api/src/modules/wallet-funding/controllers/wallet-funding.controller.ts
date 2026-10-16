@@ -23,7 +23,7 @@ import type { AccountIdentity } from '../../authentication/domain/authentication
 import { AuthenticationGuard } from '../../authentication/guards/authentication.guard.js';
 import { WalletIdParamsDto } from '../../wallets/dtos/wallet-request.dto.js';
 import { WalletErrorResponseDto } from '../../wallets/dtos/wallet-response.dto.js';
-import { money } from '../../wallets/domain/money.js';
+import { money } from '@axiapay/backend/modules/wallets/domain/money';
 import {
   CreateFundingRequestDto,
   FundingIdParamsDto,

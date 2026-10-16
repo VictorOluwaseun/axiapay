@@ -13,7 +13,8 @@
     "noUnusedParameters": true,
     "noImplicitOverride": true,
     "useUnknownInCatchVariables": true,
-    "outDir": "dist"
+    "outDir": "dist",
+    "rootDir": "../.."
   },
   "include": ["src/**/*.ts", "tests/**/*.ts", "vitest*.ts"],
   "exclude": ["node_modules", "dist"]

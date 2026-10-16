@@ -1,7 +1,7 @@
 import { sql, type Kysely, type Selectable } from 'kysely';
-import type { DatabaseSchema } from '../../../infrastructure/database/create-database.js';
-import type { AirtimeConversionQuotes } from '../../../infrastructure/database/database.generated.js';
-import { fundingFingerprint } from '../../wallets/domain/funding-identity.js';
+import type { DatabaseSchema } from '@axiapay/backend/infrastructure/database/create-database';
+import type { AirtimeConversionQuotes } from '@axiapay/backend/infrastructure/database/database.generated';
+import { fundingFingerprint } from '@axiapay/backend/modules/wallets/domain/funding-identity';
 import {
   ConversionError,
   conversionFingerprint,

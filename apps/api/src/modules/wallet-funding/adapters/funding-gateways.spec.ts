@@ -1,7 +1,7 @@
 import { inspect } from 'node:util';
 /** Verify partner protocols against published signing rules and exact-number JSON, independently of ledger fixtures. */
 import { AxiosError, type AxiosAdapter } from 'axios';
-import { axiosTextResponse } from '../../../../tests/support/axios-response-fixture.js';
+import { axiosTextResponse } from '../../../../../../packages/backend/tests/support/axios-response-fixture.js';
 import { createHmac } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { OpayFundingGateway } from './opay-funding.gateway.js';

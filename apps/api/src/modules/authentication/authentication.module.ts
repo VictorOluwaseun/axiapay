@@ -7,7 +7,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import {
   DatabaseModule,
   DatabaseConnection,
-} from '../../infrastructure/database/database.module.js';
+} from '@axiapay/backend/infrastructure/database/database.module';
 import { AUTHENTICATION } from './authentication.tokens.js';
 import type { AuthenticationRepository } from './repositories/contracts/authentication.repository.js';
 import type {

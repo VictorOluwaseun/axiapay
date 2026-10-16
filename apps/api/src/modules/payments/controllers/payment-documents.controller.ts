@@ -20,7 +20,7 @@ import { IsString, IsUUID, Length, Matches } from 'class-validator';
 import { AuthenticatedAccount } from '../../authentication/decorators/authenticated-account.decorator.js';
 import type { AccountIdentity } from '../../authentication/domain/authentication-models.js';
 import { AuthenticationGuard } from '../../authentication/guards/authentication.guard.js';
-import { PaymentDocumentService } from '../services/payment-document.service.js';
+import { PaymentDocumentService } from '@axiapay/backend/modules/payments/services/payment-document.service';
 import { PaymentExceptionFilter } from '../filters/payment-exception.filter.js';
 import { PaymentErrorResponseDto } from '../dtos/payment-response.dto.js';
 

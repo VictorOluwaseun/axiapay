@@ -15,8 +15,8 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { AuthenticationGuard } from '../../authentication/guards/authentication.guard.js';
-import { ServiceCatalogService } from '../../service-catalog/services/service-catalog.service.js';
-import { PaymentQuoteService } from '../services/payment-quote.service.js';
+import { ServiceCatalogService } from '@axiapay/backend/modules/service-catalog/services/service-catalog.service';
+import { PaymentQuoteService } from '@axiapay/backend/modules/payments/services/payment-quote.service';
 import {
   ProductIdParamsDto,
   ProductQueryDto,

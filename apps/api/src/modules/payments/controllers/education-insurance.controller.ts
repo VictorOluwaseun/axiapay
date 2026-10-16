@@ -20,8 +20,8 @@ import {
 import { AuthenticatedAccount } from '../../authentication/decorators/authenticated-account.decorator.js';
 import type { AccountIdentity } from '../../authentication/domain/authentication-models.js';
 import { AuthenticationGuard } from '../../authentication/guards/authentication.guard.js';
-import { EducationRecipientService } from '../services/education-recipient.service.js';
-import { InsuranceApplicationService } from '../services/insurance-application.service.js';
+import { EducationRecipientService } from '@axiapay/backend/modules/payments/services/education-recipient.service';
+import { InsuranceApplicationService } from '@axiapay/backend/modules/payments/services/insurance-application.service';
 import {
   CreateEducationValidationDto,
   CreateInsuranceApplicationDto,

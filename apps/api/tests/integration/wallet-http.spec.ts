@@ -16,19 +16,19 @@ import {
   vi,
 } from 'vitest';
 import { ApiModule } from '../../src/bootstrap/api.module.js';
-import { DatabaseConnection } from '../../src/infrastructure/database/database.module.js';
+import { DatabaseConnection } from '@axiapay/backend/infrastructure/database/database.module';
 import { AUTHENTICATION } from '../../src/modules/authentication/authentication.tokens.js';
 import type { AuthenticationCodeDelivery } from '../../src/modules/authentication/ports/authentication.ports.js';
 import type { AuthenticationResult } from '../../src/modules/authentication/services/authentication-session.js';
-import { WalletModule } from '../../src/modules/wallets/wallet.module.js';
-import { WalletService } from '../../src/modules/wallets/services/wallet.service.js';
+import { WalletModule } from '@axiapay/backend/modules/wallets/wallet.module';
+import { WalletService } from '@axiapay/backend/modules/wallets/services/wallet.service';
 import type { WalletBalanceResponseDto } from '../../src/modules/wallets/dtos/wallet-response.dto.js';
-import type { ConfirmedFunding } from '../../src/modules/wallets/ports/wallet-verification.js';
-import { money } from '../../src/modules/wallets/domain/money.js';
+import type { ConfirmedFunding } from '@axiapay/backend/modules/wallets/ports/wallet-verification';
+import { money } from '@axiapay/backend/modules/wallets/domain/money';
 import {
   startWalletTestDatabase,
   type WalletTestDatabase,
-} from '../support/wallet-test-database.js';
+} from '../../../../packages/backend/tests/support/wallet-test-database.js';
 
 let database: WalletTestDatabase;
 let application: NestFastifyApplication;

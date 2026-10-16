@@ -1,6 +1,6 @@
 /** Verify the first-party airtime/data contract, real PostgreSQL invariants and recovery using test-only fulfilment adapters. */
 import { AxiosError, type AxiosAdapter } from 'axios';
-import { axiosTextResponse } from '../support/axios-response-fixture.js';
+import { axiosTextResponse } from '../../../../packages/backend/tests/support/axios-response-fixture.js';
 import { randomUUID } from 'node:crypto';
 import { ConfigModule } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
@@ -12,60 +12,60 @@ import { sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { RequestValidationModule } from '../../src/bootstrap/request-validation.module.js';
 import { validateEnvironment } from '../../src/infrastructure/config/environment.js';
-import { DatabaseConnection } from '../../src/infrastructure/database/database.module.js';
+import { DatabaseConnection } from '@axiapay/backend/infrastructure/database/database.module';
 import { AUTHENTICATION } from '../../src/modules/authentication/authentication.tokens.js';
 import type { AuthenticationResult } from '../../src/modules/authentication/services/authentication-session.js';
 import { PaymentsModule } from '../../src/modules/payments/payments.module.js';
-import { PAYMENTS } from '../../src/modules/payments/payments.tokens.js';
+import { PAYMENTS } from '@axiapay/backend/modules/payments/payments.tokens';
 import {
   paymentTermsFingerprint,
   type ServicePayment,
-} from '../../src/modules/payments/domain/payment.js';
-import { PostgresPaymentRepository } from '../../src/modules/payments/repositories/postgres-payment.repository.js';
-import { PaymentExecutionService } from '../../src/modules/payments/services/payment-execution.service.js';
-import { AirtimeProcessor } from '../../src/modules/payments/processors/airtime.processor.js';
-import { VtpassAirtimeAdapter } from '../../src/modules/payments/adapters/vtpass-airtime.adapter.js';
-import { parseVtpassJson } from '../../src/modules/payments/adapters/vtpass-airtime.protocol.js';
+} from '@axiapay/backend/modules/payments/domain/payment';
+import { PostgresPaymentRepository } from '@axiapay/backend/modules/payments/repositories/postgres-payment.repository';
+import { PaymentExecutionService } from '@axiapay/backend/modules/payments/services/payment-execution.service';
+import { AirtimeProcessor } from '@axiapay/backend/modules/payments/processors/airtime.processor';
+import { VtpassAirtimeAdapter } from '@axiapay/backend/modules/payments/adapters/vtpass-airtime.adapter';
+import { parseVtpassJson } from '@axiapay/backend/modules/payments/adapters/vtpass-airtime.protocol';
 import type {
   PaymentProviderRegistration,
   ProviderPaymentResult,
-} from '../../src/modules/payments/ports/service-payment-provider.js';
+} from '@axiapay/backend/modules/payments/ports/service-payment-provider';
 import type { PaymentQuoteResponseDto } from '../../src/modules/payments/dtos/payment-response.dto.js';
-import { WalletModule } from '../../src/modules/wallets/wallet.module.js';
-import { WalletService } from '../../src/modules/wallets/services/wallet.service.js';
-import type { ConfirmedFunding } from '../../src/modules/wallets/ports/wallet-verification.js';
-import { money } from '../../src/modules/wallets/domain/money.js';
+import { WalletModule } from '@axiapay/backend/modules/wallets/wallet.module';
+import { WalletService } from '@axiapay/backend/modules/wallets/services/wallet.service';
+import type { ConfirmedFunding } from '@axiapay/backend/modules/wallets/ports/wallet-verification';
+import { money } from '@axiapay/backend/modules/wallets/domain/money';
 import type {
   ServiceType,
   ServiceProduct,
   ElectricityMeterType,
   EducationPaymentType,
-} from '../../src/modules/service-catalog/domain/service-product.js';
-import type { BillAccountVerificationResult } from '../../src/modules/payments/ports/bill-account-verification.js';
+} from '@axiapay/backend/modules/service-catalog/domain/service-product';
+import type { BillAccountVerificationResult } from '@axiapay/backend/modules/payments/ports/bill-account-verification';
 import type { BillAccountValidationResponseDto } from '../../src/modules/payments/dtos/bill-account.dto.js';
-import type { InsuranceProductTerms } from '../../src/modules/service-catalog/domain/insurance-product-terms.js';
+import type { InsuranceProductTerms } from '@axiapay/backend/modules/service-catalog/domain/insurance-product-terms';
 import type {
   EducationBeneficiaryVerification,
   EducationBeneficiaryResult,
-} from '../../src/modules/payments/ports/education-beneficiary-verification.js';
+} from '@axiapay/backend/modules/payments/ports/education-beneficiary-verification';
 import type {
   InsuranceEligibility,
   InsuranceEligibilityResult,
-} from '../../src/modules/payments/ports/insurance-eligibility.js';
+} from '@axiapay/backend/modules/payments/ports/insurance-eligibility';
 import type {
   PaymentDocumentRetrieval,
   RetrievedPaymentDocument,
-} from '../../src/modules/payments/ports/payment-document-retrieval.js';
+} from '@axiapay/backend/modules/payments/ports/payment-document-retrieval';
 import type {
   BankBeneficiaryVerification,
   BankBeneficiaryResult,
-} from '../../src/modules/payments/ports/bank-beneficiary-verification.js';
-import type { PaymentDocument } from '../../src/modules/payments/domain/payment-document.js';
-import type { PaymentFulfilment } from '../../src/modules/payments/domain/payment-fulfilment.js';
+} from '@axiapay/backend/modules/payments/ports/bank-beneficiary-verification';
+import type { PaymentDocument } from '@axiapay/backend/modules/payments/domain/payment-document';
+import type { PaymentFulfilment } from '@axiapay/backend/modules/payments/domain/payment-fulfilment';
 import {
   startWalletTestDatabase,
   type WalletTestDatabase,
-} from '../support/wallet-test-database.js';
+} from '../../../../packages/backend/tests/support/wallet-test-database.js';
 
 let database: WalletTestDatabase;
 let application: NestFastifyApplication;

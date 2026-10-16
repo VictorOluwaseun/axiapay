@@ -1,4 +1,4 @@
-import { asyncSignal } from '../support/async-signal.js';
+import { asyncSignal } from '../../../../packages/backend/tests/support/async-signal.js';
 /** Exercise public authentication flows and concurrency against an isolated PostgreSQL database. */
 import {
   afterAll,
@@ -22,10 +22,10 @@ import {
 } from '@testcontainers/postgresql';
 import { sql, type Kysely } from 'kysely';
 import { Migrator } from 'kysely/migration';
-import { createDatabase } from '../../src/infrastructure/database/create-database.js';
+import { createDatabase } from '@axiapay/backend/infrastructure/database/create-database';
 import { NodeAuthenticationSecrets } from '../../src/modules/authentication/security/node-authentication-secrets.js';
 import { AuthenticationModule } from '../../src/modules/authentication/authentication.module.js';
-import { DatabaseConnection } from '../../src/infrastructure/database/database.module.js';
+import { DatabaseConnection } from '@axiapay/backend/infrastructure/database/database.module';
 import { RequestValidationModule } from '../../src/bootstrap/request-validation.module.js';
 import { AUTHENTICATION } from '../../src/modules/authentication/authentication.tokens.js';
 import { PostgresAuthenticationRepository } from '../../src/modules/authentication/repositories/postgres-authentication.repository.js';

@@ -20,7 +20,7 @@ import {
 import { AuthenticatedAccount } from '../../authentication/decorators/authenticated-account.decorator.js';
 import type { AccountIdentity } from '../../authentication/domain/authentication-models.js';
 import { AuthenticationGuard } from '../../authentication/guards/authentication.guard.js';
-import { BillAccountService } from '../services/bill-account.service.js';
+import { BillAccountService } from '@axiapay/backend/modules/payments/services/bill-account.service';
 import {
   BillAccountValidationIdParamsDto,
   BillAccountValidationResponseDto,

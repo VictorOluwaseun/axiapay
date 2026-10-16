@@ -12,18 +12,30 @@
         "LOG_LEVEL",
         "DATABASE_URL",
         "REDIS_CACHE_URL",
-        "REDIS_QUEUE_URL"
-      ]
+        "REDIS_QUEUE_URL",
+        "AUTH_*",
+        "VTPASS_*",
+        "FUNDING_*",
+        "PAYSTACK_*",
+        "OPAY_*"
+      ],
+      "dependsOn": ["^build"],
+      "interruptible": true
     },
     "test": {
-      "outputs": []
+      "outputs": [],
+      "dependsOn": ["^build"]
     },
     "test:integration": {
       "cache": false,
-      "passThroughEnv": ["DOCKER_HOST", "DOCKER_CONTEXT", "TESTCONTAINERS_*"]
+      "passThroughEnv": ["DOCKER_HOST", "DOCKER_CONTEXT", "TESTCONTAINERS_*"],
+      "dependsOn": ["^build"]
     },
     "format:check": {
       "outputs": []
+    },
+    "check-types": {
+      "dependsOn": ["^build"]
     }
   }
 }

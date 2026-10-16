@@ -1,4 +1,4 @@
-import type { Money } from '../../wallets/domain/money.js';
+import type { Money } from '@axiapay/backend/modules/wallets/domain/money';
 import type {
   FundingEnvironment,
   FundingOption,

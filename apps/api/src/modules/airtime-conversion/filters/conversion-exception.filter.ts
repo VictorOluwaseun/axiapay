@@ -2,7 +2,7 @@ import { Catch } from '@nestjs/common';
 import { HttpExceptionFilter } from '../../../shared/http/http-exception.filter.js';
 import type { HttpFailure } from '../../../shared/http/http-failure.js';
 import { AuthenticationError } from '../../authentication/domain/authentication-error.js';
-import { WalletError } from '../../wallets/domain/wallet-error.js';
+import { WalletError } from '@axiapay/backend/modules/wallets/domain/wallet-error';
 import { ConversionError } from '../domain/conversion.js';
 
 /** Stable customer errors omit provider messages, source phones, evidence and credentials. */

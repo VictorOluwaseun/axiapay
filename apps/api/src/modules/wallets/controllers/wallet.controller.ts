@@ -21,8 +21,8 @@ import {
 import { AuthenticatedAccount } from '../../authentication/decorators/authenticated-account.decorator.js';
 import type { AccountIdentity } from '../../authentication/domain/authentication-models.js';
 import { AuthenticationGuard } from '../../authentication/guards/authentication.guard.js';
-import { WalletService } from '../services/wallet.service.js';
-import { money } from '../domain/money.js';
+import { WalletService } from '@axiapay/backend/modules/wallets/services/wallet.service';
+import { money } from '@axiapay/backend/modules/wallets/domain/money';
 import {
   CreateWalletDto,
   TransferWalletFundsDto,

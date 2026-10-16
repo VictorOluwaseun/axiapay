@@ -1,4 +1,4 @@
-import type { DB } from '../../../infrastructure/database/database.generated.js';
+import type { DB } from '@axiapay/backend/infrastructure/database/database.generated';
 
 /** Select authentication tables from generated PostgreSQL types; persistence types stay inside the repository implementation. */
 export type AuthenticationDatabase = Pick<

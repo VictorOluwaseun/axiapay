@@ -17,11 +17,11 @@ import {
   assertReference,
   money,
   type Money,
-} from '../../wallets/domain/money.js';
+} from '@axiapay/backend/modules/wallets/domain/money';
 import type {
   ConfirmedFunding,
   FundingVerification,
-} from '../../wallets/ports/wallet-verification.js';
+} from '@axiapay/backend/modules/wallets/ports/wallet-verification';
 import { validateFundingRoutes } from './funding-routing.js';
 
 /** AxiaPay funding intent, routing, and independent verification. Provider protocols and HTTP evidence stay outside this service. */

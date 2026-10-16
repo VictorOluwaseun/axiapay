@@ -18,15 +18,15 @@ import {
   InsuranceApplicationResponseDto,
   InsuranceTermsResponseDto,
 } from './education-insurance.dto.js';
-import { hasPaymentFulfilment } from '../domain/payment-fulfilment.js';
-import type { PaymentFulfilment } from '../domain/payment-fulfilment.js';
+import { hasPaymentFulfilment } from '@axiapay/backend/modules/payments/domain/payment-fulfilment';
+import type { PaymentFulfilment } from '@axiapay/backend/modules/payments/domain/payment-fulfilment';
 import type {
   PaymentQuote,
   PaymentStatus,
   ServicePayment,
-} from '../domain/payment.js';
-import { paymentStatus } from '../domain/payment.js';
-import type { ServiceProduct } from '../../service-catalog/domain/service-product.js';
+} from '@axiapay/backend/modules/payments/domain/payment';
+import { paymentStatus } from '@axiapay/backend/modules/payments/domain/payment';
+import type { ServiceProduct } from '@axiapay/backend/modules/service-catalog/domain/service-product';
 
 /** Customer-facing product revision excludes adapter routing and exposes exact plan/denomination terms. */
 export class ServiceProductResponseDto {

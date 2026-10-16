@@ -3,7 +3,7 @@ import {
   HasExactlyOneField,
 } from '../../../shared/validation/input-constraints.js';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import type { ServiceType } from '../../service-catalog/domain/service-product.js';
+import type { ServiceType } from '@axiapay/backend/modules/service-catalog/domain/service-product';
 import {
   IsIn,
   IsString,
