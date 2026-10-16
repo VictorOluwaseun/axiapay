@@ -38,9 +38,9 @@ Repositories own storage access and transaction scope, either directly or throug
 
 Extract a data source for substantial storage logic, reuse, or clear separation between multiple stores. Do not require a second class that only forwards each repository method. Cache eligibility, keys, expiry, and invalidation remain repository decisions in either arrangement.
 
-Authentication uses `PostgresAuthenticationRepository` directly for SQL, persistence mapping, and transactions. Nested repository operations reuse the current transaction connection; challenge replacement, account creation, code consumption, and session creation retain their existing atomic boundaries. Authentication reads bypass cache. `DatabaseModule` owns connection lifecycle.
+Authentication uses `AuthenticationRepositoryImpl` for SQL, persistence mapping, transactions and Redis cache coordination. Nested repository operations reuse the current transaction connection; challenge replacement, account creation, code consumption, and session creation retain their existing atomic boundaries. Session identity hits use Redis; credentials and transaction-local reads bypass cache. `DatabaseModule` owns the SQL connection lifecycle.
 
-Wallets retain `WalletPostgresDataSource`: ledger queries, locking, journal writes, reservations, and outbox persistence form a substantial storage responsibility. `WalletRepositoryImpl` continues coordinating it and mapping persistence records to domain values. Its transaction and cache-bypass behaviour is unchanged.
+Wallets retain `WalletDataSource`: ledger queries, locking, journal writes, reservations, and outbox persistence form a substantial storage responsibility. `WalletRepositoryImpl` continues coordinating it and mapping persistence records to domain values. Its transaction and cache-bypass behaviour is unchanged.
 
 Nest modules assemble the dependency graph through constructor injection, class providers, and explicit tokens/factories for interfaces. They export feature services and guards while keeping concrete persistence private. `DatabaseModule` owns the shared Kysely pool and closes it through Nest lifecycle hooks. Tests replace individual ports or pool ownership without bypassing the feature module graph.
 
@@ -68,11 +68,15 @@ HTTP failure formatting and redacted diagnostics are owned by the global `HttpEx
 
 ## Storage and durable work
 
-Eligible reads use repository-owned cache-aside with normalized query parameters, authorized account scope, and explicit expiry. Updates invalidate affected details, collections, and summaries after commit. Define recovery for failed invalidation and protection against stale concurrent fills. Authentication and wallet authorization currently require immediate consistency and bypass cache.
+Eligible reads use repository-owned cache-aside with normalized query parameters, authorized account scope, and explicit expiry. Updates invalidate affected details, collections, and summaries after commit. Session identities use signed Redis payloads with absolute expiry; valid hits perform no SQL. Mutation triggers record affected sessions in a transactional outbox, delivered after commit with periodic durable recovery. Atomic Redis generations reject stale fills, including after marker eviction or reconnect. Protected mutations authenticate against current PostgreSQL state; read-only identity hits remain Redis-only. Invalidation recovery uses an isolated pool with SQL deadlines and capped post-commit waits. Transactional authorization and wallet spending bypass Redis. Commit and delivery have a consistency window across replicas; see [the session-cache protocol and rollout](../src/modules/authentication/session-cache.md).
 
 A financial transaction binds participating repositories to the same Kysely transaction. Journal and outbox writes commit with the business change. Provider calls run outside long-lived database transactions, with durable progress and reconciliation. API, SMS, bulk, and schedule paths must share logical payment identities. The separately deployed worker runs BullMQ payment recovery using the shared `PaymentsRuntimeModule`; API replicas never consume jobs. PostgreSQL recovery rows commit atomically with payment holds, so the queue is a wake-up mechanism rather than a per-payment second commit. See [worker operations](../../worker/README.md). BullMQ execution is introduced with its actual workflow; it does not replace the database ledger or authorization.
 
 ESLint allows storage imports in concrete repositories and data sources while prohibiting them in contracts, services, domain code, and HTTP adapters. It also prohibits nested `if` statements. Every named code unit documents its responsibility and important guarantees. See [stack practices](stack-practices.md), [the layout decision](decisions/0004-feature-module-layout.md), and the root `AGENTS.md`.
+
+## Signup activation
+
+Signup code redemption uses `PostgresCodeRedemptionRepository` to bind authentication and wallet repositories to one PostgreSQL transaction. `AuthenticationCodeService` provisions the initial zero-balance NGN wallet only after signup contact proof succeeds, before issuing the session. The existing wallet data source joins this transaction instead of opening another one; account activation, wallet/accounts, session and proof consumption commit or roll back together. Each repository retains its own SQL, and services receive contracts rather than transaction clients. Login and password recovery retain their existing behavior and do not backfill wallets.
 
 ## Device authentication
 

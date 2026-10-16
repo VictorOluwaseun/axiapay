@@ -16,7 +16,7 @@ Use exact minor units for money, unique logical request identities, deterministi
 
 ## ioredis
 
-Keep cache access in concrete repositories or optional cache data sources, with cache policy owned by repositories. Keys encode normalized effective query parameters and authorized scope; always set expiry. Invalidate relevant cached results after successful writes, including collections and summaries. Each cached feature must define durable invalidation recovery and stale-fill protection. Current authentication and wallet authorization bypass Redis.
+Keep cache access in concrete repositories or optional cache data sources, with cache policy owned by repositories. Keys encode normalized effective query parameters and authorized scope; always set expiry. Invalidate relevant cached results after successful writes, including collections and summaries. Each cached feature must define durable invalidation recovery and stale-fill protection. Authentication uses signed Redis identities with SQL-free hits, a transactional invalidation outbox and atomic generation-fenced fills. Transactional authentication and wallet spending bypass Redis. See [session-cache consistency and rollout](../src/modules/authentication/session-cache.md).
 
 Use distinct cache and queue connections. Configure retries, timeouts, error events, and shutdown to match the operation. Pipeline independent cache operations when useful; use Redis transactions or scripts for actual Redis atomicity rather than assuming a pipeline supplies it. See the [ioredis documentation](https://github.com/redis/ioredis).
 
