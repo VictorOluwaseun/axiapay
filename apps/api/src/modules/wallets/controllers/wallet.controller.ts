@@ -7,6 +7,7 @@ import {
   Inject,
   Param,
   Post,
+  Query,
   UseFilters,
   UseGuards,
 } from '@nestjs/common';
@@ -25,6 +26,7 @@ import { WalletService } from '@axiapay/payments-runtime/modules/wallets/service
 import { money } from '@axiapay/payments-runtime/modules/wallets/domain/money';
 import {
   CreateWalletDto,
+  CurrentWalletQueryDto,
   TransferWalletFundsDto,
   WalletIdParamsDto,
 } from '../dtos/wallet-request.dto.js';
@@ -60,6 +62,29 @@ import { WalletExceptionFilter } from '../filters/wallet-exception.filter.js';
 export class WalletController {
   /** Inject business operations only; storage and session validation belong to their respective collaborators. */
   constructor(@Inject(WalletService) private readonly wallets: WalletService) {}
+
+  /** Retrieve the caller's existing wallet summary; the account decorator supplies the only permitted owner scope. */
+  @Get('me')
+  @Header('Cache-Control', 'no-store')
+  @Header('Pragma', 'no-cache')
+  @ApiOperation({
+    summary: 'Get the current account’s wallet display summary for a currency',
+  })
+  @ApiResponse({ status: 200, type: WalletBalanceResponseDto })
+  @ApiResponse({
+    status: 404,
+    type: WalletErrorResponseDto,
+    description:
+      'No wallet exists for this account and currency; this read does not create one.',
+  })
+  async getMyWallet(
+    @Query() query: CurrentWalletQueryDto,
+    @AuthenticatedAccount() account: AccountIdentity,
+  ): Promise<WalletBalanceResponseDto> {
+    return WalletBalanceResponseDto.fromWallet(
+      await this.wallets.getWalletByOwner(account.id, query.currency),
+    );
+  }
 
   /** Provision or return the caller's owner/currency wallet without accepting an owner or initial balance. */
   @Post()

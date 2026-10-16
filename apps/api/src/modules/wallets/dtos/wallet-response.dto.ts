@@ -22,8 +22,17 @@ export class WalletBalanceResponseDto {
   @ApiProperty({ type: String, pattern: '^[0-9]+$', example: '15000' })
   readonly totalMinorUnits!: string;
 
-  /** Project a single committed database snapshot without leaking persistence identities. */
-  static fromWallet(wallet: Wallet): WalletBalanceResponseDto {
+  /** Project a financial or display snapshot without leaking persistence identities. */
+  static fromWallet(
+    wallet: Pick<
+      Wallet,
+      | 'id'
+      | 'currency'
+      | 'walletStatus'
+      | 'availableMinorUnits'
+      | 'reservedMinorUnits'
+    >,
+  ): WalletBalanceResponseDto {
     return {
       id: wallet.id,
       currency: wallet.currency,

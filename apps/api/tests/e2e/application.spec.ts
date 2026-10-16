@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { NestFastifyApplication } from '@nestjs/platform-fastify';
 import { createApplication } from '../../src/bootstrap/create-application.js';
 import { WalletService } from '@axiapay/payments-runtime/modules/wallets/services/wallet.service';
-import { WalletModule } from '@axiapay/payments-runtime/modules/wallets/wallet.module';
+import { walletHttpCoreModule } from '../../src/modules/wallets/wallet-http.module.js';
 
 let application: NestFastifyApplication;
 beforeAll(async () => {
@@ -156,7 +156,7 @@ describe('API foundation', () => {
   );
   it('disables trusted integration operations when no verifiers are configured', async () => {
     const wallets = application
-      .select(WalletModule)
+      .select(walletHttpCoreModule)
       .get(WalletService, { strict: true });
     await expect(
       wallets.confirmWalletFunding('untrusted-reference'),

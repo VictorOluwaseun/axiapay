@@ -1,3 +1,5 @@
+import { WalletSummaryInvalidationConnection } from '../../src/infrastructure/database/wallet-summary-invalidation.connection.js';
+import { SessionCacheInvalidationConnection } from '../../src/infrastructure/database/session-cache-invalidation.connection.js';
 /** Exercise session authorization and the public wallet contract against the migrated, restricted PostgreSQL ledger. */
 import { randomBytes, randomUUID } from 'node:crypto';
 import { Test, type TestingModule } from '@nestjs/testing';
@@ -21,6 +23,7 @@ import { AUTHENTICATION } from '../../src/modules/authentication/authentication.
 import type { AuthenticationCodeDelivery } from '../../src/modules/authentication/ports/authentication.ports.js';
 import type { AuthenticationResult } from '../../src/modules/authentication/services/authentication-session.js';
 import { WalletModule } from '@axiapay/payments-runtime/modules/wallets/wallet.module';
+import { walletHttpCoreModule } from '../../src/modules/wallets/wallet-http.module.js';
 import { WalletService } from '@axiapay/payments-runtime/modules/wallets/services/wallet.service';
 import type { WalletBalanceResponseDto } from '../../src/modules/wallets/dtos/wallet-response.dto.js';
 import type { ConfirmedFunding } from '@axiapay/payments-runtime/modules/wallets/ports/wallet-verification';
@@ -54,6 +57,10 @@ beforeAll(async () => {
   );
   const module = await Test.createTestingModule({ imports: [ApiModule] })
     .overrideProvider(DatabaseConnection)
+    .useValue({ database: database.database })
+    .overrideProvider(SessionCacheInvalidationConnection)
+    .useValue({ database: database.database })
+    .overrideProvider(WalletSummaryInvalidationConnection)
     .useValue({ database: database.database })
     .overrideProvider(AUTHENTICATION.codeDelivery)
     .useValue(delivery)
@@ -118,7 +125,7 @@ interface CustomerWallet {
   readonly wallet: WalletBalanceResponseDto;
 }
 
-/** Complete real signup verification and create a wallet through authenticated HTTP. */
+/** Verify signup provisions NGN immediately, then retrieve it or create a requested additional currency. */
 async function customer(currency = 'NGN'): Promise<CustomerWallet> {
   const challenge = await application.inject({
     method: 'POST',
@@ -136,6 +143,14 @@ async function customer(currency = 'NGN'): Promise<CustomerWallet> {
   });
   expect(verified.statusCode).toBe(201);
   const session = verified.json<AuthenticationResult>();
+  const signupWallet = await database.database
+    .selectFrom('wallets')
+    .select(['id', 'currency', 'owner_id'])
+    .where('owner_id', '=', session.account.id)
+    .execute();
+  expect(signupWallet).toEqual([
+    { id: expect.any(String), currency: 'NGN', owner_id: session.account.id },
+  ]);
   const response = await application.inject({
     method: 'POST',
     url: '/v1/wallets',
@@ -204,7 +219,7 @@ function transfer(
 }
 
 describe('authenticated wallet HTTP', () => {
-  it('provisions only the verified account and returns the same owner/currency wallet on retries', async () => {
+  it('retrieves the signup wallet for the verified account and preserves it on retries', async () => {
     const owner = await customer();
     const repeated = await application.inject({
       method: 'POST',
@@ -514,7 +529,7 @@ describe('authenticated wallet HTTP', () => {
     const recipient = await customer();
     await fund(owner, 200n);
     const wallets = application
-      .select(WalletModule)
+      .select(walletHttpCoreModule)
       .get(WalletService, { strict: true });
     const original = wallets.transferBetweenWallets.bind(wallets);
     vi.spyOn(wallets, 'transferBetweenWallets').mockImplementationOnce(
