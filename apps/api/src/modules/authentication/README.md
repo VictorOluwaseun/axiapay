@@ -37,7 +37,7 @@ All paths below are under `/v1/auth`. Authentication responses use `Cache-Contro
 | `GET /me`                 | `Authorization: Bearer <accessToken>` | `200` verified caller identity                                            |
 | `POST /logout`            | `Authorization: Bearer <accessToken>` | `204`; repeat calls are safe                                              |
 
-A contact has the form `{ "kind": "email", "value": "alice@example.com" }` or `{ "kind": "phone", "value": "+2348012345678" }`. Unknown body fields are rejected. A signup password must contain 15–128 Unicode characters; whitespace is preserved, and there are no uppercase, digit, or symbol requirements.
+A contact has the form `{ "kind": "email", "value": "alice@example.com" }` or `{ "kind": "phone", "value": "+2348012345678" }`. Unknown body fields are rejected. A signup password must contain 8–128 Unicode characters; whitespace is preserved, and there are no uppercase, digit, or symbol requirements.
 
 A challenge response contains `challengeId`, `expiresAt`, `expiresInSeconds`, and `resendAfterSeconds`. Read the code from Mailpit and submit it with the matching challenge ID. Signup, login and password-reset endpoints are purpose-specific; a code cannot cross between them. Recovery also binds the account and credential version at issuance; see [password recovery](password-recovery.md).
 

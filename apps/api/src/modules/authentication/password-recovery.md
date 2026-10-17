@@ -12,7 +12,7 @@ All paths below are under `/v1/auth`. No bearer token is needed. Responses disab
 4. Submit `POST /password/reset` with `{"challengeId":"<server UUID>","code":"012345","newPassword":"a replacement private passphrase"}`. The code and new password are submitted together; there is no intermediate reset token or general-purpose verified session.
 5. `204` with an empty body confirms the password change. Clear stored sessions and device-key registrations, then return to normal sign-in. The response never contains a new session. Fingerprint login requires fresh primary sign-in and enrollment of a newly generated key.
 
-Email canonicalization and international phone format match signup/login. New passwords require 15–128 Unicode code points, using the same policy as signup; whitespace is preserved and no implicit conversion is allowed. No composition rules are added.
+Email canonicalization and international phone format match signup/login. New passwords require 8–128 Unicode code points, using the same policy as signup; whitespace is preserved and no implicit conversion is allowed. No composition rules are added.
 
 | Result                                                    | Client recovery                                                                                                                             |
 | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
