@@ -63,6 +63,44 @@ afterEach(() => {
 });
 
 describe('HTTP input boundary', () => {
+  it.each(['1234567', '🔒'.repeat(7)])(
+    'rejects signup passwords below eight code points before service entry (%s)',
+    async (password) => {
+      const operation = vi.spyOn(
+        application.get(AuthenticationService),
+        'signup',
+      );
+      const response = await application.inject({
+        method: 'POST',
+        url: '/v1/auth/signup',
+        payload: { contact, password },
+      });
+      expect(response.statusCode).toBe(400);
+      expect(operation).not.toHaveBeenCalled();
+    },
+  );
+  it.each(['12345678', '🔒'.repeat(8), ' 123456 '])(
+    'accepts exact eight-character signup passwords without rewriting them (%s)',
+    async (password) => {
+      const operation = vi
+        .spyOn(application.get(AuthenticationService), 'signup')
+        .mockResolvedValue({
+          challengeId: id,
+          expiresAt: '2030-01-01T00:05:00Z',
+          expiresInSeconds: 300,
+          resendAfterSeconds: 60,
+        });
+      const response = await application.inject({
+        method: 'POST',
+        url: '/v1/auth/signup',
+        payload: { contact, password },
+      });
+      expect(response.statusCode).toBe(202);
+      expect(operation).toHaveBeenCalledWith(
+        expect.objectContaining({ contact, password }),
+      );
+    },
+  );
   it.each([
     { contact, password: 'a'.repeat(129) },
     {
@@ -470,6 +508,43 @@ describe('non-HTTP validation wrapper', () => {
 });
 
 describe('password recovery input boundary', () => {
+  it.each(['1234567', '🔒'.repeat(7)])(
+    'rejects reset passwords below eight code points before service entry (%s)',
+    async (newPassword) => {
+      const operation = vi.spyOn(
+        application.get(AuthenticationService),
+        'resetPassword',
+      );
+      const response = await application.inject({
+        method: 'POST',
+        url: '/v1/auth/password/reset',
+        payload: { challengeId: id, code: '012345', newPassword },
+      });
+      expect(response.statusCode).toBe(400);
+      expect(operation).not.toHaveBeenCalled();
+    },
+  );
+  it.each(['12345678', '🔒'.repeat(8), ' 123456 '])(
+    'accepts exact eight-character reset passwords without rewriting them (%s)',
+    async (newPassword) => {
+      const operation = vi
+        .spyOn(application.get(AuthenticationService), 'resetPassword')
+        .mockResolvedValue(undefined);
+      const response = await application.inject({
+        method: 'POST',
+        url: '/v1/auth/password/reset',
+        payload: { challengeId: id, code: '012345', newPassword },
+      });
+      expect(response.statusCode).toBe(204);
+      expect(operation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          challengeId: id,
+          code: '012345',
+          newPassword,
+        }),
+      );
+    },
+  );
   it.each([
     { challengeId: id, code: '012345', newPassword: 'short' },
     { challengeId: id, code: '012345', newPassword: 'a'.repeat(129) },
