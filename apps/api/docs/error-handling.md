@@ -13,7 +13,7 @@ All handled HTTP errors use this envelope:
 }
 ```
 
-`statusCode` matches the HTTP status. Clients should branch on `code`; messages are for display and may change. `requestId` also appears in `X-Request-Id` and structured failure diagnostics. Application startup configures Fastify to generate a UUID and copies it to the raw request for Pino correlation. Caller-supplied request ID headers cannot replace it. Every error response sets `Cache-Control: no-store` and `Pragma: no-cache`.
+`statusCode` matches the HTTP status. Clients should branch on `code`; messages are for display and may change. `requestId` also appears in `X-Request-Id` and structured failure diagnostics. Application startup accepts one safe `X-Request-Id`: 1–128 ASCII letters, digits, dots, underscores or hyphens, beginning with a letter or digit. Missing, empty, duplicate or invalid values receive a fresh server UUID. The selected value is assigned before middleware and copied to the raw request for Pino correlation. Every response, including successful and bodyless `304` responses, echoes it in `X-Request-Id`. These caller-controlled labels are diagnostic references; they never establish authorization, uniqueness or payment idempotency. Every error response sets `Cache-Control: no-store` and `Pragma: no-cache`.
 
 Rate-limited authentication responses preserve `retryAfterSeconds` and the matching `Retry-After` header. Customer session failures retain `WWW-Authenticate: Bearer`; provider webhook authentication failures do not advertise customer bearer authentication.
 
@@ -35,6 +35,8 @@ This boundary applies to HTTP. Non-HTTP adapters still validate their own inputs
 
 ## Verification
 
-`tests/e2e/http-error-handling.spec.ts` exercises the composed application, middleware failures, malformed/empty/oversized bodies, unsupported content types, missing routes, safe HTTP exceptions, non-Error throws, request-reference isolation, feature mappings, retry headers, and financial uncertainty. `src/shared/http/http-exception.filter.spec.ts` covers already-started replies and fallback request references. The wallet HTTP integration suite verifies recovery from a lost response after a committed transfer using the same request key.
+`tests/e2e/http-error-handling.spec.ts` exercises the composed application, middleware failures, malformed/empty/oversized bodies, unsupported content types, missing routes, safe HTTP exceptions, non-Error throws, request-reference fallback, feature mappings, retry headers, and financial uncertainty. `src/shared/http/http-exception.filter.spec.ts` covers already-started replies and fallback request references. The wallet HTTP integration suite verifies recovery from a lost response after a committed transfer using the same request key.
+
+`tests/e2e/request-id.spec.ts` verifies successful responses, parser/authorization errors, 200/304 revalidation, concurrent correlation, raw access-log identity and structured failure diagnostics. `src/shared/http/request-id.spec.ts` covers bounds, controls and ambiguous values before logging.
 
 Development OpenAPI documents the shared `HttpErrorResponseDto` envelope for all declared error responses and a global `500` response. The implementation follows [Nest's exception-filter and inheritance guidance](https://docs.nestjs.com/exception-filters) and [Fastify's request identity configuration](https://fastify.dev/docs/latest/Reference/Server/#genreqid).
