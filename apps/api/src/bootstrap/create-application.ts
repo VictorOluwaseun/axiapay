@@ -1,8 +1,5 @@
 /** Build the HTTP application independently of opening a network listener for testability. */
 import 'reflect-metadata';
-import { randomUUID } from 'node:crypto';
-import type { IncomingMessage } from 'node:http';
-import type { Http2ServerRequest } from 'node:http2';
 import { RequestMethod } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
@@ -18,19 +15,11 @@ import {
 } from '@nestjs/swagger';
 import { Logger } from 'nestjs-pino';
 import { HttpErrorResponseDto } from '../shared/http/http-error-response.dto.js';
+import { assignRequestId } from '../shared/http/request-id.js';
 import { ApiModule } from './api.module.js';
 
-/** Assign one server-generated identity to Fastify and its raw request so Pino and public error responses correlate. */
-function assignRequestId(
-  request: IncomingMessage | Http2ServerRequest,
-): string {
-  const requestId = randomUUID();
-  Object.assign(request, { id: requestId });
-  return requestId;
-}
-
-/** Document the shared envelope for every declared error without replacing feature descriptions or successful contracts. */
-function configureErrorDocumentation(document: OpenAPIObject): void {
+/** Document request correlation on all operations and the shared envelope on errors without replacing successful contracts. */
+function configureHttpDocumentation(document: OpenAPIObject): void {
   for (const path of Object.values(document.paths)) {
     for (const method of [
       'get',
@@ -45,27 +34,36 @@ function configureErrorDocumentation(document: OpenAPIObject): void {
       if (!operation) {
         continue;
       }
+      operation.parameters = [
+        ...(operation.parameters ?? []),
+        {
+          in: 'header',
+          name: 'X-Request-Id',
+          required: false,
+          description:
+            'Optional diagnostic reference: 1–128 ASCII letters, digits, dots, underscores or hyphens, starting with a letter or digit. Invalid values are replaced. Never an authorization or idempotency key.',
+          schema: { type: 'string', maxLength: 128 },
+        },
+      ];
       for (const [status, response] of Object.entries(operation.responses)) {
-        if (
-          response === undefined ||
-          Number(status) < 400 ||
-          !/^\d{3}$/.test(status) ||
-          '$ref' in response
-        ) {
+        if (response === undefined || '$ref' in response) {
           continue;
         }
-        response.content = {
-          'application/json': {
-            schema: { $ref: getSchemaPath(HttpErrorResponseDto) },
-          },
-        };
         response.headers = {
           ...response.headers,
           'X-Request-Id': {
-            description: 'Server-generated diagnostic reference.',
+            description:
+              'Validated caller diagnostic reference, or a server-generated UUID.',
             schema: { type: 'string' },
           },
         };
+        if (Number(status) >= 400 && /^\d{3}$/.test(status)) {
+          response.content = {
+            'application/json': {
+              schema: { $ref: getSchemaPath(HttpErrorResponseDto) },
+            },
+          };
+        }
       }
     }
   }
@@ -91,15 +89,23 @@ function configureDocumentation(application: NestFastifyApplication): void {
   const document = SwaggerModule.createDocument(application, options, {
     extraModels: [HttpErrorResponseDto],
   });
-  configureErrorDocumentation(document);
+  configureHttpDocumentation(document);
   SwaggerModule.setup('docs', application, document);
 }
 
 /** Compose the API with redacted logging, versioned routes, and graceful shutdown hooks. */
 export async function createApplication(): Promise<NestFastifyApplication> {
+  const adapter = new FastifyAdapter({
+    requestIdHeader: false,
+    genReqId: assignRequestId,
+  });
+  adapter.getInstance().addHook('onRequest', (request, reply, done) => {
+    reply.header('X-Request-Id', request.id);
+    done();
+  });
   const application = await NestFactory.create<NestFastifyApplication>(
     ApiModule,
-    new FastifyAdapter({ requestIdHeader: false, genReqId: assignRequestId }),
+    adapter,
     { bufferLogs: true, abortOnError: false, rawBody: true },
   );
   application.useLogger(application.get(Logger));

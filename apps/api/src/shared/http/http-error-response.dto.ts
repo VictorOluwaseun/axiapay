@@ -14,7 +14,7 @@ export class HttpErrorResponseDto implements HttpErrorResponse {
 
   @ApiProperty({
     description:
-      'Server-generated diagnostic reference, also returned in X-Request-Id.',
+      'Validated caller diagnostic reference or a server-generated UUID, also returned in X-Request-Id.',
   })
   requestId!: string;
 

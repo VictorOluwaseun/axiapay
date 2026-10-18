@@ -4,9 +4,7 @@ import type { IncomingMessage } from 'node:http';
 import type { Params } from 'nestjs-pino';
 
 /** Project a request into the minimal operational fields safe for routine access logs. */
-export function serializeRequest(
-  request: IncomingMessage & { id?: string | number },
-) {
+export function serializeRequest(request: IncomingMessage) {
   return {
     id: request.id,
     method: request.method,

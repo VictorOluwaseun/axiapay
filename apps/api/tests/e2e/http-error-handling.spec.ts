@@ -65,7 +65,7 @@ describe('global HTTP failure boundary', () => {
     const response = await application.inject({
       method: 'GET',
       url: `/health/live?token=${privateText}`,
-      headers: { 'x-request-id': 'untrusted-caller-reference' },
+      headers: { 'x-request-id': 'invalid caller reference' },
     });
     expect(response.statusCode).toBe(500);
     const requestId = response.headers['x-request-id'];
@@ -220,13 +220,13 @@ describe('global HTTP failure boundary', () => {
     },
   );
 
-  it('assigns different server request references to concurrent failures', async () => {
+  it('assigns different fallback references to concurrent failures with invalid IDs', async () => {
     const responses = await Promise.all(
       Array.from({ length: 8 }, () =>
         application.inject({
           method: 'GET',
           url: '/v1/no-such-route',
-          headers: { 'x-request-id': 'same-caller-value' },
+          headers: { 'x-request-id': 'invalid caller value' },
         }),
       ),
     );
