@@ -4,4 +4,5 @@ export const PAYMENTS = Object.freeze({
   recoveryRepository: Symbol('PaymentRecoveryRepository'),
   providers: Symbol('PaymentProviders'),
   clock: Symbol('PaymentClock'),
+  featurePolicy: Symbol('PaymentFeaturePolicy'),
 });

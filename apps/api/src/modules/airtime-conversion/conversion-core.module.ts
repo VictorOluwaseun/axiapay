@@ -10,6 +10,7 @@ import {
   DatabaseConnection,
   DatabaseModule,
 } from '@axiapay/payments-runtime/infrastructure/database/database.module';
+import { RemoteConfigModule } from '../remote-config/remote-config.module.js';
 import { CONVERSION } from './conversion.tokens.js';
 import type { ConversionRoute } from './ports/airtime-conversion-provider.js';
 import { PostgresConversionRepository } from './repositories/postgres-conversion.repository.js';
@@ -31,7 +32,7 @@ export class ConversionCoreModule {
   static register(options: ConversionModuleOptions = {}): DynamicModule {
     return {
       module: ConversionCoreModule,
-      imports: [DatabaseModule, ...(options.imports ?? [])],
+      imports: [DatabaseModule, RemoteConfigModule, ...(options.imports ?? [])],
       providers: [
         {
           provide: CONVERSION.repository,

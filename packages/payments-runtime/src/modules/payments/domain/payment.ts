@@ -36,6 +36,7 @@ export class PaymentError extends Error {
   constructor(
     readonly code:
       | 'INVALID_PAYMENT'
+      | 'FEATURE_DISABLED'
       | 'PRODUCT_UNAVAILABLE'
       | 'QUOTE_NOT_FOUND'
       | 'QUOTE_EXPIRED'

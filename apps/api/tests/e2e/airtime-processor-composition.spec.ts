@@ -63,6 +63,7 @@ describe('airtime processor composition', () => {
     const module = await Test.createTestingModule({
       imports: [
         PaymentsCoreModule.register({
+          featurePolicy: { useValue: { isEnabled: async () => true } },
           imports: [TestAirtimeAdaptersModule],
           fulfilment: {
             inject: [FIRST_ADAPTER, SECOND_ADAPTER],

@@ -86,7 +86,7 @@ export interface PaymentRepository {
       quote: PaymentQuote,
       product: ServiceProduct,
       bank: Bank | null,
-    ) => PaymentSettlementAccounts,
+    ) => PaymentSettlementAccounts | Promise<PaymentSettlementAccounts>,
   ): Promise<ServicePayment>;
   /** Claim the submission boundary only once after a matching reservation has committed; never reset the claim on uncertainty. */
   claimSubmission(paymentId: string): Promise<boolean>;

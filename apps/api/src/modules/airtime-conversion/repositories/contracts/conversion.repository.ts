@@ -19,10 +19,12 @@ export interface ConversionRepository {
       readonly quoteId: string;
       readonly requestKey: string;
     },
-    authorize: (quote: ConversionQuote) => {
-      readonly acceptedAt: Date;
-      readonly receiveBy: Date;
-    },
+    authorize: (quote: ConversionQuote) =>
+      | {
+          readonly acceptedAt: Date;
+          readonly receiveBy: Date;
+        }
+      | Promise<{ readonly acceptedAt: Date; readonly receiveBy: Date }>,
   ): Promise<ConversionRequest>;
   /** Read progress and derive operationId only from a committed matching ledger journal. */
   get(id: string): Promise<ConversionRequest | null>;

@@ -43,6 +43,7 @@ import { PaymentExceptionFilter } from '../filters/payment-exception.filter.js';
 @ApiBearerAuth()
 @ApiResponse({ status: 400, type: PaymentErrorResponseDto })
 @ApiResponse({ status: 401, type: PaymentErrorResponseDto })
+@ApiResponse({ status: 403, type: PaymentErrorResponseDto })
 @ApiResponse({ status: 404, type: PaymentErrorResponseDto })
 @ApiResponse({ status: 409, type: PaymentErrorResponseDto })
 @ApiResponse({ status: 503, type: PaymentErrorResponseDto })

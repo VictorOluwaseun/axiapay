@@ -89,6 +89,10 @@ const paymentFailures: Record<
     status: 503,
     message: 'Bill account verification remains unconfirmed.',
   },
+  FEATURE_DISABLED: {
+    status: 403,
+    message: 'This payment feature is temporarily disabled.',
+  },
   PRODUCT_UNAVAILABLE: { status: 404, message: 'Product unavailable.' },
   QUOTE_NOT_FOUND: { status: 404, message: 'Quote not found.' },
   QUOTE_EXPIRED: {

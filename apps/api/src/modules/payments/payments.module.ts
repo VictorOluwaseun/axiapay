@@ -1,3 +1,5 @@
+import { RemoteConfigModule } from '../remote-config/remote-config.module.js';
+import { RemoteConfigService } from '../remote-config/services/remote-config.service.js';
 import { Module, type DynamicModule } from '@nestjs/common';
 import type { PaymentsModuleOptions } from '@axiapay/payments-runtime/modules/payments/payments-core.module';
 import { PaymentsRuntimeModule } from '@axiapay/payments-runtime/modules/payments/payments-runtime.module';
@@ -14,10 +16,19 @@ import { PaymentDocumentsController } from './controllers/payment-documents.cont
 @Module({})
 export class PaymentsModule {
   /** Bind existing purchase routes to the shared payment runtime and explicitly selected provider adapters. */
-  static register(options: PaymentsModuleOptions = {}): DynamicModule {
+  static register(
+    options: Omit<PaymentsModuleOptions, 'featurePolicy'> = {},
+  ): DynamicModule {
     return {
       module: PaymentsModule,
-      imports: [AuthenticationModule, PaymentsRuntimeModule.register(options)],
+      imports: [
+        AuthenticationModule,
+        PaymentsRuntimeModule.register({
+          ...options,
+          imports: [...(options.imports ?? []), RemoteConfigModule],
+          featurePolicy: { useExisting: RemoteConfigService },
+        }),
+      ],
       providers: [BankTransferService],
       controllers: [
         PaymentsController,

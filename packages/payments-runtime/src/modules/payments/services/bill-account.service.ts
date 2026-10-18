@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
+import type { PaymentFeaturePolicy } from '../ports/payment-feature-policy.js';
 import { ServiceCatalogService } from '../../service-catalog/services/service-catalog.service.js';
 import type { ServiceProduct } from '../../service-catalog/domain/service-product.js';
 import { assertReference } from '../../wallets/domain/money.js';
@@ -22,6 +23,8 @@ import { PAYMENTS } from '../payments.tokens.js';
 export class BillAccountService {
   /** Inject first-party storage, catalogue and optional verification ports; concrete provider clients remain at the composition boundary. */
   constructor(
+    @Inject(PAYMENTS.featurePolicy)
+    private readonly featurePolicy: PaymentFeaturePolicy,
     @Inject(PAYMENTS.repository) private readonly payments: PaymentRepository,
     @Inject(ServiceCatalogService)
     private readonly catalogue: ServiceCatalogService,
@@ -36,6 +39,9 @@ export class BillAccountService {
     readonly accountNumber: string;
   }): Promise<BillAccountValidation> {
     const product = await this.catalogue.getProduct(input.productId);
+    if (!(await this.featurePolicy.isEnabled(product.serviceType))) {
+      throw new PaymentError('FEATURE_DISABLED');
+    }
     if (!['tv', 'electricity'].includes(product.serviceType)) {
       throw new PaymentError('INVALID_PAYMENT');
     }

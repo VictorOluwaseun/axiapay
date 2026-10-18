@@ -27,7 +27,7 @@ export interface ReserveWalletFundsInput {
   /** Recheck optional application authorization while wallet locks are held; must be synchronous with no I/O or external side effects.
    * Runs only for a new hold. Committed idempotent replays retain the originally accepted authorization.
    */
-  readonly validateAuthorization?: () => void;
+  readonly validateAuthorization?: () => void | Promise<void>;
 }
 
 /** Build the verified success credits; zero fees do not create zero-value ledger lines. */
@@ -102,7 +102,7 @@ export class WalletReservationService {
           throw new WalletError('WALLET_NOT_FOUND');
         }
         assertWalletOwner(wallet, input.actorId);
-        input.validateAuthorization?.();
+        await input.validateAuthorization?.();
         assertCanSpend(wallet, value);
         await transaction.createReservation({
           id: operationId,

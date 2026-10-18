@@ -7,6 +7,10 @@ import { ConversionError } from '../domain/conversion.js';
 
 /** Stable customer errors omit provider messages, source phones, evidence and credentials. */
 const failures = {
+  FEATURE_DISABLED: {
+    status: 403,
+    message: 'Airtime conversion is temporarily disabled.',
+  },
   CONVERSION_UNAVAILABLE: {
     status: 503,
     message:

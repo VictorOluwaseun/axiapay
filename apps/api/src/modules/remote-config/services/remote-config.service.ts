@@ -1,4 +1,9 @@
+import { PaymentError } from '@axiapay/payments-runtime/modules/payments/domain/payment';
 import { Inject, Injectable } from '@nestjs/common';
+import type {
+  PaymentFeature,
+  PaymentFeaturePolicy,
+} from '@axiapay/payments-runtime/modules/payments/ports/payment-feature-policy';
 import { createHash } from 'node:crypto';
 import {
   remoteConfigFlagKeys,
@@ -9,12 +14,34 @@ import { REMOTE_CONFIG_REPOSITORY } from '../remote-config.tokens.js';
 
 /** Compose the public policy and a deterministic content version from one validated repository snapshot. */
 @Injectable()
-export class RemoteConfigService {
+export class RemoteConfigService implements PaymentFeaturePolicy {
   /** Depend on a read-only repository contract, never on SQL or a remote provider client. */
   constructor(
     @Inject(REMOTE_CONFIG_REPOSITORY)
     private readonly repository: RemoteConfigRepository,
   ) {}
+
+  /** Read the same bounded server snapshot used by public config; unavailable policy cannot authorize new payments. */
+  async isEnabled(feature: PaymentFeature): Promise<boolean> {
+    let flags;
+    try {
+      flags = await this.repository.getFlags();
+    } catch (cause) {
+      throw new PaymentError('PAYMENT_UNAVAILABLE', { cause });
+    }
+    const keys = {
+      airtime: remoteConfigFlagKeys.airtime,
+      data: remoteConfigFlagKeys.data,
+      electricity: remoteConfigFlagKeys.electricity,
+      tv: remoteConfigFlagKeys.tv,
+      education: remoteConfigFlagKeys.education,
+      insurance: remoteConfigFlagKeys.insurance,
+      bank_transfer: remoteConfigFlagKeys.bankTransfer,
+      merchant: remoteConfigFlagKeys.merchant,
+      airtime_conversion: remoteConfigFlagKeys.airtimeConversion,
+    } as const;
+    return flags[keys[feature]];
+  }
 
   /** Version only the public representation; unrelated Firebase edits and refresh timestamps never invalidate a client's identical snapshot. */
   async getConfiguration(): Promise<RemoteConfig> {

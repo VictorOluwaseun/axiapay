@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
+import type { PaymentFeaturePolicy } from '../ports/payment-feature-policy.js';
 import { ServiceCatalogService } from '../../service-catalog/services/service-catalog.service.js';
 import {
   assertWalletActive,
@@ -69,6 +70,8 @@ interface QuoteRecipientInput {
 export class PaymentQuoteService {
   /** Depend on first-party catalogue and storage contracts, plus replaceable time and adapter availability. */
   constructor(
+    @Inject(PAYMENTS.featurePolicy)
+    private readonly featurePolicy: PaymentFeaturePolicy,
     @Inject(PAYMENTS.repository) private readonly payments: PaymentRepository,
     @Inject(ServiceCatalogService)
     private readonly catalogue: ServiceCatalogService,
@@ -102,6 +105,9 @@ export class PaymentQuoteService {
     assertWalletOwner(input.wallet, input.actorId);
     assertWalletActive(input.wallet);
     const product = await this.catalogue.getProduct(input.productId);
+    if (!(await this.featurePolicy.isEnabled(product.serviceType))) {
+      throw new PaymentError('FEATURE_DISABLED');
+    }
     const recipient = await this.resolveRecipient(
       input.actorId,
       product,
@@ -196,8 +202,11 @@ export class PaymentQuoteService {
     return quote;
   }
 
-  /** Recheck expiry synchronously under wallet locks; this performs no repository or provider I/O. */
-  assertCurrent(quote: PaymentQuote): void {
+  /** Recheck current local feature policy and expiry under wallet locks, without provider or configuration network I/O. */
+  async assertCurrent(quote: PaymentQuote): Promise<void> {
+    if (!(await this.featurePolicy.isEnabled(quote.serviceType))) {
+      throw new PaymentError('FEATURE_DISABLED');
+    }
     assertQuoteCurrent(quote, this.clock.now());
   }
 
@@ -207,6 +216,9 @@ export class PaymentQuoteService {
       return false;
     }
     try {
+      if (!(await this.featurePolicy.isEnabled(quote.serviceType))) {
+        return false;
+      }
       assertQuoteCurrent(quote, this.clock.now());
       const product = await this.catalogue.getProduct(quote.productId);
       const registration = this.providers[quote.providerKey]!;
@@ -236,12 +248,17 @@ export class PaymentQuoteService {
   }
 
   /** Catalogue capability includes required recipient/eligibility/document capabilities for the selected service, with no SDK/credential exposure. */
-  isProductSubmissionAvailable(product: ServiceProduct): boolean {
+  async isProductSubmissionAvailable(
+    product: ServiceProduct,
+  ): Promise<boolean> {
     if (!this.isProviderRegistered(product.providerKey)) {
       return false;
     }
     const registration = this.providers[product.providerKey]!;
     try {
+      if (!(await this.featurePolicy.isEnabled(product.serviceType))) {
+        return false;
+      }
       registration.adapter.validate?.({
         scope: 'product',
         terms: product,

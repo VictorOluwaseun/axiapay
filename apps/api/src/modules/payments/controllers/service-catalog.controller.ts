@@ -33,6 +33,7 @@ import { PaymentExceptionFilter } from '../filters/payment-exception.filter.js';
 @ApiBearerAuth()
 @ApiResponse({ status: 400, type: PaymentErrorResponseDto })
 @ApiResponse({ status: 401, type: PaymentErrorResponseDto })
+@ApiResponse({ status: 403, type: PaymentErrorResponseDto })
 @ApiResponse({ status: 404, type: PaymentErrorResponseDto })
 @ApiResponse({ status: 503, type: PaymentErrorResponseDto })
 @UseGuards(AuthenticationGuard)
@@ -68,10 +69,12 @@ export class ServiceCatalogController {
       limit: Number(query.limit ?? '50'),
     });
     return {
-      products: page.products.map((product) =>
-        ServiceProductResponseDto.fromProduct(
-          product,
-          this.quotes.isProductSubmissionAvailable(product),
+      products: await Promise.all(
+        page.products.map(async (product) =>
+          ServiceProductResponseDto.fromProduct(
+            product,
+            await this.quotes.isProductSubmissionAvailable(product),
+          ),
         ),
       ),
       nextCursor: page.nextCursor,
@@ -92,7 +95,7 @@ export class ServiceCatalogController {
     );
     return ServiceProductResponseDto.fromProduct(
       product,
-      this.quotes.isProductSubmissionAvailable(product),
+      await this.quotes.isProductSubmissionAvailable(product),
     );
   }
 }

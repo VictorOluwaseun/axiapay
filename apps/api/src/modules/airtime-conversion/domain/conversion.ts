@@ -9,6 +9,7 @@ export class ConversionError extends Error {
   /** Carry a public error code without provider payloads or customer details. */
   constructor(
     readonly code:
+      | 'FEATURE_DISABLED'
       | 'CONVERSION_UNAVAILABLE'
       | 'CONVERSION_NOT_FOUND'
       | 'CONVERSION_CONFLICT'

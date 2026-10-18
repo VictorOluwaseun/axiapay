@@ -55,6 +55,7 @@ import {
 @ApiBearerAuth()
 @ApiResponse({ status: 400, type: PaymentErrorResponseDto })
 @ApiResponse({ status: 401, type: PaymentErrorResponseDto })
+@ApiResponse({ status: 403, type: PaymentErrorResponseDto })
 @ApiResponse({ status: 404, type: PaymentErrorResponseDto })
 @ApiResponse({ status: 409, type: PaymentErrorResponseDto })
 @ApiResponse({ status: 503, type: PaymentErrorResponseDto })
@@ -122,10 +123,12 @@ export class BankTransfersController {
       limit: Number(query.limit ?? '50'),
     });
     return {
-      products: page.products.map((product) =>
-        BankTransferProductResponseDto.fromProduct(
-          product,
-          this.quotes.isProductSubmissionAvailable(product),
+      products: await Promise.all(
+        page.products.map(async (product) =>
+          BankTransferProductResponseDto.fromProduct(
+            product,
+            await this.quotes.isProductSubmissionAvailable(product),
+          ),
         ),
       ),
       nextCursor: page.nextCursor,

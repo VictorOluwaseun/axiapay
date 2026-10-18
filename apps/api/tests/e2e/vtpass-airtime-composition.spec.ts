@@ -32,6 +32,7 @@ async function configuredModule(partnerSettings: Record<string, unknown>) {
   return Test.createTestingModule({
     imports: [
       PaymentsCoreModule.register({
+        featurePolicy: { useValue: { isEnabled: async () => true } },
         imports: [VtpassAirtimeModule],
         fulfilment: { useExisting: VTPASS_AIRTIME.registrations },
       }),

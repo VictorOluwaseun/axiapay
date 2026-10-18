@@ -107,7 +107,7 @@ export class PostgresConversionRepository implements ConversionRepository {
           throw new ConversionError('CONVERSION_CONFLICT');
         }
         const quote = mapQuote(quoteRecord);
-        const acceptance = authorize(quote);
+        const acceptance = await authorize(quote);
         const request: ConversionRequest = {
           id: input.id,
           quote,

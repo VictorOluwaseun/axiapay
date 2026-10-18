@@ -554,7 +554,7 @@ export class PostgresPaymentRepository implements PaymentRepository {
               .where('id', '=', productRecord.bank_id)
               .forShare()
               .executeTakeFirstOrThrow();
-      const accounts = validate(
+      const accounts = await validate(
         quote,
         productFromRecord(productRecord),
         bankRecord ? bankFromRecord(bankRecord) : null,

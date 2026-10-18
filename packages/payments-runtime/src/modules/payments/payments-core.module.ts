@@ -11,6 +11,7 @@ import {
   DatabaseModule,
 } from '../../infrastructure/database/database.module.js';
 import { ServiceCatalogModule } from '../service-catalog/service-catalog.module.js';
+import type { PaymentFeaturePolicy } from './ports/payment-feature-policy.js';
 import { PAYMENTS } from './payments.tokens.js';
 import { PostgresPaymentRepository } from './repositories/postgres-payment.repository.js';
 import { PaymentExecutionService } from './services/payment-execution.service.js';
@@ -25,6 +26,10 @@ import type { PaymentProviders } from './ports/service-payment-provider.js';
 /** Explicit application composition for optional adapter registrations; provider SDKs and credentials remain outside this feature core. */
 export interface PaymentsModuleOptions {
   readonly imports?: ModuleMetadata['imports'];
+  readonly featurePolicy?:
+    | Omit<FactoryProvider<PaymentFeaturePolicy>, 'provide'>
+    | Omit<ValueProvider<PaymentFeaturePolicy>, 'provide'>
+    | Omit<ExistingProvider, 'provide'>;
   readonly fulfilment?:
     | Omit<FactoryProvider<PaymentProviders>, 'provide'>
     | Omit<ValueProvider<PaymentProviders>, 'provide'>
@@ -61,6 +66,12 @@ export class PaymentsCoreModule {
             now: () => new Date(),
           }),
         },
+        {
+          provide: PAYMENTS.featurePolicy,
+          ...(options.featurePolicy ?? {
+            useValue: { isEnabled: async () => false },
+          }),
+        },
         PaymentExecutionService,
         PaymentQuoteService,
         BillAccountService,
@@ -70,6 +81,12 @@ export class PaymentsCoreModule {
         PaymentDocumentService,
       ],
       exports: [
+        {
+          provide: PAYMENTS.featurePolicy,
+          ...(options.featurePolicy ?? {
+            useValue: { isEnabled: async () => false },
+          }),
+        },
         PaymentExecutionService,
         PaymentQuoteService,
         BillAccountService,

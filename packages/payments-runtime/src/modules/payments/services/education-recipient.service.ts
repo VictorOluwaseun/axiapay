@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
+import type { PaymentFeaturePolicy } from '../ports/payment-feature-policy.js';
 import { ServiceCatalogService } from '../../service-catalog/services/service-catalog.service.js';
 import { assertReference } from '../../wallets/domain/money.js';
 import { assertBillDisplayText } from '../domain/bill-account.js';
@@ -20,6 +21,8 @@ import { PAYMENTS } from '../payments.tokens.js';
 export class EducationRecipientService {
   /** Inject authoritative catalogue/storage and non-purchasing verification capability. */
   constructor(
+    @Inject(PAYMENTS.featurePolicy)
+    private readonly featurePolicy: PaymentFeaturePolicy,
     @Inject(PAYMENTS.repository) private readonly payments: PaymentRepository,
     @Inject(ServiceCatalogService)
     private readonly catalogue: ServiceCatalogService,
@@ -34,6 +37,9 @@ export class EducationRecipientService {
     readonly beneficiaryIdentifier: string;
   }): Promise<EducationRecipientValidation> {
     const product = await this.catalogue.getProduct(input.productId);
+    if (!(await this.featurePolicy.isEnabled(product.serviceType))) {
+      throw new PaymentError('FEATURE_DISABLED');
+    }
     if (
       product.serviceType !== 'education' ||
       product.educationRecipientVerificationRequired === false

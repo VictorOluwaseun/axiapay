@@ -1,3 +1,4 @@
+import { RemoteConfigService } from '../../remote-config/services/remote-config.service.js';
 import { Inject, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { money } from '@axiapay/payments-runtime/modules/wallets/domain/money';
@@ -37,6 +38,8 @@ export class ConversionService implements FundingVerification {
 
   /** Snapshot explicit route configuration; an empty registry cannot quote or accept new conversions. */
   constructor(
+    @Inject(RemoteConfigService)
+    private readonly configuration: RemoteConfigService,
     @Inject(CONVERSION.repository)
     private readonly conversions: ConversionRepository,
     @Inject(CONVERSION.routes) routes: readonly ConversionRoute[],
@@ -72,7 +75,10 @@ export class ConversionService implements FundingVerification {
   }
 
   /** Discover only explicitly enabled, currency-compatible offers; no provider identities or proposed commercial defaults are returned. */
-  listOffers(currency: string): readonly ConversionOffer[] {
+  async listOffers(currency: string): Promise<readonly ConversionOffer[]> {
+    if (!(await this.configuration.isEnabled('airtime_conversion'))) {
+      return [];
+    }
     return this.routes
       .filter((route) => route.acceptsNewRequests)
       .flatMap((route) =>
@@ -89,6 +95,9 @@ export class ConversionService implements FundingVerification {
     readonly airtimeMinorUnits: bigint;
     readonly currency: string;
   }): Promise<ConversionQuote> {
+    if (!(await this.configuration.isEnabled('airtime_conversion'))) {
+      throw new ConversionError('FEATURE_DISABLED');
+    }
     const route = this.routes.find(
       (candidate) =>
         candidate.acceptsNewRequests &&
@@ -171,10 +180,13 @@ export class ConversionService implements FundingVerification {
   }
 
   /** Replays honor original accepted terms; this policy runs only for new acceptance under the repository's quote lock. */
-  private authorizeAcceptance(quote: ConversionQuote): {
+  private async authorizeAcceptance(quote: ConversionQuote): Promise<{
     acceptedAt: Date;
     receiveBy: Date;
-  } {
+  }> {
+    if (!(await this.configuration.isEnabled('airtime_conversion'))) {
+      throw new ConversionError('FEATURE_DISABLED');
+    }
     const acceptedAt = new Date();
     if (acceptedAt >= quote.expiresAt) {
       throw new ConversionError('QUOTE_EXPIRED');

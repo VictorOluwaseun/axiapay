@@ -5,6 +5,7 @@ import type {
 import { assertBillDisplayText } from '../domain/bill-account.js';
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
+import type { PaymentFeaturePolicy } from '../ports/payment-feature-policy.js';
 import { ServiceCatalogService } from '../../service-catalog/services/service-catalog.service.js';
 import { assertReference } from '../../wallets/domain/money.js';
 import {
@@ -28,6 +29,8 @@ import { PAYMENTS } from '../payments.tokens.js';
 export class InsuranceApplicationService {
   /** Inject authoritative product terms, owner-scoped storage and replaceable non-purchasing eligibility capability. */
   constructor(
+    @Inject(PAYMENTS.featurePolicy)
+    private readonly featurePolicy: PaymentFeaturePolicy,
     @Inject(PAYMENTS.repository) private readonly payments: PaymentRepository,
     @Inject(ServiceCatalogService)
     private readonly catalogue: ServiceCatalogService,
@@ -45,6 +48,9 @@ export class InsuranceApplicationService {
     readonly options: readonly InsuranceInputOption[];
   }> {
     const product = await this.catalogue.getProduct(input.productId);
+    if (!(await this.featurePolicy.isEnabled(product.serviceType))) {
+      throw new PaymentError('FEATURE_DISABLED');
+    }
     const terms = product.insuranceTerms;
     if (
       product.serviceType !== 'insurance' ||
@@ -89,6 +95,9 @@ export class InsuranceApplicationService {
     readonly coverageStartsOn: string;
   }): Promise<InsuranceApplication> {
     const product = await this.catalogue.getProduct(input.productId);
+    if (!(await this.featurePolicy.isEnabled(product.serviceType))) {
+      throw new PaymentError('FEATURE_DISABLED');
+    }
     if (product.serviceType !== 'insurance' || !product.insuranceTerms) {
       throw new PaymentError('INVALID_PAYMENT');
     }

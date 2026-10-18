@@ -1,3 +1,6 @@
+import { remoteConfigFlagKeys } from '../../src/modules/remote-config/domain/remote-config.js';
+import { TestRemoteConfigRepository } from '../support/remote-config.js';
+import { REMOTE_CONFIG_REPOSITORY } from '../../src/modules/remote-config/remote-config.tokens.js';
 import { WalletSummaryInvalidationConnection } from '../../src/infrastructure/database/wallet-summary-invalidation.connection.js';
 import { SessionCacheInvalidationConnection } from '../../src/infrastructure/database/session-cache-invalidation.connection.js';
 import { VtpassDataAdapter } from '@axiapay/payments-runtime/modules/payments/adapters/vtpass-data.adapter';
@@ -93,6 +96,7 @@ let currentTime = new Date('2030-01-01T00:00:00Z');
 const registrations: Record<string, PaymentProviderRegistration | undefined> =
   {};
 const codes = new Map<string, string>();
+const featurePolicy = new TestRemoteConfigRepository();
 const fundingEvidence = new Map<string, ConfirmedFunding>();
 
 beforeAll(async () => {
@@ -112,6 +116,8 @@ beforeAll(async () => {
       PaymentsModule.register(),
     ],
   })
+    .overrideProvider(REMOTE_CONFIG_REPOSITORY)
+    .useValue(featurePolicy)
     .overrideProvider(DatabaseConnection)
     .useValue({ database: database.database })
     .overrideProvider(SessionCacheInvalidationConnection)
@@ -4249,5 +4255,176 @@ describe('durable payment recovery', () => {
     ).toBeNull();
     expect((await context.balance()).availableMinorUnits).toBe(100_000n);
     expect(context.transport).not.toHaveBeenCalled();
+  });
+});
+
+/** Exercise feature policy at the actual HTTP, acceptance and locked wallet boundaries. */
+describe('configured payment availability', () => {
+  it.each([
+    ['airtime', remoteConfigFlagKeys.airtime],
+    ['data', remoteConfigFlagKeys.data],
+    ['electricity', remoteConfigFlagKeys.electricity],
+    ['tv', remoteConfigFlagKeys.tv],
+    ['education', remoteConfigFlagKeys.education],
+    ['insurance', remoteConfigFlagKeys.insurance],
+    ['bank_transfer', remoteConfigFlagKeys.bankTransfer],
+    ['merchant', remoteConfigFlagKeys.merchant],
+  ] as const)(
+    'blocks fresh %s requests without affecting other services or money',
+    async (service, key) => {
+      const context = await fixture(service);
+      let recipient: Record<string, unknown> = {};
+      if (service === 'electricity' || service === 'tv') {
+        recipient = {
+          accountValidationId: (await context.verifyAccount()).json().id,
+          contactPhoneNumber: '+2348012345678',
+        };
+      }
+      if (service === 'education') {
+        recipient = {
+          educationValidationId: (await context.educationValidation()).json()
+            .id,
+        };
+      }
+      if (service === 'insurance') {
+        recipient = {
+          insuranceApplicationId: (await context.insuranceApplication()).json()
+            .id,
+        };
+      }
+      if (service === 'bank_transfer') {
+        recipient = {
+          bankBeneficiaryValidationId: (await context.bankValidation()).json()
+            .id,
+        };
+      }
+      if (service === 'merchant') {
+        recipient = { merchantRecipientIdentifier: 'test-merchant' };
+      }
+      const review = await context.quote(recipient);
+      expect(review.statusCode).toBe(201);
+      featurePolicy.setFlag(key, false);
+      try {
+        const listed = await application.inject({
+          method: 'GET',
+          url: `/v1/service-catalog/products/${context.productId}`,
+          headers: { authorization: `Bearer ${context.session.accessToken}` },
+        });
+        expect(listed.statusCode).toBe(200);
+        expect(listed.json().isSubmissionAvailable).toBe(false);
+        const response = await context.quote(recipient);
+        expect(response.statusCode).toBe(403);
+        expect((await context.pay(review.json().id)).statusCode).toBe(403);
+        expect(response.json().code).toBe('FEATURE_DISABLED');
+        if (service === 'electricity' || service === 'tv') {
+          expect((await context.verifyAccount()).statusCode).toBe(403);
+        }
+        if (service === 'education') {
+          expect((await context.educationValidation()).statusCode).toBe(403);
+        }
+        if (service === 'insurance') {
+          expect((await context.insuranceApplication()).statusCode).toBe(403);
+        }
+        if (service === 'bank_transfer') {
+          expect((await context.bankValidation()).statusCode).toBe(403);
+        }
+        expect((await context.balance()).reservedMinorUnits).toBe(0n);
+        expect(context.submit).not.toHaveBeenCalled();
+        const unrelated = await fixture(
+          service === 'airtime' ? 'data' : 'airtime',
+        );
+        expect((await unrelated.quote()).statusCode).toBe(201);
+      } finally {
+        featurePolicy.reset();
+      }
+    },
+  );
+
+  it('rechecks a reviewed quote on confirmation and re-enables only on an explicit retry', async () => {
+    const context = await fixture();
+    const quote = (await context.quote()).json<PaymentQuoteResponseDto>();
+    const key = randomUUID();
+    featurePolicy.setFlag(remoteConfigFlagKeys.airtime, false);
+    try {
+      expect((await context.pay(quote.id, key)).json().code).toBe(
+        'FEATURE_DISABLED',
+      );
+      expect(context.submit).not.toHaveBeenCalled();
+      expect((await context.balance()).reservedMinorUnits).toBe(0n);
+    } finally {
+      featurePolicy.reset();
+    }
+    expect((await context.pay(quote.id, key)).statusCode).toBe(200);
+    expect(context.submit).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a policy change at the locked reservation boundary without a debit or provider call', async () => {
+    const context = await fixture();
+    const quote = (await context.quote()).json<PaymentQuoteResponseDto>();
+    const original = wallets.reserveWalletFunds.bind(wallets);
+    const reserve = vi
+      .spyOn(wallets, 'reserveWalletFunds')
+      .mockImplementationOnce((input) => {
+        featurePolicy.setFlag(remoteConfigFlagKeys.airtime, false);
+        return original(input);
+      });
+    try {
+      expect((await context.pay(quote.id)).json().code).toBe(
+        'FEATURE_DISABLED',
+      );
+      expect((await context.balance()).availableMinorUnits).toBe(100_000n);
+      expect((await context.balance()).reservedMinorUnits).toBe(0n);
+      expect(context.submit).not.toHaveBeenCalled();
+    } finally {
+      reserve.mockRestore();
+      featurePolicy.reset();
+    }
+  });
+
+  it('keeps held payment reads, identical submission replay and reconciliation available during disabled or unavailable configuration', async () => {
+    const context = await fixture();
+    const quote = (await context.quote()).json<PaymentQuoteResponseDto>();
+    const key = randomUUID();
+    const accepted = await context.pay(quote.id, key);
+    const paymentId = accepted.json().id as string;
+    expect(accepted.statusCode).toBe(200);
+    featurePolicy.setFlag(remoteConfigFlagKeys.airtime, false);
+    let unavailable: ReturnType<typeof vi.spyOn> | undefined;
+    try {
+      expect((await context.pay(quote.id, key)).statusCode).toBe(200);
+      unavailable = vi
+        .spyOn(featurePolicy, 'getFlags')
+        .mockRejectedValue(new Error('private provider context'));
+      expect((await context.reconcile(paymentId)).statusCode).toBe(200);
+      expect((await context.pay(quote.id, key)).statusCode).toBe(200);
+      const read = await application.inject({
+        method: 'GET',
+        url: `/v1/payments/${paymentId}`,
+        headers: { authorization: `Bearer ${context.session.accessToken}` },
+      });
+      expect(read.statusCode).toBe(200);
+      expect(context.submit).toHaveBeenCalledTimes(1);
+      expect(context.lookup).toHaveBeenCalled();
+    } finally {
+      unavailable?.mockRestore();
+      featurePolicy.reset();
+    }
+  });
+
+  it('fails closed for new purchases when the bounded policy snapshot is unavailable', async () => {
+    const context = await fixture();
+    const quote = (await context.quote()).json<PaymentQuoteResponseDto>();
+    const unavailable = vi
+      .spyOn(featurePolicy, 'getFlags')
+      .mockRejectedValue(new Error('private provider context'));
+    try {
+      const response = await context.pay(quote.id);
+      expect(response.statusCode).toBe(503);
+      expect(response.body).not.toContain('private provider context');
+      expect(context.submit).not.toHaveBeenCalled();
+      expect((await context.balance()).reservedMinorUnits).toBe(0n);
+    } finally {
+      unavailable.mockRestore();
+    }
   });
 });

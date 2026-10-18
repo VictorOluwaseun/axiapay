@@ -1,3 +1,6 @@
+import { remoteConfigFlagKeys } from '../../src/modules/remote-config/domain/remote-config.js';
+import { TestRemoteConfigRepository } from '../support/remote-config.js';
+import { REMOTE_CONFIG_REPOSITORY } from '../../src/modules/remote-config/remote-config.tokens.js';
 import { WalletSummaryInvalidationConnection } from '../../src/infrastructure/database/wallet-summary-invalidation.connection.js';
 import { SessionCacheInvalidationConnection } from '../../src/infrastructure/database/session-cache-invalidation.connection.js';
 /** Exercise authenticated conversion contracts, immutable SQL evidence, exact ledger credit and failure recovery in disposable PostgreSQL. */
@@ -153,6 +156,7 @@ const offer: ConversionOffer & { readonly providerProductCode: string } = {
   providerProductCode: 'fixture-airtime-inbound',
 };
 const provider = new ContractConversionProvider();
+const featurePolicy = new TestRemoteConfigRepository();
 const partnerAccountId = randomUUID();
 const replacementAccountId = randomUUID();
 let database: WalletTestDatabase;
@@ -184,6 +188,8 @@ async function createConversionApplication(
       AirtimeConversionModule.register({ routes: { useValue: routes } }),
     ],
   })
+    .overrideProvider(REMOTE_CONFIG_REPOSITORY)
+    .useValue(featurePolicy)
     .overrideProvider(DatabaseConnection)
     .useValue({ database: storage.database })
     .overrideProvider(SessionCacheInvalidationConnection)
@@ -222,6 +228,7 @@ beforeAll(async () => {
   application = await createConversionApplication([route()]);
 });
 beforeEach(() => {
+  featurePolicy.reset();
   provider.isEligible = true;
   provider.losePreparationResponse = false;
   provider.lookupUnavailable = false;
@@ -1046,5 +1053,28 @@ describe('airtime conversion storage boundaries', () => {
         .execute(),
     ).rejects.toMatchObject({ code: '23514' });
     expect(await balance(customer)).toBe(0n);
+  });
+});
+
+describe('configured airtime conversion availability', () => {
+  it('blocks new eligibility and acceptance while preserving accepted instructions and recovery', async () => {
+    const customer = await createFundingCustomer(application, database);
+    const review = await quote(customer);
+    expect(review.statusCode).toBe(201);
+    const existing = await pending(customer);
+    const inputs = provider.eligibilityInputs.length;
+    featurePolicy.setFlag(remoteConfigFlagKeys.airtimeConversion, false);
+    try {
+      expect((await quote(customer)).json().code).toBe('FEATURE_DISABLED');
+      expect(provider.eligibilityInputs.length).toBe(inputs);
+      expect((await accept(customer, review.json().quoteId)).json().code).toBe(
+        'FEATURE_DISABLED',
+      );
+      expect(
+        (await reconcile(customer, existing.conversionId)).statusCode,
+      ).toBe(200);
+    } finally {
+      featurePolicy.reset();
+    }
   });
 });

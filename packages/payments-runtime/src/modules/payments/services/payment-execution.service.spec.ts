@@ -52,6 +52,7 @@ describe('fresh purchase validation', () => {
         getProduct: vi.fn(async () => vtpassProduct(payment)),
       };
       const execution = new PaymentExecutionService(
+        { isEnabled: async () => true },
         {} as PaymentRepository,
         catalogue as unknown as ServiceCatalogService,
         {
@@ -117,6 +118,7 @@ function executionFixture() {
       vi.fn<PaymentRepository['recordBankTransferSuccess']>(),
   };
   const execution = new PaymentExecutionService(
+    { isEnabled: async () => true },
     repository as unknown as PaymentRepository,
     {} as ServiceCatalogService,
     {

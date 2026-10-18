@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
+import type { PaymentFeaturePolicy } from '../ports/payment-feature-policy.js';
 import { ServiceCatalogService } from '../../service-catalog/services/service-catalog.service.js';
 import type {
   PaymentOutcomeVerification,
@@ -34,6 +35,8 @@ import { validatedPaymentDocument } from '../domain/payment-document.js';
 export class PaymentExecutionService implements PaymentOutcomeVerification {
   /** Keep provider clients and SQL behind first-party contracts, with no wallet/module dependency cycle. */
   constructor(
+    @Inject(PAYMENTS.featurePolicy)
+    private readonly featurePolicy: PaymentFeaturePolicy,
     @Inject(PAYMENTS.repository) private readonly payments: PaymentRepository,
     @Inject(ServiceCatalogService)
     private readonly catalogue: ServiceCatalogService,
@@ -54,7 +57,10 @@ export class PaymentExecutionService implements PaymentOutcomeVerification {
         quoteId: input.quoteId,
         requestKey: input.requestKey,
       },
-      (quote, product, bank) => {
+      async (quote, product, bank) => {
+        if (!(await this.featurePolicy.isEnabled(product.serviceType))) {
+          throw new PaymentError('FEATURE_DISABLED');
+        }
         assertQuoteCurrent(quote, this.clock.now());
         if (!product.isEnabled) {
           throw new PaymentError('PRODUCT_UNAVAILABLE');
@@ -112,6 +118,9 @@ export class PaymentExecutionService implements PaymentOutcomeVerification {
     const registration = this.providerForPayment(payment);
     if (payment.reservationId) {
       return;
+    }
+    if (!(await this.featurePolicy.isEnabled(payment.quote.serviceType))) {
+      throw new PaymentError('FEATURE_DISABLED');
     }
     assertQuoteCurrent(payment.quote, this.clock.now());
     const product = await this.catalogue.getProduct(payment.quote.productId);
