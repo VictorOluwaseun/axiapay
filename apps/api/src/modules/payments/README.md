@@ -135,3 +135,7 @@ Migration `202610130007-education-insurance.js` adds catalogue contracts, owner/
 ## Bank transfers
 
 [Bank transfer API contracts and setup](bank-transfers.md) describe the first-party bank directory, owner-scoped name enquiry, exact recipient/debit review, bank transfer endpoints and shared wallet execution/recovery. Bank success requires mandatory matching recipient-credit proof stored atomically with financial evidence. Bank outcome, wallet funds and safe failure reason are separately observable. Provider adapters remain unregistered by default.
+
+## Configured feature availability
+
+The [shared remote configuration policy](../remote-config/README.md#payment-feature-policy-and-rollout) independently controls each catalogue service. New quotes, recipient preparation, quote acceptance and unreserved spending check current policy; disabled features return `403 FEATURE_DISABLED`. Discovery reports `isSubmissionAvailable: false`. Existing held payment status, receipts and reconciliation continue during disablement or policy outages. Provider readiness and authoritative wallet/session checks still apply independently.

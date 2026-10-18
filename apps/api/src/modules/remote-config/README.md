@@ -1,6 +1,6 @@
 # Firebase remote configuration
 
-Firebase is the configuration administration source. The API validates a global policy from its **server template**, enforces it during authentication, and publishes the effective settings through `GET /v1/config`. Android does not need a Firebase SDK for these shared settings.
+Firebase is the configuration administration source. The API validates a global policy from its **server template**, enforces it during authentication and new payment workflows, and publishes the effective settings through `GET /v1/config`. Android does not need a Firebase SDK for these shared settings.
 
 ## HTTP contract and versioning
 
@@ -36,6 +36,8 @@ A first request, or one carrying an old version, returns `200 OK` with `ETag: "r
   }
 }
 ```
+
+Compression proxies can return a weak ETag (`W/"rc1-…"`) for the same versioned settings. Native clients retain the exact received validator and use [weak comparison for GET revalidation](https://www.rfc-editor.org/rfc/rfc9110.html#section-13.1.2); a different opaque version still fails validation.
 
 Store the response and ETag together. On subsequent requests send the **quoted** ETag in `If-None-Match`:
 
@@ -117,3 +119,13 @@ The Android app in the separate `axiapay-mobile` repository consumes configurati
 Remote configuration has no PostgreSQL dependency, query or fallback. No new database migration or read grant is needed. Keep the already-applied `202610170016-remote-config.js` migration and generated schema entry as history; the table and its values remain unused and preserved. Do not delete applied migration files or alter migration records. Table cleanup can follow after Firebase cutover and rollback needs are settled.
 
 Tests inject controlled policy fixtures that are never production fallbacks. Tests cover Firebase validation, all seventeen switches, issued proof, bounded retention, expiry, recovery, concurrent refresh, cancellation, late completion, safe failures and conditional HTTP responses. Live Firebase verification requires the project ID, published server template and credentials.
+
+## Payment feature policy and rollout
+
+Merge and publish the nine new feature parameters in the existing Firebase **server** template to make the intended features available. Older authentication-only server templates remain valid; absent feature keys default to disabled until publication. Preserve existing authentication values and unrelated parameters; the supplied starter template is an example, not a replacement command. Each enabled switch still requires an enabled product, a configured capable provider, valid authentication, recipient verification, pricing and sufficient funds. No database migration is needed. Policy changes become effective on each replica's next successful bounded refresh, rather than immediately across all processes.
+
+A disabled service remains discoverable with `isSubmissionAvailable: false`. Its new quotes, recipient/eligibility verification and new payment acceptance fail with HTTP `403 FEATURE_DISABLED`. Policy is rechecked after quote review and inside the locked wallet reservation transaction before moving funds. The policy adapter reads only the local bounded configuration snapshot there; no Firebase network call runs under the database lock. If config is absent/expired, new payment writes fail with `503 PAYMENT_UNAVAILABLE`. Unavailability projections report false without hiding owned quote history.
+
+Already reserved/submitted payments retain status, identical-key replay, receipts, reconciliation and worker recovery even if policy becomes disabled or expires. Accepted but unreserved instructions must still pass current policy before any new hold. Airtime conversion checks policy before fresh eligibility and locked acceptance; accepted conversion instructions and credit recovery remain available. Feature switches do not release funds, cancel accepted obligations, change provider outcomes or replay purchases. Wallet funding and wallet-to-wallet transfers retain their existing separate policies.
+
+Android restores these flags with the existing atomic, API-scoped config cache before background ETag revalidation. Disabled services remain labeled and disabled in the home/payment grids; a refreshed disablement also blocks explicit review, meter verification and confirmation of an open live purchase without discarding its quote or payment references. Re-enabling never submits automatically. Saved progress/history remains accessible. Older auth-only snapshots preserve authentication choices and default every payment feature to unavailable; a partial or malformed new feature object rejects the replacement. Demo's flavor binding always supplies its independent enabled fixture. No Firebase SDK, Redis authority or new device storage dependency is introduced.
