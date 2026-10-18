@@ -33,6 +33,37 @@ describe('API foundation', () => {
     expect(response.json().paths).toHaveProperty('/health/live');
     expect(response.json().paths).toHaveProperty('/v1/auth/signup');
     const document = response.json();
+    expect(document.paths['/v1/config'].get.security).toBeUndefined();
+    expect(document.paths['/v1/config'].get.responses).toHaveProperty('304');
+    expect(
+      document.components.schemas.RemoteConfigResponseDto.required,
+    ).toContain('version');
+    expect(document.paths['/v1/config'].get.parameters).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'If-None-Match',
+          in: 'header',
+          required: false,
+        }),
+      ]),
+    );
+    expect(
+      document.paths['/v1/config'].get.responses['200'].content[
+        'application/json'
+      ].schema.$ref,
+    ).toBe('#/components/schemas/RemoteConfigResponseDto');
+    expect(document.paths['/v1/auth/signup'].post.responses).toHaveProperty(
+      '403',
+    );
+    expect(
+      document.components.schemas.AuthenticationMethodsConfigurationResponseDto
+        .required,
+    ).toEqual([
+      'emailEnabled',
+      'phoneEnabled',
+      'passwordEnabled',
+      'otpEnabled',
+    ]);
     expect(
       document.paths['/v1/auth/password/forgot'].post.requestBody.content[
         'application/json'

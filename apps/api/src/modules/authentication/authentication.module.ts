@@ -30,10 +30,11 @@ import { AuthenticationCodeService } from './services/authentication-code.servic
 import { AuthenticationService } from './services/authentication.service.js';
 import { AuthenticationRateLimiter } from './services/authentication-rate-limiter.service.js';
 import { SessionCacheInvalidationConnection } from '../../infrastructure/database/session-cache-invalidation.connection.js';
+import { RemoteConfigModule } from '../remote-config/remote-config.module.js';
 
 /** Compose explicit Nest providers; export feature operations and guards, keeping persistence private. */
 @Module({
-  imports: [ConfigModule, DatabaseModule],
+  imports: [ConfigModule, DatabaseModule, RemoteConfigModule],
   controllers: [AuthenticationController, DeviceAuthenticationController],
   providers: [
     RedisCacheConnection,

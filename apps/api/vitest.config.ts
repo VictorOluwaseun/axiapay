@@ -29,6 +29,8 @@ export default defineConfig({
     include: ['src/**/*.spec.ts', 'tests/e2e/**/*.spec.ts'],
     env: {
       NODE_ENV: 'test',
+      // Tests select their configuration fixtures explicitly, even on a machine with a configured Firebase project.
+      FIREBASE_PROJECT_ID: '',
       AUTH_CODE_SECRET: '11'.repeat(32),
       LOG_LEVEL: 'silent',
       DATABASE_URL: 'postgresql://test:test@127.0.0.1:55432/test',

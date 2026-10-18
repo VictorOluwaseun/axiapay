@@ -2,6 +2,8 @@
 
 NestJS and Fastify foundation for individual payments. Active routes include verified phone/email authentication, authenticated wallet creation, balances and internal transfers, process liveness, and development OpenAPI documentation. See the [authentication guide](src/modules/authentication/README.md) for password and one-time-code flows and the [wallet HTTP contract](src/modules/wallets/README.md#customer-http-api).
 
+Public [Firebase remote configuration](src/modules/remote-config/README.md) at `GET /v1/config` controls signup/login methods and publishes independent availability flags for airtime, data, electricity, TV, education, insurance, bank transfers, merchant payments and airtime conversion. The API refreshes a bounded Firebase server-template snapshot and enforces it during request and verification. Responses include a content version and ETag; a matching `If-None-Match` returns bodyless `304 Not Modified`. Configure Firebase project credentials and publish all seventeen parameters before rollout; absent or expired policy returns `503` without enabling defaults.
+
 The [first-party service payment APIs](src/modules/payments/README.md) now provide product discovery, service and bank-recipient verification, insurance consent/eligibility, exact review quotes, duplicate-safe wallet-backed submission, request-key recovery and delayed token/policy/document reconciliation. Fulfilment uses injected adapter contracts; `PaymentsModule.register()` has no adapter or commercial product by default and cannot reserve money for an unavailable integration.
 
 ## Local setup

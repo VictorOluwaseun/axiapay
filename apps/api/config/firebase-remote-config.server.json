@@ -1,0 +1,124 @@
+{
+  "conditions": [],
+  "parameters": {
+    "auth_signup_email_enabled": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "valueType": "BOOLEAN",
+      "description": "Allow requesting and redeeming email signup codes."
+    },
+    "auth_signup_phone_enabled": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "valueType": "BOOLEAN",
+      "description": "Allow requesting and redeeming phone signup codes."
+    },
+    "auth_login_email_enabled": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "valueType": "BOOLEAN",
+      "description": "Allow email password login and login-code requests and redemption."
+    },
+    "auth_login_phone_enabled": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "valueType": "BOOLEAN",
+      "description": "Allow phone password login and login-code requests and redemption."
+    },
+    "feature_airtime_enabled": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "valueType": "BOOLEAN",
+      "description": "Allow new airtime requests. Existing accepted payment recovery remains available."
+    },
+    "feature_data_enabled": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "valueType": "BOOLEAN",
+      "description": "Allow new data requests. Existing accepted payment recovery remains available."
+    },
+    "feature_electricity_enabled": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "valueType": "BOOLEAN",
+      "description": "Allow new electricity requests. Existing accepted payment recovery remains available."
+    },
+    "feature_tv_enabled": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "valueType": "BOOLEAN",
+      "description": "Allow new tv requests. Existing accepted payment recovery remains available."
+    },
+    "feature_education_enabled": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "valueType": "BOOLEAN",
+      "description": "Allow new education requests. Existing accepted payment recovery remains available."
+    },
+    "feature_insurance_enabled": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "valueType": "BOOLEAN",
+      "description": "Allow new insurance requests. Existing accepted payment recovery remains available."
+    },
+    "feature_bank_transfer_enabled": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "valueType": "BOOLEAN",
+      "description": "Allow new bankTransfer requests. Existing accepted payment recovery remains available."
+    },
+    "feature_merchant_enabled": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "valueType": "BOOLEAN",
+      "description": "Allow new merchant requests. Existing accepted payment recovery remains available."
+    },
+    "feature_airtime_conversion_enabled": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "valueType": "BOOLEAN",
+      "description": "Allow new airtimeConversion requests. Existing accepted payment recovery remains available."
+    },
+    "auth_signup_password_enabled": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "valueType": "BOOLEAN",
+      "description": "Allow password signup. Password signup still requires contact verification."
+    },
+    "auth_signup_otp_enabled": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "valueType": "BOOLEAN",
+      "description": "Allow passwordless one-time-code signup. Does not disable contact verification for password signup."
+    },
+    "auth_login_password_enabled": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "valueType": "BOOLEAN",
+      "description": "Allow password login. Password signup still requires contact verification."
+    },
+    "auth_login_otp_enabled": {
+      "defaultValue": {
+        "value": "true"
+      },
+      "valueType": "BOOLEAN",
+      "description": "Allow passwordless one-time-code login. Does not disable contact verification for password signup."
+    }
+  }
+}

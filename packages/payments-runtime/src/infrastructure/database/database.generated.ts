@@ -228,6 +228,11 @@ export interface LedgerJournals {
   reservation_id: string | null;
 }
 
+export interface RemoteConfigFlags {
+  enabled: boolean;
+  key: string;
+}
+
 export interface ServiceBillAccountValidations {
   account_number: string;
   customer_name: string;
@@ -461,6 +466,7 @@ export interface DB {
   ledger_balances: LedgerBalances;
   ledger_entries: LedgerEntries;
   ledger_journals: LedgerJournals;
+  remote_config_flags: RemoteConfigFlags;
   service_bill_account_validations: ServiceBillAccountValidations;
   service_catalog_products: ServiceCatalogProducts;
   service_education_validations: ServiceEducationValidations;

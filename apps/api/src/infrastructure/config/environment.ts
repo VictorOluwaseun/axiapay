@@ -12,6 +12,31 @@ const environmentSchema = paymentProviderEnvironmentSchema
     DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
     REDIS_CACHE_URL: z.url({ protocol: /^rediss?$/ }),
     REDIS_QUEUE_URL: z.url({ protocol: /^rediss?$/ }),
+    FIREBASE_PROJECT_ID: z
+      .string()
+      .regex(/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/)
+      .or(z.literal('').transform(() => undefined))
+      .optional(),
+    GOOGLE_APPLICATION_CREDENTIALS: z.string().min(1).optional(),
+    GOOGLE_CLOUD_QUOTA_PROJECT: z.string().min(1).optional(),
+    REMOTE_CONFIG_REFRESH_INTERVAL_MS: z.coerce
+      .number()
+      .int()
+      .min(1000)
+      .max(3600000)
+      .default(60000),
+    REMOTE_CONFIG_FETCH_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .min(100)
+      .max(60000)
+      .default(10000),
+    REMOTE_CONFIG_MAX_AGE_MS: z.coerce
+      .number()
+      .int()
+      .min(1000)
+      .max(3600000)
+      .default(300000),
     AUTH_CODE_SECRET: z.string().regex(/^[a-fA-F0-9]{64}$/),
     AUTH_CODE_DELIVERY: z.literal('mailpit').default('mailpit'),
     AUTH_MAILPIT_URL: z.url().default('http://127.0.0.1:58025'),
@@ -32,6 +57,24 @@ const environmentSchema = paymentProviderEnvironmentSchema
     OPAY_WEBHOOK_URL: z.url({ protocol: /^https$/ }).optional(),
   })
   .superRefine((settings, context) => {
+    if (
+      settings.REMOTE_CONFIG_MAX_AGE_MS <
+      settings.REMOTE_CONFIG_REFRESH_INTERVAL_MS +
+        settings.REMOTE_CONFIG_FETCH_TIMEOUT_MS
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['REMOTE_CONFIG_MAX_AGE_MS'],
+        message: 'Must allow a complete refresh before the snapshot expires.',
+      });
+    }
+    if (settings.NODE_ENV === 'production' && !settings.FIREBASE_PROJECT_ID) {
+      context.addIssue({
+        code: 'custom',
+        path: ['FIREBASE_PROJECT_ID'],
+        message: 'Required for production authentication configuration.',
+      });
+    }
     const paystackFields = [
       'PAYSTACK_SECRET_KEY',
       'PAYSTACK_LEDGER_ACCOUNT_ID',

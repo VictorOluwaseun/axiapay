@@ -1,3 +1,5 @@
+import { TestRemoteConfigRepository } from '../support/remote-config.js';
+import { REMOTE_CONFIG_REPOSITORY } from '../../src/modules/remote-config/remote-config.tokens.js';
 import { WalletSummaryInvalidationConnection } from '../../src/infrastructure/database/wallet-summary-invalidation.connection.js';
 import { SessionCacheInvalidationConnection } from '../../src/infrastructure/database/session-cache-invalidation.connection.js';
 /** Exercise session authorization and the public wallet contract against the migrated, restricted PostgreSQL ledger. */
@@ -56,6 +58,8 @@ beforeAll(async () => {
     database.administrator,
   );
   const module = await Test.createTestingModule({ imports: [ApiModule] })
+    .overrideProvider(REMOTE_CONFIG_REPOSITORY)
+    .useValue(new TestRemoteConfigRepository())
     .overrideProvider(DatabaseConnection)
     .useValue({ database: database.database })
     .overrideProvider(SessionCacheInvalidationConnection)

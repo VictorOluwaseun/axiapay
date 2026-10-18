@@ -1,5 +1,7 @@
 # Database migrations
 
+`202610170016-remote-config.js` records the historical PostgreSQL remote-config table. Current remote configuration comes from [Firebase through the API](../src/modules/remote-config/README.md); no API configuration query, SQL fallback or new read grant uses this table. Retain this already-applied migration and generated schema history. Existing rows remain untouched for cutover recovery; database table cleanup is a separate follow-up after Firebase rollout.
+
 Authentication is introduced by `202610130000-authentication.js`: verified contacts, challenges, sessions, and rate-limit counters. Its tables are separate from wallet and ledger records.
 
 `202610160013-authentication-session-cache.js` introduced a transactional revision for Redis identity caching. Its successor, `202610160014-auth-session-cache-invalidation.js`, retains the database namespace and replaces read-time revision checks with a targeted invalidation outbox. Triggers enqueue changes atomically; repositories deliver after commit and recover failures without querying PostgreSQL on cache hits. Grant the authentication runtime role `SELECT, DELETE ON public.auth_session_cache_invalidations`. Existing accounts and sessions are preserved. Drain older API replicas before applying 0014, which removes their revision accessor, and deploy this version after migration. Regenerate schema types; namespace writes remain owner-only. See [session caching, consistency limits and restore precautions](../src/modules/authentication/session-cache.md).

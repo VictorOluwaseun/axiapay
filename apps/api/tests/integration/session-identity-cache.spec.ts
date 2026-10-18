@@ -1,3 +1,5 @@
+import { TestRemoteConfigRepository } from '../support/remote-config.js';
+import { REMOTE_CONFIG_REPOSITORY } from '../../src/modules/remote-config/remote-config.tokens.js';
 import { WALLET_SUMMARY } from '../../src/modules/wallets/wallet-summary.tokens.js';
 import { PostgresWalletSummaryInvalidationRepository } from '../../src/modules/wallets/repositories/postgres-wallet-summary-invalidation.repository.js';
 import { WalletSummaryInvalidationConnection } from '../../src/infrastructure/database/wallet-summary-invalidation.connection.js';
@@ -70,6 +72,8 @@ async function startReplica(businessDatabase: typeof database.database) {
   const module = await Test.createTestingModule({
     imports: [RequestValidationModule, AuthenticationModule, WalletHttpModule],
   })
+    .overrideProvider(REMOTE_CONFIG_REPOSITORY)
+    .useValue(new TestRemoteConfigRepository())
     .overrideProvider(DatabaseConnection)
     .useValue({ database: businessDatabase })
     .overrideProvider(SessionCacheInvalidationConnection)

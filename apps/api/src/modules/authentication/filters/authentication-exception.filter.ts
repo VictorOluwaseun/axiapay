@@ -17,6 +17,7 @@ export class AuthenticationExceptionFilter extends HttpExceptionFilter {
     }
     const statuses = {
       INVALID_INPUT: 400,
+      AUTHENTICATION_METHOD_DISABLED: 403,
       RECENT_AUTHENTICATION_REQUIRED: 403,
       DEVICE_LIMIT_REACHED: 409,
       DEVICE_ALREADY_REGISTERED: 409,

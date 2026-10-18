@@ -26,18 +26,23 @@ import {
 import { sql, type Kysely } from 'kysely';
 import { Migrator } from 'kysely/migration';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import { createDatabase } from '@axiapay/payments-runtime/infrastructure/database/create-database';
+import {
+  createDatabase,
+  type DatabaseSchema,
+} from '@axiapay/payments-runtime/infrastructure/database/create-database';
 import { DatabaseConnection } from '@axiapay/payments-runtime/infrastructure/database/database.module';
 import { RequestValidationModule } from '../../src/bootstrap/request-validation.module.js';
 import { AuthenticationModule } from '../../src/modules/authentication/authentication.module.js';
 import { AUTHENTICATION } from '../../src/modules/authentication/authentication.tokens.js';
 import type { AuthenticationCodeDelivery } from '../../src/modules/authentication/ports/authentication.ports.js';
-import type { AuthenticationDatabase } from '../../src/modules/authentication/repositories/authentication-database.js';
 import type { AuthenticationResult } from '../../src/modules/authentication/services/authentication-session.js';
 import type { Contact } from '../../src/modules/authentication/domain/authentication-models.js';
 import { AuthenticationRepositoryImpl } from '../../src/modules/authentication/repositories/authentication.repository.impl.js';
 import { PostgresDeviceAuthenticationRepository } from '../../src/modules/authentication/repositories/postgres-device-authentication.repository.js';
 import { DeviceAuthenticationService } from '../../src/modules/authentication/services/device-authentication.service.js';
+import { TestRemoteConfigRepository } from '../support/remote-config.js';
+import { REMOTE_CONFIG_REPOSITORY } from '../../src/modules/remote-config/remote-config.tokens.js';
+import { remoteConfigFlagKeys } from '../../src/modules/remote-config/domain/remote-config.js';
 
 /** Client-visible challenge fields needed for signing, independent of database or server implementation details. */
 interface Challenge {
@@ -47,10 +52,11 @@ interface Challenge {
   expiresAt: string;
 }
 let container: StartedPostgreSqlContainer;
-let database: Kysely<AuthenticationDatabase>;
+let database: Kysely<DatabaseSchema>;
 let application: NestFastifyApplication;
 let currentTime = new Date('2030-01-01T00:00:00Z');
 const codes = new Map<string, string>();
+const remoteConfig = new TestRemoteConfigRepository();
 const password = 'a longer private passphrase';
 const email: Contact = { kind: 'email', value: 'alice@example.com' };
 const delivery: AuthenticationCodeDelivery = {
@@ -62,9 +68,7 @@ const delivery: AuthenticationCodeDelivery = {
 
 beforeAll(async () => {
   container = await new PostgreSqlContainer('postgres:18-alpine').start();
-  database = createDatabase(
-    container.getConnectionUri(),
-  ).withTables<AuthenticationDatabase>();
+  database = createDatabase(container.getConnectionUri());
   const migrator = new Migrator({
     db: database,
     provider: {
@@ -118,6 +122,8 @@ beforeAll(async () => {
   const module = await Test.createTestingModule({
     imports: [RequestValidationModule, AuthenticationModule],
   })
+    .overrideProvider(REMOTE_CONFIG_REPOSITORY)
+    .useValue(remoteConfig)
     .overrideProvider(DatabaseConnection)
     .useValue({ database })
     .overrideProvider(SessionCacheInvalidationConnection)
@@ -143,6 +149,7 @@ beforeEach(async () => {
   await sql`truncate auth_accounts, auth_challenges, auth_rate_limits cascade`.execute(
     database,
   );
+  remoteConfig.reset();
   currentTime = new Date('2030-01-01T00:00:00Z');
   codes.clear();
 });
@@ -248,6 +255,22 @@ function revoke(token: string, credentialId: string) {
 }
 
 describe('device authentication', () => {
+  it('preserves device login and existing sessions when contact signup/login methods are disabled', async () => {
+    const session = await signup();
+    const device = await enroll(session.accessToken);
+    for (const key of Object.values(remoteConfigFlagKeys)) {
+      remoteConfig.setFlag(key, false);
+    }
+    const challenge = await loginChallenge(device.credentialId);
+    const result = await post(
+      'login/device/verify',
+      proof(challenge, device.keys),
+    );
+    expect(result.statusCode).toBe(200);
+    expect((await me(result.json().accessToken)).statusCode).toBe(200);
+    expect((await me(session.accessToken)).statusCode).toBe(200);
+  });
+
   it.each([
     [email, false],
     [email, true],

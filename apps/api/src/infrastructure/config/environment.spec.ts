@@ -9,6 +9,65 @@ const settings = {
   REDIS_QUEUE_URL: 'redis://localhost:56380',
 };
 describe('API configuration', () => {
+  it('validates Firebase project IDs and bounded configuration retention without requiring setup for local liveness', () => {
+    expect(
+      validateEnvironment({ ...settings, FIREBASE_PROJECT_ID: '' })
+        .FIREBASE_PROJECT_ID,
+    ).toBeUndefined();
+    expect(
+      validateEnvironment({
+        ...settings,
+        GOOGLE_APPLICATION_CREDENTIALS: '/tmp/axiapay-test-credentials.json',
+        GOOGLE_CLOUD_QUOTA_PROJECT: 'axiapay-development',
+      }),
+    ).toMatchObject({
+      GOOGLE_APPLICATION_CREDENTIALS: '/tmp/axiapay-test-credentials.json',
+      GOOGLE_CLOUD_QUOTA_PROJECT: 'axiapay-development',
+    });
+    expect(validateEnvironment(settings)).toMatchObject({
+      REMOTE_CONFIG_REFRESH_INTERVAL_MS: 60000,
+      REMOTE_CONFIG_FETCH_TIMEOUT_MS: 10000,
+      REMOTE_CONFIG_MAX_AGE_MS: 300000,
+    });
+    expect(
+      validateEnvironment({
+        ...settings,
+        FIREBASE_PROJECT_ID: 'axiapay-development',
+        REMOTE_CONFIG_REFRESH_INTERVAL_MS: '2000',
+        REMOTE_CONFIG_FETCH_TIMEOUT_MS: '1000',
+        REMOTE_CONFIG_MAX_AGE_MS: '3000',
+      }),
+    ).toMatchObject({
+      FIREBASE_PROJECT_ID: 'axiapay-development',
+      REMOTE_CONFIG_REFRESH_INTERVAL_MS: 2000,
+      REMOTE_CONFIG_FETCH_TIMEOUT_MS: 1000,
+      REMOTE_CONFIG_MAX_AGE_MS: 3000,
+    });
+    expect(() =>
+      validateEnvironment({
+        ...settings,
+        FIREBASE_PROJECT_ID: '../untrusted/project',
+      }),
+    ).toThrow('FIREBASE_PROJECT_ID');
+    expect(() =>
+      validateEnvironment({
+        ...settings,
+        REMOTE_CONFIG_REFRESH_INTERVAL_MS: '0',
+      }),
+    ).toThrow('REMOTE_CONFIG_REFRESH_INTERVAL_MS');
+    expect(() =>
+      validateEnvironment({
+        ...settings,
+        REMOTE_CONFIG_FETCH_TIMEOUT_MS: 'Infinity',
+      }),
+    ).toThrow('REMOTE_CONFIG_FETCH_TIMEOUT_MS');
+    expect(() =>
+      validateEnvironment({ ...settings, REMOTE_CONFIG_MAX_AGE_MS: '60000' }),
+    ).toThrow('REMOTE_CONFIG_MAX_AGE_MS');
+    expect(() =>
+      validateEnvironment({ ...settings, NODE_ENV: 'production' }),
+    ).toThrow('FIREBASE_PROJECT_ID');
+  });
   it('requires complete VTpass credentials, separate fee routing and an explicit live environment in production', () => {
     const vtpass = {
       ...settings,

@@ -46,6 +46,11 @@ import {
   description: 'Invalid credentials, code, or session.',
 })
 @ApiResponse({
+  status: 403,
+  description:
+    'The selected contact or credential method is disabled for signup or login.',
+})
+@ApiResponse({
   status: 429,
   description: 'Attempt budget exhausted; observe Retry-After.',
 })

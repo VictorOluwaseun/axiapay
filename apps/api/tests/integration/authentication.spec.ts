@@ -37,6 +37,12 @@ import { AuthenticationRepositoryImpl } from '../../src/modules/authentication/r
 import type { AuthenticationCodeDelivery } from '../../src/modules/authentication/ports/authentication.ports.js';
 import type { AuthenticationResult } from '../../src/modules/authentication/services/authentication-session.js';
 import type { Contact } from '../../src/modules/authentication/domain/authentication-models.js';
+import { TestRemoteConfigRepository } from '../support/remote-config.js';
+import { REMOTE_CONFIG_REPOSITORY } from '../../src/modules/remote-config/remote-config.tokens.js';
+import {
+  remoteConfigFlagKeys,
+  type RemoteConfigFlagKey,
+} from '../../src/modules/remote-config/domain/remote-config.js';
 
 /** Capture test-only deliveries through the real code-delivery port, without exposing codes in the HTTP contract. */
 class CapturedCodeDelivery implements AuthenticationCodeDelivery {
@@ -73,6 +79,7 @@ const clock = {
     new Date(currentTime),
 };
 const delivery = new CapturedCodeDelivery();
+const remoteConfig = new TestRemoteConfigRepository();
 const email: Contact = { kind: 'email', value: 'alice@example.com' };
 const phone: Contact = { kind: 'phone', value: '+2348012345678' };
 const password = 'a longer private passphrase';
@@ -130,6 +137,8 @@ beforeAll(async () => {
   const module = await Test.createTestingModule({
     imports: [RequestValidationModule, AuthenticationModule],
   })
+    .overrideProvider(REMOTE_CONFIG_REPOSITORY)
+    .useValue(remoteConfig)
     .overrideProvider(DatabaseConnection)
     .useValue({ database })
     .overrideProvider(SessionCacheInvalidationConnection)
@@ -152,6 +161,7 @@ beforeEach(async () => {
   await sql`truncate auth_sessions, auth_accounts, auth_challenges, auth_rate_limits cascade`.execute(
     database,
   );
+  remoteConfig.reset();
   // Keep immutable ledger history; compare provisioning against this test's starting snapshot.
   initialWalletCount = (
     await database.selectFrom('wallets').select('id').execute()
@@ -210,6 +220,386 @@ function me(token: string) {
     headers: { authorization: `Bearer ${token}` },
   });
 }
+
+/** Publish one test policy change without restarting the application or touching authentication storage. */
+async function setFlag(
+  key: RemoteConfigFlagKey,
+  enabled: boolean,
+): Promise<void> {
+  remoteConfig.setFlag(key, enabled);
+}
+
+describe('remote authentication configuration', () => {
+  it('publishes a versioned policy without authentication', async () => {
+    const response = await application.inject({
+      method: 'GET',
+      url: '/v1/config',
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['cache-control']).toBe(
+      'private, no-cache, must-revalidate',
+    );
+    expect(response.headers.etag).toBe(`"${response.json().version}"`);
+    expect(response.json()).toEqual({
+      version: expect.stringMatching(/^rc1-[a-f0-9]{64}$/),
+      features: {
+        airtime: { enabled: true },
+        data: { enabled: true },
+        electricity: { enabled: true },
+        tv: { enabled: true },
+        education: { enabled: true },
+        insurance: { enabled: true },
+        bankTransfer: { enabled: true },
+        merchant: { enabled: true },
+        airtimeConversion: { enabled: true },
+      },
+      authentication: {
+        signup: {
+          emailEnabled: true,
+          phoneEnabled: true,
+          passwordEnabled: true,
+          otpEnabled: true,
+        },
+        login: {
+          emailEnabled: true,
+          phoneEnabled: true,
+          passwordEnabled: true,
+          otpEnabled: true,
+        },
+      },
+    });
+  });
+
+  it.each([
+    {
+      operation: 'signup',
+      contact: email,
+      otherContact: phone,
+      key: remoteConfigFlagKeys.signupEmail,
+    },
+    {
+      operation: 'signup',
+      contact: phone,
+      otherContact: email,
+      key: remoteConfigFlagKeys.signupPhone,
+    },
+    {
+      operation: 'login',
+      contact: email,
+      otherContact: phone,
+      key: remoteConfigFlagKeys.loginEmail,
+    },
+    {
+      operation: 'login',
+      contact: phone,
+      otherContact: email,
+      key: remoteConfigFlagKeys.loginPhone,
+    },
+  ] as const)(
+    'applies $key independently before issuing a code or hashing a password',
+    async ({ operation, contact, otherContact, key }) => {
+      await setFlag(key, false);
+      const hash = vi.spyOn(ArgonPasswordHasher.prototype, 'hash');
+      const route = operation === 'signup' ? 'signup' : 'login/code';
+      const rejected = await post(route, {
+        contact,
+        ...(operation === 'signup' ? { password } : {}),
+      });
+      expect(rejected.statusCode).toBe(403);
+      expect(rejected.json().code).toBe('AUTHENTICATION_METHOD_DISABLED');
+      expect(delivery.messages).toHaveLength(0);
+      expect(hash).not.toHaveBeenCalled();
+      expect(
+        await database.selectFrom('auth_challenges').selectAll().execute(),
+      ).toHaveLength(0);
+      expect(
+        await database.selectFrom('auth_rate_limits').selectAll().execute(),
+      ).toHaveLength(0);
+
+      const configuration = await application.inject({
+        method: 'GET',
+        url: '/v1/config',
+      });
+      const property =
+        contact.kind === 'email' ? 'emailEnabled' : 'phoneEnabled';
+      expect(configuration.json().authentication[operation][property]).toBe(
+        false,
+      );
+      expect((await post(route, { contact: otherContact })).statusCode).toBe(
+        202,
+      );
+      const otherRoute = operation === 'signup' ? 'login/code' : 'signup';
+      expect((await post(otherRoute, { contact })).statusCode).toBe(202);
+    },
+  );
+
+  it.each([
+    {
+      operation: 'signup',
+      credential: 'password',
+      key: remoteConfigFlagKeys.signupPassword,
+    },
+    {
+      operation: 'signup',
+      credential: 'otp',
+      key: remoteConfigFlagKeys.signupOtp,
+    },
+    {
+      operation: 'login',
+      credential: 'password',
+      key: remoteConfigFlagKeys.loginPassword,
+    },
+    {
+      operation: 'login',
+      credential: 'otp',
+      key: remoteConfigFlagKeys.loginOtp,
+    },
+  ] as const)(
+    'rejects disabled $operation $credential before hashing, delivery or account lookup',
+    async ({ operation, credential, key }) => {
+      await setFlag(key, false);
+      const hash = vi.spyOn(ArgonPasswordHasher.prototype, 'hash');
+      const verify = vi.spyOn(ArgonPasswordHasher.prototype, 'verify');
+      const route =
+        operation === 'signup'
+          ? 'signup'
+          : credential === 'password'
+            ? 'login/password'
+            : 'login/code';
+      for (const contact of [email, phone]) {
+        const rejected = await post(route, {
+          contact,
+          ...(credential === 'password' ? { password } : {}),
+        });
+        expect(rejected.statusCode).toBe(403);
+        expect(rejected.json().code).toBe('AUTHENTICATION_METHOD_DISABLED');
+      }
+      expect(hash).not.toHaveBeenCalled();
+      expect(verify).not.toHaveBeenCalled();
+      expect(delivery.messages).toHaveLength(0);
+      expect(
+        await database.selectFrom('auth_challenges').selectAll().execute(),
+      ).toHaveLength(0);
+      expect(
+        await database.selectFrom('auth_rate_limits').selectAll().execute(),
+      ).toHaveLength(0);
+    },
+  );
+
+  it.each([email, phone])(
+    'keeps mandatory contact proof for password $kind signup when passwordless OTP signup is disabled',
+    async (contact) => {
+      await setFlag(remoteConfigFlagKeys.signupOtp, false);
+      const session = await signup(contact, password);
+      expect(session.account.contact).toEqual(contact);
+      expect(delivery.messages).toHaveLength(1);
+      expect(
+        await database
+          .selectFrom('wallets')
+          .where('owner_id', '=', session.account.id)
+          .select('id')
+          .execute(),
+      ).toHaveLength(1);
+      expect(
+        (await post('login/password', { contact, password })).statusCode,
+      ).toBe(200);
+    },
+  );
+
+  it.each([
+    {
+      operation: 'signup',
+      credential: 'password',
+      key: remoteConfigFlagKeys.signupPassword,
+    },
+    {
+      operation: 'signup',
+      credential: 'otp',
+      key: remoteConfigFlagKeys.signupOtp,
+    },
+    {
+      operation: 'login',
+      credential: 'otp',
+      key: remoteConfigFlagKeys.loginOtp,
+    },
+  ] as const)(
+    'rechecks issued $operation $credential proof and retains it when the method becomes disabled',
+    async ({ operation, credential, key }) => {
+      if (operation === 'login') {
+        await signup(email, password);
+        advance(60);
+      }
+      const requested = await post(
+        operation === 'signup' ? 'signup' : 'login/code',
+        {
+          contact: email,
+          ...(credential === 'password' ? { password } : {}),
+        },
+      );
+      expect(requested.statusCode).toBe(202);
+      const challengeId = requested.json().challengeId as string;
+      const verification = { challengeId, code: delivery.codeFor(challengeId) };
+      await setFlag(key, false);
+      const before = await database
+        .selectFrom('auth_sessions')
+        .select('id')
+        .execute();
+      const route =
+        operation === 'signup' ? 'signup/verify' : 'login/code/verify';
+      const rejected = await post(route, verification);
+      expect(rejected.statusCode).toBe(403);
+      expect(rejected.json().code).toBe('AUTHENTICATION_METHOD_DISABLED');
+      expect(
+        await database
+          .selectFrom('auth_challenges')
+          .where('id', '=', challengeId)
+          .select('status')
+          .executeTakeFirstOrThrow(),
+      ).toEqual({ status: 'ready' });
+      expect(
+        await database.selectFrom('auth_sessions').select('id').execute(),
+      ).toEqual(before);
+      expect(
+        await database.selectFrom('wallets').select('id').execute(),
+      ).toHaveLength(initialWalletCount + (operation === 'login' ? 1 : 0));
+      await setFlag(key, true);
+      expect((await post(route, verification)).statusCode).toBe(
+        operation === 'signup' ? 201 : 200,
+      );
+    },
+  );
+
+  it.each([email, phone])(
+    'rechecks disabled $kind signup when redeeming an issued code and preserves its proof',
+    async (contact) => {
+      const requested = await post('signup', { contact });
+      const challengeId = requested.json().challengeId as string;
+      const verification = { challengeId, code: delivery.codeFor(challengeId) };
+      const key =
+        contact.kind === 'email'
+          ? remoteConfigFlagKeys.signupEmail
+          : remoteConfigFlagKeys.signupPhone;
+      await setFlag(key, false);
+      const rejected = await post('signup/verify', verification);
+      expect(rejected.statusCode).toBe(403);
+      expect(rejected.json().code).toBe('AUTHENTICATION_METHOD_DISABLED');
+      expect(
+        await database.selectFrom('auth_accounts').selectAll().execute(),
+      ).toHaveLength(0);
+      expect(
+        await database.selectFrom('auth_sessions').selectAll().execute(),
+      ).toHaveLength(0);
+      expect(
+        await database.selectFrom('wallets').selectAll().execute(),
+      ).toHaveLength(initialWalletCount);
+      expect(
+        await database
+          .selectFrom('auth_challenges')
+          .select('status')
+          .where('id', '=', challengeId)
+          .executeTakeFirstOrThrow(),
+      ).toEqual({ status: 'ready' });
+      await setFlag(key, true);
+      expect((await post('signup/verify', verification)).statusCode).toBe(201);
+    },
+  );
+
+  it.each([email, phone])(
+    'disables $kind password and code login while preserving other methods and existing sessions',
+    async (contact) => {
+      const session = await signup(contact, password);
+      advance(60);
+      const requested = await post('login/code', { contact });
+      const challengeId = requested.json().challengeId as string;
+      const verification = { challengeId, code: delivery.codeFor(challengeId) };
+      const key =
+        contact.kind === 'email'
+          ? remoteConfigFlagKeys.loginEmail
+          : remoteConfigFlagKeys.loginPhone;
+      await setFlag(key, false);
+      const verifyPassword = vi.spyOn(ArgonPasswordHasher.prototype, 'verify');
+      for (const [route, payload] of [
+        ['login/password', { contact, password }],
+        ['login/code', { contact }],
+        ['login/code/verify', verification],
+      ] as const) {
+        const rejected = await post(route, payload);
+        expect(rejected.statusCode).toBe(403);
+        expect(rejected.json().code).toBe('AUTHENTICATION_METHOD_DISABLED');
+      }
+      expect(verifyPassword).not.toHaveBeenCalled();
+      expect((await me(session.accessToken)).statusCode).toBe(200);
+      expect(
+        await database.selectFrom('auth_sessions').select('id').execute(),
+      ).toHaveLength(1);
+      await setFlag(key, true);
+      expect((await post('login/code/verify', verification)).statusCode).toBe(
+        200,
+      );
+      expect(
+        (await post('login/password', { contact, password })).statusCode,
+      ).toBe(200);
+    },
+  );
+
+  it.each([email, phone])(
+    'keeps $kind recovery available with all signup and login methods disabled',
+    async (contact) => {
+      await signup(contact, password);
+      advance(60);
+      for (const key of Object.values(remoteConfigFlagKeys)) {
+        await setFlag(key, false);
+      }
+      const requested = await post('password/forgot', { contact });
+      expect(requested.statusCode).toBe(202);
+      const challengeId = requested.json().challengeId as string;
+      const response = await post('password/reset', {
+        challengeId,
+        code: delivery.codeFor(challengeId),
+        newPassword: 'a different long private passphrase',
+      });
+      expect(response.statusCode).toBe(204);
+      expect(
+        (await post('login/password', { contact, password })).statusCode,
+      ).toBe(403);
+    },
+  );
+
+  it('fails safely when no current config exists without consuming an issued code or leaking provider errors', async () => {
+    const requested = await post('signup', { contact: email });
+    const challengeId = requested.json().challengeId as string;
+    vi.spyOn(remoteConfig, 'getFlags').mockRejectedValue(
+      new Error('private Firebase credential details'),
+    );
+    for (const response of [
+      await application.inject({ method: 'GET', url: '/v1/config' }),
+      await post('signup', { contact: phone }),
+      await post('login/password', { contact: email, password }),
+      await post('login/code', { contact: email }),
+      await post('signup/verify', {
+        challengeId,
+        code: delivery.codeFor(challengeId),
+      }),
+    ]) {
+      expect(response.statusCode).toBe(503);
+      expect(response.headers['cache-control']).toBe('no-store');
+      expect(response.body).not.toContain(
+        'private Firebase credential details',
+      );
+    }
+    expect(
+      await database.selectFrom('auth_accounts').selectAll().execute(),
+    ).toHaveLength(0);
+    expect(
+      await database
+        .selectFrom('auth_challenges')
+        .select('status')
+        .where('id', '=', challengeId)
+        .executeTakeFirstOrThrow(),
+    ).toEqual({ status: 'ready' });
+    expect(delivery.messages).toHaveLength(1);
+  });
+});
 
 describe('authentication HTTP and persistence', () => {
   it.each([

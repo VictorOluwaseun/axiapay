@@ -14,6 +14,7 @@ import {
 import { createApplication } from '../../src/bootstrap/create-application.js';
 import { serializeRequest } from '../../src/infrastructure/observability/logger-options.js';
 import { HealthService } from '../../src/modules/health/services/health.service.js';
+import { RemoteConfigService } from '../../src/modules/remote-config/services/remote-config.service.js';
 
 const deviceId =
   'Samsung-SM-A556E-1792270000000-550e8400-e29b-41d4-a716-446655440000';
@@ -26,13 +27,6 @@ beforeAll(async () => {
   fastify.addHook('onRequest', (request, _reply, done) => {
     rawIdentities.set(request.id, serializeRequest(request.raw).id);
     done();
-  });
-  fastify.get('/request-id-revalidation', (request, reply) => {
-    reply.header('ETag', '"request-id-test"');
-    if (request.headers['if-none-match'] === '"request-id-test"') {
-      return reply.code(304).send();
-    }
-    return { value: 'unchanged' };
   });
   await application.init();
   await application.getHttpAdapter().getInstance().ready();
@@ -154,16 +148,47 @@ describe('request ID HTTP contract', () => {
     expect(responses.map((response) => response.json().requestId)).toEqual(ids);
   });
 
-  it('echoes the reference on 200 and 304 without confusing a request ID with an ETag', async () => {
+  it('echoes the reference on 200 and 304 without confusing a request ID with a config ETag', async () => {
+    vi.spyOn(
+      application.get(RemoteConfigService),
+      'getConfiguration',
+    ).mockResolvedValue({
+      version: 'rc1-test',
+      features: {
+        airtime: { enabled: true },
+        data: { enabled: true },
+        electricity: { enabled: true },
+        tv: { enabled: true },
+        education: { enabled: true },
+        insurance: { enabled: true },
+        bankTransfer: { enabled: true },
+        merchant: { enabled: true },
+        airtimeConversion: { enabled: true },
+      },
+      authentication: {
+        signup: {
+          emailEnabled: true,
+          phoneEnabled: true,
+          passwordEnabled: true,
+          otpEnabled: true,
+        },
+        login: {
+          emailEnabled: true,
+          phoneEnabled: true,
+          passwordEnabled: true,
+          otpEnabled: true,
+        },
+      },
+    });
     const initial = await application.inject({
       method: 'GET',
-      url: '/request-id-revalidation',
+      url: '/v1/config',
       headers: { 'x-request-id': deviceId },
     });
     const nextId = `Samsung-SM-123-${randomUUID()}`;
     const repeated = await application.inject({
       method: 'GET',
-      url: '/request-id-revalidation',
+      url: '/v1/config',
       headers: {
         'x-request-id': nextId,
         'if-none-match': initial.headers.etag as string,

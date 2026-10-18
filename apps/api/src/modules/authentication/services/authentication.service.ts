@@ -14,6 +14,8 @@ import type {
 import type { AuthenticationRepository } from '../repositories/contracts/authentication.repository.js';
 import { AuthenticationCodeService } from './authentication-code.service.js';
 import { AuthenticationRateLimiter } from './authentication-rate-limiter.service.js';
+import { RemoteConfigService } from '../../remote-config/services/remote-config.service.js';
+import { assertAuthenticationMethodEnabled } from '../domain/authentication-method-policy.js';
 import {
   issueSession,
   type AuthenticationResult,
@@ -46,6 +48,8 @@ export class AuthenticationService {
     @Inject(AUTHENTICATION.clock) private readonly clock: AuthenticationClock,
     @Inject(AuthenticationCodeService)
     private readonly codes: AuthenticationCodeService,
+    @Inject(RemoteConfigService)
+    private readonly configuration: RemoteConfigService,
   ) {}
   /** Request mandatory contact proof before activation, with an optional password for future login. */
   signup(input: CodeRequest) {
@@ -80,6 +84,13 @@ export class AuthenticationService {
     clientIp: string;
   }): Promise<AuthenticationResult> {
     const { contact } = input;
+    const configuration = await this.configuration.getConfiguration();
+    assertAuthenticationMethodEnabled(
+      configuration.authentication,
+      'login',
+      contact.kind,
+      'password',
+    );
     await this.limiter.passwordLogin(contact, input.clientIp);
     const account = await this.repository.findAccount(contact);
     const valid = await this.passwords.verify(

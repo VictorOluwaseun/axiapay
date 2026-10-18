@@ -25,6 +25,8 @@ import type { AuthenticationRepository } from '../repositories/contracts/authent
 import type { CodeRedemptionRepository } from '../repositories/contracts/code-redemption.repository.js';
 import type { WalletRepository } from '@axiapay/payments-runtime/modules/wallets/repositories/contracts/wallet.repository';
 import { AuthenticationRateLimiter } from './authentication-rate-limiter.service.js';
+import { RemoteConfigService } from '../../remote-config/services/remote-config.service.js';
+import { assertAuthenticationMethodEnabled } from '../domain/authentication-method-policy.js';
 import {
   issueSession,
   type AuthenticationResult,
@@ -56,6 +58,8 @@ export class AuthenticationCodeService {
     @Inject(AuthenticationRateLimiter)
     private readonly limiter: AuthenticationAttemptLimiter,
     @Inject(AUTHENTICATION.clock) private readonly clock: AuthenticationClock,
+    @Inject(RemoteConfigService)
+    private readonly configuration: RemoteConfigService,
   ) {}
   /** Persist before delivery; all contacts follow the same path, but unknown/disabled identities gain no login or reset authority. */
   async request(input: {
@@ -65,6 +69,17 @@ export class AuthenticationCodeService {
     clientIp: string;
   }) {
     const { contact } = input;
+    if (input.purpose !== 'password-reset') {
+      const configuration = await this.configuration.getConfiguration();
+      assertAuthenticationMethodEnabled(
+        configuration.authentication,
+        input.purpose,
+        contact.kind,
+        input.purpose === 'signup' && input.password !== undefined
+          ? 'password'
+          : 'otp',
+      );
+    }
     await this.limiter.codeRequest(contact, input.clientIp);
     const passwordHash =
       input.password === undefined
@@ -177,6 +192,11 @@ export class AuthenticationCodeService {
     ) => Promise<Result | null>,
   ): Promise<Result> {
     await this.limiter.codeVerification(input.clientIp);
+    // Capture one valid policy before redemption; neither client settings nor an older issued code can bypass it.
+    const configuration =
+      input.purpose === 'password-reset'
+        ? null
+        : (await this.configuration.getConfiguration()).authentication;
     const result = await this.redemption.transaction(
       async (repository, wallets) => {
         const challenge = await repository.lockChallenge(input.challengeId);
@@ -194,6 +214,17 @@ export class AuthenticationCodeService {
         ) {
           await repository.recordWrongCode(challenge.id);
           return null;
+        }
+        // Recheck the flow recorded in trusted challenge state. Password signup always needs contact proof, independent of passwordless OTP availability.
+        if (configuration && input.purpose !== 'password-reset') {
+          assertAuthenticationMethodEnabled(
+            configuration,
+            input.purpose,
+            challenge.contact.kind,
+            input.purpose === 'signup' && challenge.passwordHash !== null
+              ? 'password'
+              : 'otp',
+          );
         }
         await repository.changeChallengeStatus(
           challenge.id,

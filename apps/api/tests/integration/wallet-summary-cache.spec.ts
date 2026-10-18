@@ -1,3 +1,5 @@
+import { TestRemoteConfigRepository } from '../support/remote-config.js';
+import { REMOTE_CONFIG_REPOSITORY } from '../../src/modules/remote-config/remote-config.tokens.js';
 /** Exercise owner-scoped display caching, committed invalidation and recovery through independent API/cache/database instances. */
 import { randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
@@ -79,6 +81,8 @@ async function startReplica() {
   const module = await Test.createTestingModule({
     imports: [RequestValidationModule, WalletHttpModule],
   })
+    .overrideProvider(REMOTE_CONFIG_REPOSITORY)
+    .useValue(new TestRemoteConfigRepository())
     .overrideProvider(DatabaseConnection)
     .useValue({ database: business })
     .overrideProvider(RedisCacheConnection)
