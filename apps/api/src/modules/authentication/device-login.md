@@ -55,10 +55,10 @@ On Android, generate the key in Android Keystore, require strong biometric autho
 
 ## Session and recovery behavior
 
-Successful device login returns the existing `{ accessToken, tokenType: "Bearer", expiresInSeconds: 86400, account }` response. Only the token digest is stored. The session records its credential ID and does not receive a primary-authentication timestamp. Existing bearer guards and account-disable checks continue to apply.
+Successful device login returns the existing `{ accessToken, refreshToken, sessionId, tokenType: "Bearer", expiresInSeconds: 900, refreshExpiresInSeconds, account }` response. Only the token digest is stored. The session records its credential ID and does not receive a primary-authentication timestamp. Existing bearer guards and account-disable checks continue to apply.
 
 - **Logout:** revokes the presented session. The registered key stays available for another explicit device login.
-- **Session expiry:** a fresh signed challenge can obtain another 24-hour session while the account and key remain active. No refresh token is introduced.
+- **Session expiry:** the rotating refresh proof can obtain new 15-minute access until the family's fixed 30-day deadline while the account and key remain active. It never renews primary-authentication freshness. After that deadline, a fresh signed challenge can obtain a new session family.
 - **Remove a device:** permanently revokes that credential, consumes its outstanding challenges, and revokes all sessions created through that key in one transaction. A concurrent login either completes before revocation and is revoked, or sees the revoked key and fails.
 - **Revocation scope:** credentials identify registered keys, not every session on a physical phone. Password/code sessions are not automatically associated with a device key and are not revoked by this endpoint. Account-wide revocation on password reset is described below.
 - **New phone, reinstall, or invalidated key:** normal phone/email sign-in followed by explicit enrollment with new key material. An existing or revoked public key cannot be registered again, including under another account.
