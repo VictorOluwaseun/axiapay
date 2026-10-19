@@ -103,7 +103,7 @@ beforeAll(async () => {
   database = await startWalletTestDatabase();
   await sql`select grant_service_payments_runtime_access('wallet_runtime');
     select grant_payment_recovery_runtime_access('wallet_runtime');
-    grant select, insert, update, delete on auth_accounts, auth_sessions, auth_challenges, auth_rate_limits to wallet_runtime;`.execute(
+    grant select, insert, update, delete on auth_accounts, auth_sessions, auth_refresh_tokens, auth_challenges, auth_rate_limits to wallet_runtime;`.execute(
     database.administrator,
   );
   const module = await Test.createTestingModule({
@@ -202,7 +202,8 @@ async function fixture(
     insuranceTerms?: InsuranceProductTerms;
   },
 ) {
-  currentTime = new Date(currentTime.getTime() + 3_600_000);
+  // Space shared IP budgets without expiring the previous owner's short-lived access.
+  currentTime = new Date(currentTime.getTime() + 60_000);
   const signup = await application.inject({
     method: 'POST',
     url: '/v1/auth/signup',
@@ -3926,6 +3927,13 @@ describe('VTpass airtime with authoritative wallet settlement', () => {
     );
     context.setOutcome('delivered');
     currentTime = new Date(currentTime.getTime() + 23 * 3_600_000);
+    const renewed = await application.inject({
+      method: 'POST',
+      url: '/v1/auth/refresh',
+      payload: { refreshToken: context.session.refreshToken },
+    });
+    expect(renewed.statusCode).toBe(200);
+    context.headers.authorization = `Bearer ${renewed.json().accessToken}`;
     expect(
       (await context.reconcile(replay.json().id)).json().paymentStatus,
     ).toBe('succeeded');

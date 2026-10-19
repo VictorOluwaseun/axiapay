@@ -11,7 +11,8 @@ export const authenticationPolicy = Object.freeze({
   codeLifetimeSeconds: 300,
   codeAttempts: 5,
   resendAfterSeconds: 60,
-  sessionLifetimeSeconds: 86_400,
+  accessTokenLifetimeSeconds: 900,
+  refreshTokenLifetimeSeconds: 30 * 86_400,
 });
 
 /** Check immutable challenge policy before comparing its secret or applying any account changes. */

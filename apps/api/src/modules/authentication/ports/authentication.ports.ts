@@ -48,6 +48,8 @@ export interface AuthenticationClock {
 
 /** Share contact/IP attempt budgets across authentication workflows without coupling callers to an attempt-policy implementation. */
 export interface AuthenticationAttemptLimiter {
+  /** Bound credential-renewal work by IP and high-entropy proof without retaining the raw token. */
+  sessionRefresh(tokenDigest: string, clientIp: string): Promise<void>;
   /** Bound enrollment attempts by authorized account and network client. */
   deviceEnrollment(accountId: string, clientIp: string): Promise<void>;
   /** Bound challenge storage by IP and opaque credential ID, including unknown credentials. */

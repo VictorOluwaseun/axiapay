@@ -99,6 +99,12 @@ beforeAll(async () => {
               import.meta.url,
             ).href
           ),
+          refreshTokens: await import(
+            new URL(
+              '../../migrations/202610190018-authentication-refresh-tokens.js',
+              import.meta.url,
+            ).href
+          ),
           sessionCache: await import(
             new URL(
               '../../migrations/202610160013-authentication-session-cache.js',
@@ -290,7 +296,7 @@ describe('device authentication', () => {
       expect(result.headers['cache-control']).toBe('no-store');
       expect(result.json()).toMatchObject({
         tokenType: 'Bearer',
-        expiresInSeconds: 86400,
+        expiresInSeconds: 900,
         account: session.account,
       });
       expect((await me(result.json().accessToken)).statusCode).toBe(200);
@@ -1064,5 +1070,39 @@ describe('device access after password recovery', () => {
     expect(loginResult.statusCode).toBe(200);
     expect(resetResult.statusCode).toBe(204);
     expect((await me(loginResult.json().accessToken)).statusCode).toBe(401);
+  });
+});
+
+describe('device-session refresh authority', () => {
+  it('rotates device sessions without renewing primary proof and revokes refresh access when the key is removed', async () => {
+    const primary = await signup();
+    const device = await enroll(primary.accessToken);
+    const challenge = await loginChallenge(device.credentialId);
+    const login = await post(
+      'login/device/verify',
+      proof(challenge, device.keys),
+    );
+    expect(login.statusCode).toBe(200);
+    const session = login.json<AuthenticationResult>();
+    const rotated = await post('refresh', {
+      refreshToken: session.refreshToken,
+    });
+    expect(rotated.statusCode).toBe(200);
+    const stored = await database
+      .selectFrom('auth_sessions')
+      .selectAll()
+      .where('id', '=', session.sessionId)
+      .executeTakeFirstOrThrow();
+    expect(stored.device_credential_id).toBe(device.credentialId);
+    expect(stored.primary_authenticated_at).toBeNull();
+    expect(
+      (await revoke(primary.accessToken, device.credentialId)).statusCode,
+    ).toBe(204);
+    expect(
+      (await post('refresh', { refreshToken: rotated.json().refreshToken }))
+        .statusCode,
+    ).toBe(401);
+    expect((await me(rotated.json().accessToken)).statusCode).toBe(401);
+    expect((await me(primary.accessToken)).statusCode).toBe(200);
   });
 });

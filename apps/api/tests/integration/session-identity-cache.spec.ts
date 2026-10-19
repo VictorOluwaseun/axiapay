@@ -129,7 +129,7 @@ let recoveryConnection: SessionCacheInvalidationConnection;
 
 beforeAll(async () => {
   database = await startWalletTestDatabase();
-  await sql`grant select, insert, update, delete on auth_accounts, auth_sessions, auth_challenges, auth_rate_limits, auth_device_credentials, auth_device_challenges to wallet_runtime`.execute(
+  await sql`grant select, insert, update, delete on auth_accounts, auth_sessions, auth_refresh_tokens, auth_challenges, auth_rate_limits, auth_device_credentials, auth_device_challenges to wallet_runtime`.execute(
     database.administrator,
   );
   await sql`grant select, delete on auth_session_cache_invalidations to wallet_runtime`.execute(
@@ -949,5 +949,52 @@ describe('session identity cache', () => {
     } finally {
       control.disconnect();
     }
+  });
+});
+
+/** Rotation changes the family in SQL while Redis invalidation reaches independent read replicas. */
+describe('refresh rotation across independent API and cache instances', () => {
+  it('invalidates the earlier access token and commits replay revocation across replicas', async () => {
+    const user = await signup();
+    expect((await me(user.accessToken)).statusCode).toBe(200);
+    const rotated = await replica.application.inject({
+      method: 'POST',
+      url: '/v1/auth/refresh',
+      payload: { refreshToken: user.refreshToken },
+    });
+    expect(rotated.statusCode).toBe(200);
+    const next = rotated.json<AuthenticationResult>();
+    expect((await me(user.accessToken)).statusCode).toBe(401);
+    expect((await me(next.accessToken)).statusCode).toBe(200);
+    const replay = await post('refresh', { refreshToken: user.refreshToken });
+    expect(replay.statusCode).toBe(401);
+    const invalid = await replica.application.inject({
+      method: 'GET',
+      url: '/v1/auth/me',
+      headers: { authorization: `Bearer ${next.accessToken}` },
+    });
+    expect(invalid.statusCode).toBe(401);
+    expect(
+      (await post('refresh', { refreshToken: next.refreshToken })).statusCode,
+    ).toBe(401);
+  });
+
+  it('serializes a refresh proof used simultaneously by different API processes', async () => {
+    const user = await signup();
+    const responses = await Promise.all([
+      post('refresh', { refreshToken: user.refreshToken }),
+      replica.application.inject({
+        method: 'POST',
+        url: '/v1/auth/refresh',
+        payload: { refreshToken: user.refreshToken },
+      }),
+    ]);
+    expect(responses.map((response) => response.statusCode).sort()).toEqual([
+      200, 401,
+    ]);
+    const winner = responses
+      .find((response) => response.statusCode === 200)!
+      .json<AuthenticationResult>();
+    expect((await me(winner.accessToken)).statusCode).toBe(401);
   });
 });

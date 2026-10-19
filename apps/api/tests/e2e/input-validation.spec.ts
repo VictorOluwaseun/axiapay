@@ -41,8 +41,11 @@ const id = 'c764f366-e737-4c84-b63b-0df02ad39c76';
 const contact = { kind: 'email', value: 'alice@example.com' };
 const session: AuthenticationResult = {
   accessToken: 'A'.repeat(43),
+  refreshToken: 'B'.repeat(43),
+  sessionId: id,
   tokenType: 'Bearer',
-  expiresInSeconds: 86400,
+  expiresInSeconds: 900,
+  refreshExpiresInSeconds: 2592000,
   account: {
     id,
     contact: { kind: 'email', value: contact.value },
@@ -619,5 +622,47 @@ describe('password recovery input boundary', () => {
         (input) => input.newPassword,
       ),
     ).toBe(newPassword);
+  });
+});
+
+describe('refresh credential input boundary', () => {
+  it.each([
+    {},
+    { refreshToken: null },
+    { refreshToken: 12 },
+    { refreshToken: 'short' },
+    { refreshToken: ' A'.repeat(43) },
+    { refreshToken: 'R'.repeat(43), accountId: id },
+  ])(
+    'rejects malformed or additional refresh input before workflow entry: %j',
+    async (payload) => {
+      const operation = vi
+        .spyOn(application.get(AuthenticationService), 'refreshSession')
+        .mockResolvedValue(session);
+      const response = await application.inject({
+        method: 'POST',
+        url: '/v1/auth/refresh',
+        payload,
+      });
+      expect(response.statusCode).toBe(400);
+      expect(operation).not.toHaveBeenCalled();
+    },
+  );
+
+  it('returns the complete uncached token pair through the validated public route', async () => {
+    const operation = vi
+      .spyOn(application.get(AuthenticationService), 'refreshSession')
+      .mockResolvedValue(session);
+    const response = await application.inject({
+      method: 'POST',
+      url: '/v1/auth/refresh',
+      payload: { refreshToken: 'R'.repeat(43) },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(session);
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(operation).toHaveBeenCalledWith(
+      expect.objectContaining({ refreshToken: 'R'.repeat(43) }),
+    );
   });
 });

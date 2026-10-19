@@ -15,6 +15,11 @@ export class AuthenticationRateLimiter implements AuthenticationAttemptLimiter {
     private readonly secrets: AuthenticationSecrets,
     private readonly clock: AuthenticationClock,
   ) {}
+  /** Bound refresh attempts across replicas without imposing a contact login budget on normal renewal. */
+  async sessionRefresh(tokenDigest: string, clientIp: string): Promise<void> {
+    await this.take('refresh-ip', clientIp, 120, 600);
+    await this.take('refresh-proof', tokenDigest, 30, 600);
+  }
   /** Bound per-IP sending plus contact resend frequency and hourly delivery volume across purposes. */
   async codeRequest(contact: Contact, clientIp: string): Promise<void> {
     await this.take('code-ip', clientIp, 30, 600);

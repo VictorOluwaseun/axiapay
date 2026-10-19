@@ -103,6 +103,12 @@ beforeAll(async () => {
               import.meta.url,
             ).href
           ),
+          refreshTokens: await import(
+            new URL(
+              '../../migrations/202610190018-authentication-refresh-tokens.js',
+              import.meta.url,
+            ).href
+          ),
           sessionCache: await import(
             new URL(
               '../../migrations/202610160013-authentication-session-cache.js',
@@ -1475,4 +1481,210 @@ describe('one-time-code password recovery', () => {
         .execute(),
     ).toHaveLength(0);
   });
+});
+
+/** Validate rotating credentials through real HTTP and transactional PostgreSQL, including committed replay rejection. */
+describe('rotating refresh sessions', () => {
+  it('issues separate short-lived access and one-use refresh credentials without persisting raw secrets', async () => {
+    const session = await signup(email, password);
+    expect(session).toMatchObject({
+      expiresInSeconds: 900,
+      refreshExpiresInSeconds: 2592000,
+      tokenType: 'Bearer',
+    });
+    expect(session.sessionId).toMatch(/^[a-f0-9-]{36}$/);
+    expect(session.refreshToken).not.toBe(session.accessToken);
+    expect((await me(session.refreshToken)).statusCode).toBe(401);
+    expect(
+      (await post('refresh', { refreshToken: session.accessToken })).statusCode,
+    ).toBe(401);
+    const stored = await database
+      .selectFrom('auth_refresh_tokens')
+      .selectAll()
+      .execute();
+    expect(stored).toHaveLength(1);
+    expect(stored[0]?.session_id).toBe(session.sessionId);
+    expect(JSON.stringify(stored)).not.toContain(session.refreshToken);
+    expect(JSON.stringify(stored)).not.toContain(session.accessToken);
+  });
+
+  it('renews after access expiry without changing family identity or primary-authentication freshness', async () => {
+    const session = await signup(email, password);
+    const original = await database
+      .selectFrom('auth_sessions')
+      .selectAll()
+      .where('id', '=', session.sessionId)
+      .executeTakeFirstOrThrow();
+    advance(901);
+    expect((await me(session.accessToken)).statusCode).toBe(401);
+    for (const key of Object.values(remoteConfigFlagKeys)) {
+      remoteConfig.setFlag(key, false);
+    }
+    const response = await post('refresh', {
+      refreshToken: session.refreshToken,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['cache-control']).toBe('no-store');
+    const renewed = response.json<AuthenticationResult>();
+    expect(renewed.sessionId).toBe(session.sessionId);
+    expect(renewed.account).toEqual(session.account);
+    expect(renewed.accessToken).not.toBe(session.accessToken);
+    expect(renewed.refreshToken).not.toBe(session.refreshToken);
+    expect(renewed.refreshExpiresInSeconds).toBe(2592000 - 901);
+    expect((await me(renewed.accessToken)).statusCode).toBe(200);
+    const updated = await database
+      .selectFrom('auth_sessions')
+      .selectAll()
+      .where('id', '=', session.sessionId)
+      .executeTakeFirstOrThrow();
+    expect(updated.primary_authenticated_at).toEqual(
+      original.primary_authenticated_at,
+    );
+    expect(updated.refresh_expires_at).toEqual(original.refresh_expires_at);
+    expect((await me(session.accessToken)).statusCode).toBe(401);
+  });
+
+  it('commits family revocation on replay, invalidating the successor credentials too', async () => {
+    const session = await signup(email);
+    const first = await post('refresh', { refreshToken: session.refreshToken });
+    expect(first.statusCode).toBe(200);
+    const next = first.json<AuthenticationResult>();
+    expect(
+      (await post('refresh', { refreshToken: session.refreshToken }))
+        .statusCode,
+    ).toBe(401);
+    expect((await me(next.accessToken)).statusCode).toBe(401);
+    expect(
+      (await post('refresh', { refreshToken: next.refreshToken })).statusCode,
+    ).toBe(401);
+    const stored = await database
+      .selectFrom('auth_sessions')
+      .select('revoked_at')
+      .where('id', '=', session.sessionId)
+      .executeTakeFirstOrThrow();
+    expect(stored.revoked_at).not.toBeNull();
+  });
+
+  it('serializes duplicate refresh proofs and revokes the single winning generation on detected reuse', async () => {
+    const session = await signup(email);
+    const responses = await Promise.all([
+      post('refresh', { refreshToken: session.refreshToken }),
+      post('refresh', { refreshToken: session.refreshToken }),
+    ]);
+    expect(responses.map((response) => response.statusCode).sort()).toEqual([
+      200, 401,
+    ]);
+    const winner = responses
+      .find((response) => response.statusCode === 200)!
+      .json<AuthenticationResult>();
+    expect((await me(winner.accessToken)).statusCode).toBe(401);
+    expect(
+      await database.selectFrom('auth_refresh_tokens').selectAll().execute(),
+    ).toHaveLength(2);
+  });
+
+  it('rolls back proof consumption and both credential changes on a failed rotation commit', async () => {
+    const session = await signup(email);
+    const rotate = AuthenticationRepositoryImpl.prototype.rotateSession;
+    vi.spyOn(
+      AuthenticationRepositoryImpl.prototype,
+      'rotateSession',
+    ).mockImplementationOnce(async function (
+      this: AuthenticationRepositoryImpl,
+      input,
+    ) {
+      await rotate.call(this, input);
+      throw new Error('private refresh commit fixture');
+    });
+    const failed = await post('refresh', {
+      refreshToken: session.refreshToken,
+    });
+    expect(failed.statusCode).toBe(503);
+    expect(failed.body).not.toContain('private refresh');
+    expect((await me(session.accessToken)).statusCode).toBe(200);
+    const records = await database
+      .selectFrom('auth_refresh_tokens')
+      .selectAll()
+      .execute();
+    expect(records).toHaveLength(1);
+    expect(records[0]?.consumed_at).toBeNull();
+    expect(
+      (await post('refresh', { refreshToken: session.refreshToken }))
+        .statusCode,
+    ).toBe(200);
+  });
+
+  it('never extends the absolute refresh deadline or issues access beyond it', async () => {
+    const session = await signup(email);
+    advance(2592000 - 10);
+    const renewed = await post('refresh', {
+      refreshToken: session.refreshToken,
+    });
+    expect(renewed.statusCode).toBe(200);
+    expect(renewed.json()).toMatchObject({
+      expiresInSeconds: 10,
+      refreshExpiresInSeconds: 10,
+    });
+    advance(10);
+    expect(
+      (await post('refresh', { refreshToken: renewed.json().refreshToken }))
+        .statusCode,
+    ).toBe(401);
+    expect((await me(renewed.json().accessToken)).statusCode).toBe(401);
+  });
+
+  it('logs out a rotated family using its earlier access token while preserving a separate login', async () => {
+    const session = await signup(email, password);
+    const independent = await post('login/password', {
+      contact: email,
+      password,
+    });
+    const next = await post('refresh', { refreshToken: session.refreshToken });
+    const logout = await application.inject({
+      method: 'POST',
+      url: '/v1/auth/logout',
+      headers: { authorization: `Bearer ${session.accessToken}` },
+      payload: {},
+    });
+    expect(logout.statusCode).toBe(204);
+    expect((await me(next.json().accessToken)).statusCode).toBe(401);
+    expect(
+      (await post('refresh', { refreshToken: next.json().refreshToken }))
+        .statusCode,
+    ).toBe(401);
+    expect((await me(independent.json().accessToken)).statusCode).toBe(200);
+  });
+
+  it.each(['disabled', 'password-reset'] as const)(
+    'cannot renew after %s',
+    async (change) => {
+      const session = await signup(email, password);
+      if (change === 'disabled') {
+        await database
+          .updateTable('auth_accounts')
+          .set({ disabled_at: currentTime })
+          .where('id', '=', session.account.id)
+          .execute();
+      }
+      if (change === 'password-reset') {
+        advance(61);
+        const request = await post('password/forgot', { contact: email });
+        const challengeId = request.json().challengeId as string;
+        expect(
+          (
+            await post('password/reset', {
+              challengeId,
+              code: delivery.codeFor(challengeId),
+              newPassword: 'a replacement private password',
+            })
+          ).statusCode,
+        ).toBe(204);
+      }
+      expect(
+        (await post('refresh', { refreshToken: session.refreshToken }))
+          .statusCode,
+      ).toBe(401);
+      expect((await me(session.accessToken)).statusCode).toBe(401);
+    },
+  );
 });

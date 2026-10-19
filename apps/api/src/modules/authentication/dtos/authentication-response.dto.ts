@@ -21,9 +21,13 @@ export class AccountIdentityResponseDto {
 /** Document the opaque bearer session returned only after successful authentication. */
 export class AuthenticationResponseDto {
   @ApiProperty() readonly accessToken!: string;
+  @ApiProperty() readonly refreshToken!: string;
+  @ApiProperty({ format: 'uuid' }) readonly sessionId!: string;
   @ApiProperty({ enum: ['Bearer'] }) readonly tokenType!: 'Bearer';
   @ApiProperty({ type: 'integer', minimum: 1 })
   readonly expiresInSeconds!: number;
+  @ApiProperty({ type: 'integer', minimum: 1 })
+  readonly refreshExpiresInSeconds!: number;
   @ApiProperty({ type: () => AccountIdentityResponseDto })
   readonly account!: AccountIdentityResponseDto;
 }

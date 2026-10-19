@@ -150,7 +150,7 @@ type Replica = Awaited<ReturnType<typeof startReplica>>;
 
 beforeAll(async () => {
   database = await startWalletTestDatabase();
-  await sql`grant select, insert, update, delete on auth_accounts, auth_sessions, auth_challenges, auth_rate_limits to wallet_runtime;
+  await sql`grant select, insert, update, delete on auth_accounts, auth_sessions, auth_refresh_tokens, auth_challenges, auth_rate_limits to wallet_runtime;
     grant select, delete on auth_session_cache_invalidations to wallet_runtime;
     select grant_wallet_summary_cache_runtime_access('wallet_runtime');`.execute(
     database.administrator,

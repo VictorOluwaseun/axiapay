@@ -92,6 +92,14 @@ export class SessionTokenInputDto {
   readonly token!: string;
 }
 
+/** A refresh proof is accepted only here, never as an access credential or through a query string. */
+export class RefreshSessionDto {
+  @ApiProperty({ pattern: '^[A-Za-z0-9_-]{43}$' })
+  @IsBase64({ urlSafe: true, padding: false })
+  @Length(43, 43)
+  readonly refreshToken!: string;
+}
+
 /** Request recovery for one canonical contact; purpose and account identity remain server-owned. */
 export class RequestPasswordResetDto extends RequestLoginCodeDto {}
 

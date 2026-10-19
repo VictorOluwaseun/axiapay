@@ -54,7 +54,7 @@ const delivery: AuthenticationCodeDelivery = {
 beforeAll(async () => {
   database = await startWalletTestDatabase();
   // Wallet posting still uses the restricted role; authentication needs its own table privileges.
-  await sql`grant select, insert, update, delete on auth_accounts, auth_sessions, auth_challenges, auth_rate_limits to wallet_runtime`.execute(
+  await sql`grant select, insert, update, delete on auth_accounts, auth_sessions, auth_refresh_tokens, auth_challenges, auth_rate_limits to wallet_runtime`.execute(
     database.administrator,
   );
   const module = await Test.createTestingModule({ imports: [ApiModule] })

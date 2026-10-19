@@ -31,6 +31,7 @@ import {
   RequestLoginCodeDto,
   RequestPasswordResetDto,
   ResetPasswordDto,
+  RefreshSessionDto,
 } from '../dtos/authentication-request.dto.js';
 import {
   CodeChallengeResponseDto,
@@ -99,6 +100,18 @@ export class AuthenticationController {
       ...body,
       clientIp,
     });
+  }
+
+  /** Redeem a refresh proof once; access expiry does not prevent renewal of its active family. */
+  @Post('refresh')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Rotate refresh and access tokens for an active session',
+  })
+  @ApiBody({ type: RefreshSessionDto })
+  @ApiResponse({ status: 200, type: AuthenticationResponseDto })
+  refreshSession(@Body() body: RefreshSessionDto, @Ip() clientIp: string) {
+    return this.authentication.refreshSession({ ...body, clientIp });
   }
 
   /** Request a fresh login code without disclosing account existence. */
