@@ -40,6 +40,19 @@ export interface AuthenticationSession {
   readonly expiresAt: Date;
   readonly revokedAt: Date | null;
 }
+/** One-use refresh proof belongs to a stable session family; raw credentials never enter persistence. */
+export interface RefreshCredential {
+  readonly tokenDigest: string;
+  readonly expiresAt: Date;
+}
+/** Authoritative family and proof state read under the account/session lock before rotation. */
+export interface RefreshSession {
+  readonly id: string;
+  readonly accountId: string;
+  readonly revokedAt: Date | null;
+  readonly refreshExpiresAt: Date | null;
+  readonly consumedAt: Date | null;
+}
 /** The identity exposed to callers intentionally excludes password hashes and storage state. */
 export interface AccountIdentity {
   readonly id: string;

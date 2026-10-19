@@ -1,5 +1,7 @@
 # Database migrations
 
+`202610190018-authentication-refresh-tokens.js` adds a fixed refresh deadline and digest-only one-use history to session families. Existing bearer sessions are preserved and are not extended or given refresh authority. Apply it before running the updated authentication API. As schema owner, run `select grant_authentication_refresh_runtime_access('your_api_role');` for SELECT/INSERT/UPDATE on refresh history; existing account/session grants still apply. The API performs no migration on startup. Session updates reuse the committed cache-invalidation trigger and outbox. Retain consumed proof history until its family is removed so reuse remains detectable throughout the refresh lifetime.
+
 `202610170016-remote-config.js` records the historical PostgreSQL remote-config table. Current remote configuration comes from [Firebase through the API](../src/modules/remote-config/README.md); no API configuration query, SQL fallback or new read grant uses this table. Retain this already-applied migration and generated schema history. Existing rows remain untouched for cutover recovery; database table cleanup is a separate follow-up after Firebase rollout.
 
 Authentication is introduced by `202610130000-authentication.js`: verified contacts, challenges, sessions, and rate-limit counters. Its tables are separate from wallet and ledger records.

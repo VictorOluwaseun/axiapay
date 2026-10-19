@@ -6,6 +6,8 @@ import type {
   CodeChallenge,
   Contact,
   AccountIdentity,
+  RefreshCredential,
+  RefreshSession,
 } from '../domain/authentication-models.js';
 import type { AuthenticationRepository } from './contracts/authentication.repository.js';
 import type { AuthenticationDatabase } from './authentication-database.js';
@@ -271,14 +273,115 @@ export class AuthenticationRepositoryImpl implements AuthenticationRepository {
   async createSession(
     session: AuthenticationSession,
     credentialVersion: number,
+    refresh?: RefreshCredential,
   ): Promise<boolean> {
-    const result =
-      await sql`insert into auth_sessions (id, account_id, token_digest, created_at, expires_at, revoked_at, device_credential_id, primary_authenticated_at)
-      select ${session.id}::uuid, id, ${session.tokenDigest}, ${session.createdAt}, ${session.expiresAt}, null, ${session.deviceCredentialId}::uuid, ${session.primaryAuthenticatedAt}
+    return this.withTransaction(async (repository) => {
+      const result =
+        await sql`insert into auth_sessions (id, account_id, token_digest, created_at, expires_at, revoked_at, device_credential_id, primary_authenticated_at, refresh_expires_at)
+      select ${session.id}::uuid, id, ${session.tokenDigest}, ${session.createdAt}, ${session.expiresAt}, null, ${session.deviceCredentialId}::uuid, ${session.primaryAuthenticatedAt}, ${refresh?.expiresAt ?? null}
       from auth_accounts where id = ${session.accountId}::uuid and disabled_at is null and credential_version = ${credentialVersion} for share returning id`.execute(
-        this.database,
-      );
-    return result.rows.length === 1;
+          repository.database,
+        );
+      if (result.rows.length !== 1) {
+        return false;
+      }
+      if (refresh) {
+        await repository.database
+          .insertInto('auth_refresh_tokens')
+          .values({
+            token_digest: refresh.tokenDigest,
+            access_token_digest: session.tokenDigest,
+            session_id: session.id,
+            created_at: session.createdAt,
+            consumed_at: null,
+          })
+          .execute();
+      }
+      return true;
+    });
+  }
+  /** Read a proof's family without Redis; family locking serializes all generations of that session. */
+  async findRefreshSession(
+    tokenDigest: string,
+    lock = false,
+  ): Promise<RefreshSession | null> {
+    if (lock && !this.database.isTransaction) {
+      throw new Error('Refresh locking requires a transaction.');
+    }
+    let query = this.database
+      .selectFrom('auth_refresh_tokens')
+      .innerJoin(
+        'auth_sessions',
+        'auth_sessions.id',
+        'auth_refresh_tokens.session_id',
+      )
+      .select([
+        'auth_sessions.id',
+        'auth_sessions.account_id',
+        'auth_sessions.revoked_at',
+        'auth_sessions.refresh_expires_at',
+        'auth_refresh_tokens.consumed_at',
+      ])
+      .where('auth_refresh_tokens.token_digest', '=', tokenDigest);
+    if (lock) {
+      query = query.forUpdate('auth_sessions');
+    }
+    const row = await query.executeTakeFirst();
+    return row
+      ? {
+          id: row.id,
+          accountId: row.account_id,
+          revokedAt: row.revoked_at,
+          refreshExpiresAt: row.refresh_expires_at,
+          consumedAt: row.consumed_at,
+        }
+      : null;
+  }
+  /** The caller owns account then family locks; every proof/access change commits or rolls back together. */
+  async rotateSession(
+    input: Parameters<AuthenticationRepository['rotateSession']>[0],
+  ): Promise<void> {
+    if (!this.database.isTransaction) {
+      throw new Error('Session rotation requires a transaction.');
+    }
+    const consumed = await this.database
+      .updateTable('auth_refresh_tokens')
+      .set({ consumed_at: input.now })
+      .where('token_digest', '=', input.previousRefreshDigest)
+      .where('session_id', '=', input.sessionId)
+      .where('consumed_at', 'is', null)
+      .returning('token_digest')
+      .executeTakeFirst();
+    if (!consumed) {
+      throw new Error('Locked refresh proof was already consumed.');
+    }
+    await this.database
+      .updateTable('auth_sessions')
+      .set({
+        token_digest: input.accessTokenDigest,
+        expires_at: input.accessExpiresAt,
+      })
+      .where('id', '=', input.sessionId)
+      .execute();
+    await this.database
+      .insertInto('auth_refresh_tokens')
+      .values({
+        token_digest: input.refreshTokenDigest,
+        access_token_digest: input.accessTokenDigest,
+        session_id: input.sessionId,
+        created_at: input.now,
+        consumed_at: null,
+      })
+      .execute();
+  }
+  /** Persist replay revocation within the caller's transaction; outbox delivery follows its commit. */
+  async revokeSessionById(sessionId: string, now: Date): Promise<void> {
+    await this.database
+      .updateTable('auth_sessions')
+      .set({ revoked_at: now })
+      .where('id', '=', sessionId)
+      .where('revoked_at', 'is', null)
+      .execute();
   }
   /** Require PostgreSQL for current-state authorization; eligible cached reads use generation-fenced fills and SQL-free hits. */
   async findSessionIdentity(
@@ -350,7 +453,19 @@ export class AuthenticationRepositoryImpl implements AuthenticationRepository {
     await this.database
       .updateTable('auth_sessions')
       .set({ revoked_at: now })
-      .where('token_digest', '=', tokenDigest)
+      .where((expression) =>
+        expression.or([
+          expression('token_digest', '=', tokenDigest),
+          expression(
+            'id',
+            'in',
+            expression
+              .selectFrom('auth_refresh_tokens')
+              .select('session_id')
+              .where('access_token_digest', '=', tokenDigest),
+          ),
+        ]),
+      )
       .where('revoked_at', 'is', null)
       .execute();
     if (!this.database.isTransaction) {

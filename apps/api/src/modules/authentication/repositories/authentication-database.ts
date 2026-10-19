@@ -6,6 +6,7 @@ export type AuthenticationDatabase = Pick<
   | 'auth_accounts'
   | 'auth_challenges'
   | 'auth_sessions'
+  | 'auth_refresh_tokens'
   | 'auth_rate_limits'
   | 'auth_device_credentials'
   | 'auth_device_challenges'

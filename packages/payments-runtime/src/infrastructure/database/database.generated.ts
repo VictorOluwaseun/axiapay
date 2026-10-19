@@ -147,6 +147,14 @@ export interface AuthRateLimits {
   window_ends_at: Timestamp;
 }
 
+export interface AuthRefreshTokens {
+  access_token_digest: string;
+  consumed_at: Timestamp | null;
+  created_at: Timestamp;
+  session_id: string;
+  token_digest: string;
+}
+
 export interface AuthSessionCacheInvalidations {
   created_at: Generated<Timestamp>;
   token_digest: string;
@@ -165,6 +173,7 @@ export interface AuthSessions {
   expires_at: Timestamp;
   id: string;
   primary_authenticated_at: Timestamp | null;
+  refresh_expires_at: Timestamp | null;
   revoked_at: Timestamp | null;
   token_digest: string;
 }
@@ -457,6 +466,7 @@ export interface DB {
   auth_device_challenges: AuthDeviceChallenges;
   auth_device_credentials: AuthDeviceCredentials;
   auth_rate_limits: AuthRateLimits;
+  auth_refresh_tokens: AuthRefreshTokens;
   auth_session_cache_invalidations: AuthSessionCacheInvalidations;
   auth_session_cache_state: AuthSessionCacheState;
   auth_sessions: AuthSessions;

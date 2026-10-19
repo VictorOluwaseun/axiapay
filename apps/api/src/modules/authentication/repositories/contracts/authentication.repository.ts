@@ -5,6 +5,8 @@ import type {
   CodeChallenge,
   Contact,
   AccountIdentity,
+  RefreshCredential,
+  RefreshSession,
 } from '../../domain/authentication-models.js';
 
 /** Own authoritative authentication data; identity hits use Redis, and committed changes invalidate through a durable outbox. Transaction callbacks share one connection. */
@@ -50,7 +52,24 @@ export interface AuthenticationRepository {
   createSession(
     session: AuthenticationSession,
     credentialVersion: number,
+    refresh?: RefreshCredential,
   ): Promise<boolean>;
+  /** Resolve refresh proof in PostgreSQL; locking requires a transaction and the account-first lock order. */
+  findRefreshSession(
+    tokenDigest: string,
+    lock?: boolean,
+  ): Promise<RefreshSession | null>;
+  /** Consume the locked proof, replace its access token and insert its successor atomically. */
+  rotateSession(input: {
+    sessionId: string;
+    previousRefreshDigest: string;
+    accessTokenDigest: string;
+    refreshTokenDigest: string;
+    accessExpiresAt: Date;
+    now: Date;
+  }): Promise<void>;
+  /** Revoke the whole locked session family on refresh-proof replay; the transaction must commit before rejection. */
+  revokeSessionById(sessionId: string, now: Date): Promise<void>;
   /** Resolve a signed cached identity, or require current PostgreSQL state for protected writes. Transaction-local reads always bypass cache. */
   findSessionIdentity(
     tokenDigest: string,
